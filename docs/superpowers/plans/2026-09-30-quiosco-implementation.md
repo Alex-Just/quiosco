@@ -158,7 +158,17 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   plugins: [react()],
   server: {
-    proxy: { "/api": "http://127.0.0.1:8787" },
+    proxy: {
+      "/api": {
+        target: "http://127.0.0.1:8787",
+        configure: (proxy) => {
+          // Dev-only: the page origin (localhost:5173) differs from the
+          // worker's request origin (127.0.0.1:8787), so the worker's /api
+          // Origin check would 403 proxied POSTs. Strip the header.
+          proxy.on("proxyReq", (proxyReq) => proxyReq.removeHeader("origin"));
+        },
+      },
+    },
   },
   test: {
     environment: "node",
@@ -2160,7 +2170,19 @@ export default defineConfig({
       },
     }),
   ],
-  server: { proxy: { "/api": "http://127.0.0.1:8787" } },
+  server: {
+    proxy: {
+      "/api": {
+        target: "http://127.0.0.1:8787",
+        configure: (proxy) => {
+          // Dev-only: the page origin (localhost:5173) differs from the
+          // worker's request origin (127.0.0.1:8787), so the worker's /api
+          // Origin check would 403 proxied POSTs. Strip the header.
+          proxy.on("proxyReq", (proxyReq) => proxyReq.removeHeader("origin"));
+        },
+      },
+    },
+  },
   test: {
     environment: "node",
     include: ["src/**/*.test.ts", "worker/**/*.test.ts", "tests/**/*.test.ts"],
@@ -2563,6 +2585,15 @@ describe("validateTargetUrl", () => {
     });
   });
 
+  it("rejects trailing-dot FQDN forms of blocked hostnames", () => {
+    expect(validateTargetUrl("http://localhost./")).toMatchObject({ ok: false, reason: "blocked-host" });
+    expect(validateTargetUrl("http://foo.local./")).toMatchObject({ ok: false, reason: "blocked-host" });
+    expect(validateTargetUrl("http://metadata.google.internal./")).toMatchObject({
+      ok: false,
+      reason: "blocked-host",
+    });
+  });
+
   it("rejects invalid URLs", () => {
     expect(validateTargetUrl("not a url")).toMatchObject({ ok: false, reason: "invalid-url" });
   });
@@ -2594,7 +2625,9 @@ export function validateTargetUrl(raw: string): UrlCheck {
   if (url.username || url.password) return { ok: false, reason: "credentials" };
   if (url.port && url.port !== "80" && url.port !== "443") return { ok: false, reason: "port" };
 
-  const host = url.hostname.toLowerCase();
+  // Strip a trailing dot so FQDN forms ("localhost.", "foo.local.") cannot
+  // bypass the denylist checks below.
+  const host = url.hostname.toLowerCase().replace(/\.$/, "");
   if (BLOCKED_HOSTS.has(host)) return { ok: false, reason: "blocked-host" };
   if (host.endsWith(".local")) return { ok: false, reason: "blocked-host" };
 
@@ -4453,7 +4486,15 @@ export default function ArticlePage() {
     }
     setBusy(true);
     try {
-      const fresh = await store.update(article.id, { translationStatus: "pending", error: null });
+      // A finished translation is re-run from scratch (the target language or
+      // rules may have changed); partial/error states resume from the stored
+      // position.
+      const done = article.translationStatus === "done";
+      const fresh = await store.update(article.id, {
+        translationStatus: "pending",
+        error: null,
+        ...(done ? { translation: null, translatedChunks: 0, totalChunks: 0 } : {}),
+      });
       setArticle(fresh);
       await translateArticle(store, fresh, settings);
       const reloaded = await store.get(article.id);
@@ -4501,9 +4542,11 @@ export default function ArticlePage() {
         <button type="button" onClick={onRetranslate} disabled={busy || running}>
           {busy || running
             ? "Translating…"
-            : article.translationStatus === "error" || (article.translation && article.translatedChunks > 0)
-              ? "Resume translation"
-              : "Translate"}
+            : article.translationStatus === "done"
+              ? "Re-translate"
+              : article.translationStatus === "error" || (article.translation && article.translatedChunks > 0)
+                ? "Resume translation"
+                : "Translate"}
         </button>
         <button type="button" className="danger" onClick={onDelete}>
           Delete
