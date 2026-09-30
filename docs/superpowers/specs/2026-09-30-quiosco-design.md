@@ -142,7 +142,7 @@ headers (`x-quiosco-via`, `x-quiosco-final-url`, `x-quiosco-status`).
 |---|------|--------------|
 | 1 | `direct` | fetch with a Chrome UA and `Accept-Language: es-ES,es` |
 | 2 | `googlebot` | same URL with the Googlebot UA (13ft technique) |
-| 3 | `jina` | `https://r.jina.ai/<url>` — returns markdown, no Readability needed; keyless at 20 RPM, optional free key |
+| 3 | `jina` | `https://r.jina.ai/` + the absolute article URL (construction spelled out and tested with query strings and fragments) — returns markdown, no Readability needed; keyless at 20 RPM, optional free key |
 | 4 | `wayback` | archive.org availability API, then the raw `id_` snapshot |
 | 5 | `archive_ph` | `archive.ph/newest/<url>` lookup, best-effort |
 
@@ -160,6 +160,12 @@ Worker-side guards are specified in §11.6: http(s) only, port and credential
 restrictions, per-redirect-hop validation, host denylist, 8 MB response cap,
 20 s timeout per rung; cookies are never forwarded (which also defeats metered
 counters).
+
+Worker response hygiene: upstream hop-by-hop headers, `Set-Cookie`, and
+`Content-Length`/`Content-Encoding` are stripped (Workers auto-decompresses
+upstream gzip/br, so forwarding them blindly would corrupt bodies); the
+response carries an inert content type with the sanitized charset forwarded,
+so the client's decode step above has what it needs.
 
 ## 7. Translation
 
@@ -184,6 +190,8 @@ Settings (localStorage): `targetLanguage`, `rules`, `model`, `appToken`,
 `autoTranslate` (default on). The model field is a free-text input with a
 curated suggestion list; default `deepseek-v4.1-flash`, with the Zen free models
 (`big-pickle`, `space-bunny-free`, `longcat-2.5-preview-free`, ...) offered.
+The Worker enforces an allowlist (`ALLOWED_MODELS`) and rejects any other id
+with 400, so a leaked app token cannot select expensive models (§11.4).
 
 Guard: article text capped at 150,000 characters.
 
@@ -217,8 +225,13 @@ with a `createdAt` index. The pending share handoff uses Cache Storage
 (`quiosco-share` cache), not the database, to keep the service worker
 dependency-free.
 
-Duplicate URL: if the URL is already stored, open the existing article and offer
-re-translation instead of creating a second entry.
+Duplicate URL detection normalizes before comparing (strip fragment and
+tracking params; treat `_amp`/`?amp` variants as the same article); if already
+stored, open the existing article and offer re-translation instead of creating
+a second entry.
+
+The app calls `navigator.storage.persist()` so the browser is less likely to
+evict stored articles. Export/import is noted future work, not v1.
 
 ## 9. UI
 
@@ -271,20 +284,23 @@ affordance documented in README (Chrome -> Install app).
   `/api/translate`; the Worker attaches the key upstream.
 - The Worker logs no tokens and no request bodies; upstream error bodies are
   never echoed or logged.
-- Recommended (README): a dedicated Zen key for Quiosco, plus a workspace
-  monthly usage limit and auto-reload disabled — blast radius is then scoped
-  and capped.
+- Required deployment step (README checklist): a dedicated Zen key for
+  Quiosco, a workspace monthly usage limit, and auto-reload disabled — the
+  hard cap on blast radius. The Settings screen links to this checklist.
 
 ### 11.3 Access control (the endpoint cannot be used by others)
 
 - Every `/api/*` route requires `Authorization: Bearer <APP_TOKEN>`.
   `APP_TOKEN` is a separate secret: 32 random bytes (`openssl rand -hex 32`),
   stored as a Worker secret and entered once in app Settings (device only).
-- Comparison is constant-time (SHA-256 digests compared without early exit).
+- Comparison uses the platform timing-safe primitive
+  (`crypto.subtle.timingSafeEqual` on Workers; SHA-256 digest comparison as
+  fallback).
 - No CORS headers are ever emitted. The app is same-origin; cross-site browser
   requests cannot attach the bearer header without an approved preflight.
   Defense-in-depth: a request carrying an `Origin` header that differs from
-  the app origin is rejected (the CLI smoke script sends no Origin).
+  the app origin is rejected (the CLI smoke script sends no Origin). The
+  check applies to `/api/*` only, never to `/share`.
 - Missing, wrong, or malformed credentials get a uniform 401/400 with no
   details.
 - Kill switch: rotating `APP_TOKEN` (re-run `wrangler secret put` + update
@@ -292,7 +308,15 @@ affordance documented in README (Chrome -> Install app).
 
 ### 11.4 Abuse containment (rotation safety net)
 
-- Zen workspace monthly limit + auto-reload disabled caps worst-case spend.
+- Zen workspace monthly limit + auto-reload disabled caps worst-case spend
+  (required, §11.2).
+- Server-side model allowlist: the Worker only forwards model ids on an
+  allowlist (`ALLOWED_MODELS`); anything else is rejected with 400. A leaked
+  token cannot select expensive models. The default allowlist matches the
+  curated Settings list.
+- KV-backed daily budget: the Worker counts translate chunks per day (default
+  200, configurable) in Workers KV and returns 429 beyond the cap — a second
+  containment layer independent of Zen account settings.
 - Translate body capped at 2 MB; fetch responses capped at 8 MB (§6).
 - Optional ops step (documented, not required): a Cloudflare rate-limiting
   rule on `/api/*`.
@@ -300,11 +324,14 @@ affordance documented in README (Chrome -> Install app).
 
 ### 11.5 Client hardening (protects the token and user data on-device)
 
-- Security headers on every response: `Content-Security-Policy` (below),
-  `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`,
-  `X-Frame-Options: DENY`, `Strict-Transport-Security`,
-  `Permissions-Policy: camera=(), microphone=(), geolocation=()`; `/api/*`
-  responses also `Cache-Control: no-store`.
+- Security headers on every response, including the HTML document:
+  `Content-Security-Policy` (below), `X-Content-Type-Options: nosniff`,
+  `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`,
+  `Strict-Transport-Security`, `Permissions-Policy: camera=(),
+  microphone=(), geolocation=()`; `/api/*` responses also
+  `Cache-Control: no-store`. Delivery is guaranteed by configuring
+  `assets.run_worker_first` (every response passes through the Worker; a
+  `_headers` file is the fallback), and a test asserts `GET /` ships the CSP.
 - CSP: `default-src 'self'; script-src 'self'; style-src 'self'
   'unsafe-inline'; img-src 'self' data:; connect-src 'self'; worker-src
   'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none';
@@ -313,23 +340,36 @@ affordance documented in README (Chrome -> Install app).
 - Article titles, text, and translations render as text nodes only (React
   escaping); `dangerouslySetInnerHTML` is banned. Fetched HTML is parsed with
   `DOMParser` into an inert document, never attached to the live DOM.
-- Shared text is not persisted server-side: the service worker consumes the
-  POST payload locally, stores it in Cache Storage, and the app deletes it
-  after reading. If a share POST arrives before the service worker is active
-  (first run), the Worker redirects without reading or storing the body
-  (README tells the user to open the app once after install).
+- Shared text stays on the device: the service worker consumes the POST
+  payload locally and stores it in Cache Storage under a well-known key
+  (last share wins). The payload is deleted once the article is saved, or on
+  explicit discard — it intentionally survives extraction/translation
+  failures so Retry does not require re-sharing. If a share POST arrives
+  before the service worker is active (first run), the Worker redirects
+  without reading the body and `/share` shows "nothing received — share
+  again or paste text" (README tells the user to open the app once after
+  install).
 - localStorage holds settings only (including APP_TOKEN); never the Zen key.
-- The service worker caches the app shell only; `/api/*` responses are never
-  cached.
+- The service worker precaches the app shell and stores the pending share;
+  `/api/*` responses are never cached.
 
 ### 11.6 Fetch proxy safety (SSRF and abuse)
 
 - http(s) only; URLs with embedded credentials rejected; ports restricted to
-  80/443.
-- Host denylist: localhost, `*.local`, loopback/private/link-local ranges
-  (IPv4 and IPv6), and cloud metadata addresses.
-- Redirects followed manually (max 5), each hop validated with the same rules;
-  the final URL is reported back.
+  80/443. URLs are canonicalized with `new URL()` before any check.
+- IP-literal hosts are rejected outright. Canonicalization first makes this
+  cover hex/decimal/octal IPv4 spellings and IPv4-mapped IPv6
+  (`[::ffff:169.254.169.254]`).
+- Host denylist (defense-in-depth): localhost, `*.local`, loopback/private/
+  link-local ranges (v4 and v6), and known metadata endpoints —
+  `169.254.169.254`, `169.254.170.2`, `100.100.100.200`,
+  `metadata.google.internal`.
+- Redirects followed manually (max 5), each hop re-validated with the same
+  rules; the final URL is reported back.
+- Network-layer backstop: `global_fetch_strictly_public` is explicitly
+  enabled in the wrangler config, so Cloudflare blocks fetches to private
+  addresses even under DNS rebinding; the denylist above is
+  defense-in-depth.
 - 20 s timeout per rung; 8 MB cap; cookies never forwarded.
 
 ### 11.7 Privacy
@@ -338,6 +378,8 @@ affordance documented in README (Chrome -> Install app).
   sent to ladder third parties (jina / wayback / archive.ph) only on
   escalation — documented in README and Settings.
 - No server-side storage of articles, reading history, or URLs; no analytics.
+- README notes the Googlebot-UA rung is user-agent spoofing, kept for personal
+  reading only.
 - README disclaimer: personal reading only, never redistribute; hard paywalls
   are not defeated — the manual text path is for content the user already has
   access to.
@@ -348,38 +390,58 @@ affordance documented in README (Chrome -> Install app).
   - share classification (URL in `text`, both fields, short text, empty),
   - chunker boundaries and merge,
   - prompt builder,
-  - quality gate (fixtures per site pattern: CSS overlay paywall, ISO-8859-15
+  - quality gate against dated fixtures captured from real pages of the §3
+    list, plus synthetic per-site patterns (CSS overlay paywall, ISO-8859-15
     page, challenge page),
-  - SSRF validator, store CRUD, settings,
-  - auth middleware: 401 without/with wrong token, 200 with correct token,
-    cross-origin `Origin` rejected, security headers present, no CORS headers,
-  - redirect-hop validation, credential/port rejection.
-- Worker: unit tests for pure helpers; `scripts/smoke.mjs` runs against the
-  deployed worker over a curated list (~18 URLs covering the top Spanish
-  papers) and prints a per-URL table (rung used, characters, pass/fail). The
-  smoke script takes the token from `QUIOSCO_APP_TOKEN` env and never prints it.
+  - SSRF validator: canonicalization, hex/decimal/octal IPv4 and IPv4-mapped
+    IPv6 rejection, credential/port rejection, redirect-hop validation,
+  - store CRUD, settings, duplicate-URL normalization.
+- Worker tests:
+  - auth middleware on every route including `/api/health`: 401 for missing,
+    wrong, and malformed tokens; 200 with the correct token,
+  - cross-origin `Origin` rejected on `/api/*`; no CORS headers,
+  - security headers asserted on `GET /` (CSP, nosniff) and `/api/*`
+    (no-store),
+  - upstream-error redaction: `/api/translate` errors never echo upstream
+    bodies,
+  - model allowlist enforcement and daily budget (429 beyond the cap).
+- E2E (Playwright): POST -> service worker -> Cache -> `/share` handoff, run
+  against a production build so headers and CSP are applied.
+- Smoke: `scripts/smoke.mjs` runs against the deployed worker over the frozen
+  URL list (Appendix A) and prints a per-URL table (rung used, characters,
+  pass/fail). A URL passes only when the quality gate passes with >= 600
+  characters. The script takes the token from `QUIOSCO_APP_TOKEN` and never
+  prints it.
 - Acceptance: >= 90% of the smoke list extracts without manual text; 100%
-  reachable end-to-end via manual text path; Android share QA checklist (URL
-  share, highlighted-text share, install/update caveat) passes.
-- CI (GitHub Actions): typecheck, lint/format (Biome), tests, build.
+  reachable end-to-end via manual text path; the Android share QA checklist
+  (URL share, highlighted-text share, first-run no-SW behavior,
+  install/update caveat — run against a production-CSP build) passes.
+- CI (GitHub Actions): typecheck, lint/format (Biome), tests, build, bundle
+  scan (no key material in the built client). The smoke list runs weekly on a
+  schedule (repo secrets) and on release.
 
 ## 13. Deployment & operations
 
-- Toolchain: Node 22+, pnpm, wrangler. `pnpm dev` runs Vite + `wrangler dev`;
-  `pnpm deploy` builds and deploys.
+- Toolchain: Node 22+, pnpm, wrangler. `pnpm dev` runs Vite + `wrangler dev`
+  with a Vite proxy for `/api`, keeping the dev loop same-origin (no CORS
+  anywhere); `pnpm deploy` builds and deploys.
+- `wrangler.toml` pins `compatibility_date`, enables
+  `global_fetch_strictly_public`, sets `assets.run_worker_first`, and binds
+  the KV namespace used for the daily translate budget.
 - Secrets: `wrangler secret put OPENCODE_API_KEY` (dedicated key), `APP_TOKEN`
   (generate with `openssl rand -hex 32`), optional `JINA_API_KEY`. Local dev
   uses `.dev.vars`, which is gitignored.
-- Recommended Zen setup (README): workspace monthly limit, auto-reload off.
+- Required Zen setup (README checklist): workspace monthly limit, auto-reload
+  off.
 - Optional hardening (README): Cloudflare rate-limiting rule on `/api/*`, 2FA
   on Cloudflare and OpenCode accounts.
 - Rotation documented: `wrangler secret put APP_TOKEN` again + update the token
   in the app's Settings; the old token is dead immediately.
 - Hosting: `https://quiosco.<account>.workers.dev` (HTTPS, required for PWA
   install and clipboard API). Custom domain is out of scope.
-- README covers: secrets, deploy, install on Android, "open the app once after
-  install so the service worker is active", reinstall note when the manifest
-  changes (WebAPK update lag).
+- README covers: secrets, the deploy checklist (Appendix B), install on
+  Android, "open the app once after install so the service worker is active",
+  reinstall note when the manifest changes (WebAPK update lag).
 - Cost: $0 infra; only Zen usage (fractions of a cent per article with cheap
   models; free models available).
 
@@ -387,12 +449,13 @@ affordance documented in README (Chrome -> Install app).
 
 | Risk | Mitigation |
 |---|---|
-| Worker egress IP blocked by a publisher | ladder escalates to jina/googlebot; smoke test detects |
+| Worker egress IP blocked by a publisher | ladder escalates to jina/googlebot; weekly smoke run detects |
 | Publisher markup changes | quality gate + manual text path; fixtures updated |
-| Free Zen models churn | model is a setting with free-text id |
+| Free Zen models churn | model is a setting; server allowlist updatable via config |
 | archive.ph / jina availability | manual text path; rung order minimizes dependency |
 | WebAPK share target needs reinstall after manifest change | README note |
 | Article too long for one request | chunker + 150k char cap |
+| Browser eviction / cleared storage loses local articles | `navigator.storage.persist()`; export/import future work |
 
 ## 15. Decisions resolved
 
@@ -404,6 +467,29 @@ affordance documented in README (Chrome -> Install app).
 - Translation: non-streamed, sequential chunks, resumable.
 - Default model: `deepseek-v4.1-flash` (configurable; free models surfaced).
 - Security: Zen key is a Worker-only secret; all `/api/*` gated by a separate
-  high-entropy `APP_TOKEN` (constant-time compare, no CORS, strict CSP);
-  leak containment via Zen monthly limit + token rotation; fetch proxy hardened
-  against SSRF.
+  high-entropy `APP_TOKEN` (timing-safe compare, no CORS, strict CSP delivered
+  via `run_worker_first`); leak containment via required Zen monthly limit +
+  KV daily budget + model allowlist + rotation; fetch proxy hardened against
+  SSRF with `global_fetch_strictly_public`.
+
+## Appendix A — Smoke URL list
+
+`scripts/smoke-urls.json` in the repo freezes the exact URL list used by the
+acceptance run: ~18 URLs covering the top Spanish papers by public ranking
+(OJD/Comscore), including sports and at least two regional titles. Each entry:
+`{ url, site, expected: "any" }`. The list is versioned so the criterion in
+§12 is reproducible and auditable; changes to it are code review items.
+
+## Appendix B — Deployment checklist
+
+1. Zen: create a dedicated API key for Quiosco; set a workspace monthly usage
+   limit; disable auto-reload.
+2. Cloudflare: `wrangler secret put OPENCODE_API_KEY`; generate and set
+   `APP_TOKEN` (`openssl rand -hex 32`); optional `JINA_API_KEY`.
+3. Config: pin `compatibility_date`; enable `global_fetch_strictly_public`;
+   set `assets.run_worker_first`; bind the budget KV namespace.
+4. Deploy: `pnpm deploy`; verify `GET /` returns the CSP header and
+   `/api/health` returns 401 without the token.
+5. Android: install from Chrome, open once (service worker active), then run
+   the share QA checklist.
+6. Optional: Cloudflare rate-limiting rule on `/api/*`; 2FA on both accounts.
