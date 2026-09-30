@@ -69,11 +69,6 @@ export async function runTranslation(
         if (!output) throw new Error("empty translation");
         translation = translation ? `${translation}\n\n${output}` : output;
         translatedChunks = index + 1;
-        await options.onProgress?.({
-          translatedChunks,
-          totalChunks,
-          translation,
-        });
         done = true;
       } catch (error) {
         lastError = error;
@@ -86,6 +81,13 @@ export async function runTranslation(
         totalChunks,
       );
     }
+    // Progress persistence lives outside the retry loop: a failing callback
+    // must not trigger a re-translation (which would duplicate the chunk).
+    await options.onProgress?.({
+      translatedChunks,
+      totalChunks,
+      translation,
+    });
   }
 
   return { translation, totalChunks };

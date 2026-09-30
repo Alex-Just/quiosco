@@ -88,4 +88,15 @@ describe("runTranslation", () => {
     expect(result.translation).toBe("primera parte\n\nsegunda parte");
     expect(translate).toHaveBeenCalledTimes(1);
   });
+
+  it("does not re-translate when the progress callback fails", async () => {
+    const translate = vi.fn(async () => "uno");
+    const onProgress = vi.fn(async () => {
+      throw new Error("persist failed");
+    });
+    await expect(
+      runTranslation({ text: "Corto.", settings, translate, onProgress }),
+    ).rejects.toThrow("persist failed");
+    expect(translate).toHaveBeenCalledTimes(1);
+  });
 });
