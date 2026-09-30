@@ -45,9 +45,6 @@ export default function ListPage() {
             {name} ({counts[name]})
           </button>
         ))}
-        <Link className="tab add" to="/add">
-          + Add
-        </Link>
       </nav>
       {visible.length === 0 ? (
         <p className="muted">
@@ -71,6 +68,9 @@ export default function ListPage() {
           ))}
         </ul>
       )}
+      <Link className="fab" to="/add">
+        + Add
+      </Link>
     </section>
   );
 }

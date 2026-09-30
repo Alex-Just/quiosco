@@ -157,7 +157,7 @@ export default function AddPage() {
       <label>
         Article text
         <textarea
-          rows={12}
+          rows={7}
           value={text}
           onChange={(event) => setText(event.target.value)}
         />
@@ -175,7 +175,7 @@ export default function AddPage() {
         from the text before it is translated.
       </p>
       {error && <p className="error">{error}</p>}
-      <div className="row">
+      <div className="row form-actions">
         <button
           type="button"
           className="primary"
