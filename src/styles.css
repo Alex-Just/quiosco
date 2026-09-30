@@ -55,9 +55,6 @@ body {
 }
 
 .app-header {
-  position: sticky;
-  top: 0;
-  z-index: 10;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -65,15 +62,7 @@ body {
   max-width: 42rem;
   margin: 0 auto;
   padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
-  background: var(--bg);
   border-bottom: 1px solid var(--line);
-}
-
-@supports (backdrop-filter: blur(8px)) {
-  .app-header {
-    background: color-mix(in srgb, var(--bg) 78%, transparent);
-    backdrop-filter: blur(14px);
-  }
 }
 
 .app-title {
@@ -381,17 +370,18 @@ button.danger {
   border-color: var(--accent);
 }
 
-.checkbox {
+.settings .checkbox,
+.add .checkbox {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
 }
 
 .checkbox input[type="checkbox"] {
   flex: none;
-  width: 20px;
-  height: 20px;
-  margin: 2px 0 0;
+  width: 22px;
+  height: 22px;
+  margin: 0;
   accent-color: var(--accent);
 }
 
