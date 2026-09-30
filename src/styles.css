@@ -186,7 +186,7 @@ button:disabled {
 }
 .settings input:not([type="checkbox"]),
 .settings textarea,
-.add input,
+.add input:not([type="checkbox"]),
 .add textarea {
   width: 100%;
   padding: 8px;
@@ -197,7 +197,8 @@ button:disabled {
   color: var(--fg);
   font: inherit;
 }
-.settings .checkbox {
+.settings .checkbox,
+.add .checkbox {
   display: flex;
   gap: 8px;
   align-items: center;

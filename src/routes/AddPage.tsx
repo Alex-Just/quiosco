@@ -32,6 +32,7 @@ export default function AddPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [cleanup, setCleanup] = useState(true);
 
   useEffect(() => {
     if (!store || loaded) return;
@@ -43,6 +44,7 @@ export default function AddPage() {
           setTitle(article.title);
           setUrl(article.url ?? "");
           setText(article.text);
+          setCleanup(article.cleanup !== false);
         }
       } else {
         const state = (location.state ?? null) as PrefillState | null;
@@ -62,7 +64,7 @@ export default function AddPage() {
 
   async function onSave() {
     if (!store) return;
-    const cleaned = cleanArticleText(text, title);
+    const cleaned = cleanup ? cleanArticleText(text, title) : text.trim();
     if (cleaned.length < 40) {
       setError("Paste the article text first (at least a paragraph).");
       return;
@@ -75,12 +77,16 @@ export default function AddPage() {
       if (editId) {
         const existing = await store.get(editId);
         const textChanged = !existing || existing.text !== clipped;
+        const cleanupChanged =
+          !existing || (existing.cleanup !== false) !== cleanup;
         await store.update(editId, {
           title: title.trim() || "Untitled",
           url: normalizeUrl(url),
           text: clipped,
-          // Editing the text invalidates any stored translation.
-          ...(textChanged
+          cleanup,
+          // Editing the text or the cleanup choice invalidates any stored
+          // translation.
+          ...(textChanged || cleanupChanged
             ? {
                 translation: null,
                 translationStatus: "pending" as const,
@@ -110,6 +116,7 @@ export default function AddPage() {
         title,
         text: clipped,
         via: "manual",
+        cleanup,
       });
       await store.put(article);
       if (settings.autoTranslate && settings.appToken) {
@@ -155,9 +162,17 @@ export default function AddPage() {
           onChange={(event) => setText(event.target.value)}
         />
       </label>
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={cleanup}
+          onChange={(event) => setCleanup(event.target.checked)}
+        />
+        Clean up the text before translating
+      </label>
       <p className="muted">
-        Page noise (nav, cookie banners, footers, link lists) is removed when
-        saving, and the AI strips anything left before translating.
+        When enabled, menus, cookie banners, footers and link lists are removed
+        from the text before it is translated.
       </p>
       {error && <p className="error">{error}</p>}
       <div className="row">

@@ -7,6 +7,7 @@ export function newArticle(input: {
   title: string;
   text: string;
   via: Via;
+  cleanup?: boolean;
 }): Article {
   const now = Date.now();
   let site: string | null = null;
@@ -30,6 +31,7 @@ export function newArticle(input: {
     totalChunks: 0,
     cleanText: null,
     translationPhase: null,
+    cleanup: input.cleanup ?? true,
     status: "unread",
     error: null,
     createdAt: now,

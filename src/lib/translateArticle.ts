@@ -12,22 +12,29 @@ export async function translateArticle(
 ): Promise<void> {
   const api = createApi({ token: settings.appToken });
   try {
+    const cleanup = article.cleanup !== false;
     await store.update(article.id, {
       translationStatus: "running",
-      translationPhase: "cleaning",
+      translationPhase: cleanup ? "cleaning" : "translating",
       totalChunks: 0,
       error: null,
     });
-    let source = article.cleanText ?? null;
-    if (!source) {
-      const result = await cleanWithLlm(
-        article.text,
-        settings.model,
-        (request) => api.translate(request),
-        article.title,
-      );
-      source = result.text;
-      if (result.cleaned) await store.update(article.id, { cleanText: source });
+    let source = article.text;
+    if (cleanup) {
+      const cached = article.cleanText ?? null;
+      if (cached) {
+        source = cached;
+      } else {
+        const result = await cleanWithLlm(
+          article.text,
+          settings.model,
+          (request) => api.translate(request),
+          article.title,
+        );
+        source = result.text;
+        if (result.cleaned)
+          await store.update(article.id, { cleanText: source });
+      }
     }
     await store.update(article.id, {
       translationPhase: "translating",
