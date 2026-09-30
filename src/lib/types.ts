@@ -34,3 +34,17 @@ export interface SharePayload {
   url: string;
   receivedAt: number;
 }
+
+export interface RungResponse {
+  bytes: Uint8Array;
+  contentType: string | null;
+  kind: "html" | "markdown";
+  via: Rung;
+  finalUrl: string | null;
+}
+
+export interface TranslateRequest {
+  model: string;
+  system: string;
+  text: string;
+}
