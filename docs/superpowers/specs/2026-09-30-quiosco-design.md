@@ -30,6 +30,9 @@ Goals:
 - G5 Zero infra cost: Cloudflare Workers free tier, on-device storage, free
   third-party fallbacks.
 - G6 Small, idiomatic, tested TypeScript codebase.
+- G7 No secret exposure: the Zen key stays server-side; the public endpoint
+  cannot be used by anyone without the app token; abuse is bounded if the app
+  token ever leaks.
 
 Non-goals:
 
@@ -68,7 +71,8 @@ Three pieces, one repo, one deployable:
 - **PWA (client)** — React + TypeScript + Vite, installed via Chrome for Android.
   Owns extraction, storage, UI, and ladder orchestration.
 - **Worker (server)** — Cloudflare Worker on the same origin. Serves the built
-  PWA as static assets and exposes `/api/*`. Stateless; holds secrets only.
+  PWA as static assets and exposes `/api/*`. Stateless; holds secrets only;
+  applies security headers and never emits CORS headers (§11).
 - **Storage (device)** — articles in IndexedDB; settings in localStorage.
   Nothing about the user's reading is stored server-side.
 
@@ -152,16 +156,19 @@ Quality gate after every rung — text passes when it has >= 600 characters,
 e.g. "suscríbete para seguir leyendo", "subscribe to continue",
 "checking your browser"). First passing rung wins; `via` is recorded.
 
-Worker-side guards: http(s) only; SSRF denylist (localhost, private ranges,
-link-local, `.local`); 8 MB response cap; 20 s timeout per rung; cookies never
-forwarded (which also defeats metered counters).
+Worker-side guards are specified in §11.6: http(s) only, port and credential
+restrictions, per-redirect-hop validation, host denylist, 8 MB response cap,
+20 s timeout per rung; cookies are never forwarded (which also defeats metered
+counters).
 
 ## 7. Translation
 
 Worker `POST /api/translate` with `{model, system, text}` forwards to
 `https://opencode.ai/zen/v1/chat/completions` with `Authorization: Bearer` from
-the Worker secret `OPENCODE_API_KEY`. Non-streamed, 120 s timeout, returns
-`{text, usage}`.
+the Worker secret `OPENCODE_API_KEY`. Non-streamed, 120 s timeout, 2 MB request
+body cap, returns `{text, usage}`. Upstream errors are mapped to short generic
+messages; upstream response bodies are never echoed to the client or logged
+(§11.2).
 
 Client side:
 
@@ -242,19 +249,98 @@ affordance documented in README (Chrome -> Install app).
 - 401 from worker -> prompt to check the app token in Settings.
 - Worker unreachable -> Retry; nothing lost (pending share persists in Cache).
 
-## 11. Security & privacy
+## 11. Security
 
-- `/api/*` requires `Authorization: Bearer <APP_TOKEN>` (worker secret,
-  constant-time comparison).
-- The Zen key lives only in the Worker secret store; it never reaches the client.
-- No article content or URLs are logged server-side.
-- SSRF guard + size/time limits as in §6.
-- Third-party rungs (jina, wayback, archive.ph) see the article URL only when the
-  ladder escalates to them; this is documented in the README and visible in
-  Settings.
-- Personal-use disclaimer in README: content is read privately, never
-  redistributed; hard paywalls are not defeated — the manual text path is for
-  content the user already has access to.
+### 11.1 Threat model
+
+- The deployed URL is public; assume a stranger knows it.
+- Secret #1: the OpenCode Zen key (money). It must never leave the Worker.
+- Secret #2: the app token (device-side). It is the only key that gates the
+  Worker; if it leaks, an attacker could spend Zen credits — so it is
+  high-entropy, rotatable, and spend is capped (§11.4).
+- Hostile input: fetched pages and shared text are untrusted and must never
+  execute code or exfiltrate the app token.
+- Out of scope: a compromised phone, a compromised Cloudflare/OpenCode account,
+  traffic analysis.
+
+### 11.2 Zen key handling (never exposed)
+
+- `OPENCODE_API_KEY` exists only as a Worker secret. Never in the repo, never
+  in the client bundle, never in any response.
+- The client never sends, stores, or sees the Zen key. It calls
+  `/api/translate`; the Worker attaches the key upstream.
+- The Worker logs no tokens and no request bodies; upstream error bodies are
+  never echoed or logged.
+- Recommended (README): a dedicated Zen key for Quiosco, plus a workspace
+  monthly usage limit and auto-reload disabled — blast radius is then scoped
+  and capped.
+
+### 11.3 Access control (the endpoint cannot be used by others)
+
+- Every `/api/*` route requires `Authorization: Bearer <APP_TOKEN>`.
+  `APP_TOKEN` is a separate secret: 32 random bytes (`openssl rand -hex 32`),
+  stored as a Worker secret and entered once in app Settings (device only).
+- Comparison is constant-time (SHA-256 digests compared without early exit).
+- No CORS headers are ever emitted. The app is same-origin; cross-site browser
+  requests cannot attach the bearer header without an approved preflight.
+  Defense-in-depth: a request carrying an `Origin` header that differs from
+  the app origin is rejected (the CLI smoke script sends no Origin).
+- Missing, wrong, or malformed credentials get a uniform 401/400 with no
+  details.
+- Kill switch: rotating `APP_TOKEN` (re-run `wrangler secret put` + update
+  Settings on the phone) instantly invalidates every other holder.
+
+### 11.4 Abuse containment (rotation safety net)
+
+- Zen workspace monthly limit + auto-reload disabled caps worst-case spend.
+- Translate body capped at 2 MB; fetch responses capped at 8 MB (§6).
+- Optional ops step (documented, not required): a Cloudflare rate-limiting
+  rule on `/api/*`.
+- Account hygiene (README): 2FA on the Cloudflare and OpenCode accounts.
+
+### 11.5 Client hardening (protects the token and user data on-device)
+
+- Security headers on every response: `Content-Security-Policy` (below),
+  `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`,
+  `X-Frame-Options: DENY`, `Strict-Transport-Security`,
+  `Permissions-Policy: camera=(), microphone=(), geolocation=()`; `/api/*`
+  responses also `Cache-Control: no-store`.
+- CSP: `default-src 'self'; script-src 'self'; style-src 'self'
+  'unsafe-inline'; img-src 'self' data:; connect-src 'self'; worker-src
+  'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none';
+  form-action 'none'`. Strict scripts; inline styles only because React style
+  attributes need them; no third-party origins anywhere.
+- Article titles, text, and translations render as text nodes only (React
+  escaping); `dangerouslySetInnerHTML` is banned. Fetched HTML is parsed with
+  `DOMParser` into an inert document, never attached to the live DOM.
+- Shared text is not persisted server-side: the service worker consumes the
+  POST payload locally, stores it in Cache Storage, and the app deletes it
+  after reading. If a share POST arrives before the service worker is active
+  (first run), the Worker redirects without reading or storing the body
+  (README tells the user to open the app once after install).
+- localStorage holds settings only (including APP_TOKEN); never the Zen key.
+- The service worker caches the app shell only; `/api/*` responses are never
+  cached.
+
+### 11.6 Fetch proxy safety (SSRF and abuse)
+
+- http(s) only; URLs with embedded credentials rejected; ports restricted to
+  80/443.
+- Host denylist: localhost, `*.local`, loopback/private/link-local ranges
+  (IPv4 and IPv6), and cloud metadata addresses.
+- Redirects followed manually (max 5), each hop validated with the same rules;
+  the final URL is reported back.
+- 20 s timeout per rung; 8 MB cap; cookies never forwarded.
+
+### 11.7 Privacy
+
+- Article text is sent to Zen for translation (that is the feature); URLs are
+  sent to ladder third parties (jina / wayback / archive.ph) only on
+  escalation — documented in README and Settings.
+- No server-side storage of articles, reading history, or URLs; no analytics.
+- README disclaimer: personal reading only, never redistribute; hard paywalls
+  are not defeated — the manual text path is for content the user already has
+  access to.
 
 ## 12. Testing & acceptance
 
@@ -264,10 +350,14 @@ affordance documented in README (Chrome -> Install app).
   - prompt builder,
   - quality gate (fixtures per site pattern: CSS overlay paywall, ISO-8859-15
     page, challenge page),
-  - SSRF validator, store CRUD, settings.
+  - SSRF validator, store CRUD, settings,
+  - auth middleware: 401 without/with wrong token, 200 with correct token,
+    cross-origin `Origin` rejected, security headers present, no CORS headers,
+  - redirect-hop validation, credential/port rejection.
 - Worker: unit tests for pure helpers; `scripts/smoke.mjs` runs against the
   deployed worker over a curated list (~18 URLs covering the top Spanish
-  papers) and prints a per-URL table (rung used, characters, pass/fail).
+  papers) and prints a per-URL table (rung used, characters, pass/fail). The
+  smoke script takes the token from `QUIOSCO_APP_TOKEN` env and never prints it.
 - Acceptance: >= 90% of the smoke list extracts without manual text; 100%
   reachable end-to-end via manual text path; Android share QA checklist (URL
   share, highlighted-text share, install/update caveat) passes.
@@ -277,8 +367,14 @@ affordance documented in README (Chrome -> Install app).
 
 - Toolchain: Node 22+, pnpm, wrangler. `pnpm dev` runs Vite + `wrangler dev`;
   `pnpm deploy` builds and deploys.
-- Secrets: `wrangler secret put OPENCODE_API_KEY`, `APP_TOKEN` (optional
-  `JINA_API_KEY`).
+- Secrets: `wrangler secret put OPENCODE_API_KEY` (dedicated key), `APP_TOKEN`
+  (generate with `openssl rand -hex 32`), optional `JINA_API_KEY`. Local dev
+  uses `.dev.vars`, which is gitignored.
+- Recommended Zen setup (README): workspace monthly limit, auto-reload off.
+- Optional hardening (README): Cloudflare rate-limiting rule on `/api/*`, 2FA
+  on Cloudflare and OpenCode accounts.
+- Rotation documented: `wrangler secret put APP_TOKEN` again + update the token
+  in the app's Settings; the old token is dead immediately.
 - Hosting: `https://quiosco.<account>.workers.dev` (HTTPS, required for PWA
   install and clipboard API). Custom domain is out of scope.
 - README covers: secrets, deploy, install on Android, "open the app once after
@@ -307,3 +403,7 @@ affordance documented in README (Chrome -> Install app).
 - Ladder order: direct -> googlebot -> jina -> wayback -> archive.ph.
 - Translation: non-streamed, sequential chunks, resumable.
 - Default model: `deepseek-v4.1-flash` (configurable; free models surfaced).
+- Security: Zen key is a Worker-only secret; all `/api/*` gated by a separate
+  high-entropy `APP_TOKEN` (constant-time compare, no CORS, strict CSP);
+  leak containment via Zen monthly limit + token rotation; fetch proxy hardened
+  against SSRF.
