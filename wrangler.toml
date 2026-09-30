@@ -1,0 +1,21 @@
+name = "quiosco"
+main = "worker/index.ts"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["global_fetch_strictly_public"]
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = true
+
+[[kv_namespaces]]
+binding = "BUDGET"
+id = "00000000000000000000000000000000"
+
+[vars]
+ALLOWED_MODELS = "deepseek-v4.1-flash,big-pickle,space-bunny-free,longcat-2.5-preview-free,mimo-v2.6-flash-free,nemotron-3.5-lightning-free,gemini-3.5-flash-lite"
+DAILY_CHUNK_BUDGET = "200"
+
+[dev]
+port = 8787
