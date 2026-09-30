@@ -75,7 +75,13 @@ export async function runRung(
     case "jina": {
       const target = url.toString().split("#")[0] ?? url.toString();
       const jinaUrl = new URL(`https://r.jina.ai/${target}`);
-      const headers: Record<string, string> = { Accept: "text/plain" };
+      const headers: Record<string, string> = {
+        Accept: "text/plain",
+        // Fetch the page HTML so the client runs it through the same
+        // Readability extraction as every other rung, which strips
+        // nav/cookie/footer noise from the article.
+        "x-respond-with": "html",
+      };
       if (env.JINA_API_KEY)
         headers.Authorization = `Bearer ${env.JINA_API_KEY}`;
       const { response, finalUrl } = await fetchWithRedirects(
@@ -88,10 +94,17 @@ export async function runRung(
         throw new RungError(`upstream status ${response.status}`);
       }
       const bytes = await readBodyWithCap(response);
+      // If Jina ignores x-respond-with and returns markdown, keep the markdown
+      // kind so the client strips the front matter instead of parsing it as HTML.
+      const prefix = new TextDecoder("utf-8").decode(bytes.subarray(0, 256));
+      const kind =
+        prefix.startsWith("Title:") || prefix.includes("Markdown Content:")
+          ? "markdown"
+          : "html";
       return {
         bytes,
         contentType: "text/plain; charset=utf-8",
-        kind: "markdown",
+        kind,
         finalUrl,
       };
     }

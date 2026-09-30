@@ -12,16 +12,37 @@ const htmlResponse = (body: string) =>
   });
 
 describe("jina rung", () => {
-  it("fetches through r.jina.ai and reports markdown", async () => {
-    const fetchImpl = vi.fn(async () => new Response("Markdown Content: hola"));
+  it("requests html mode and reports the html kind", async () => {
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response("<!DOCTYPE html><html><body><p>hola</p></body></html>"),
+    );
     const outcome = await runRung(
       "jina",
       "https://example.com/a?b=1",
       makeEnv(),
       fetchImpl as unknown as typeof fetch,
     );
-    const [calledUrl] = fetchImpl.mock.calls[0] as unknown as [string];
+    const [calledUrl, init] = fetchImpl.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
     expect(calledUrl).toBe("https://r.jina.ai/https://example.com/a?b=1");
+    expect((init.headers as Record<string, string>)["x-respond-with"]).toBe(
+      "html",
+    );
+    expect(outcome.kind).toBe("html");
+    expect(new TextDecoder().decode(outcome.bytes)).toContain("hola");
+  });
+
+  it("keeps the markdown kind when Jina returns markdown", async () => {
+    const fetchImpl = vi.fn(async () => new Response("Markdown Content: hola"));
+    const outcome = await runRung(
+      "jina",
+      "https://example.com/a",
+      makeEnv(),
+      fetchImpl as unknown as typeof fetch,
+    );
     expect(outcome.kind).toBe("markdown");
     expect(new TextDecoder().decode(outcome.bytes)).toContain("hola");
   });
