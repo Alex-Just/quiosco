@@ -1812,6 +1812,17 @@ describe("runTranslation", () => {
     expect(result.translation).toBe("primera parte\n\nsegunda parte");
     expect(translate).toHaveBeenCalledTimes(1);
   });
+
+  it("does not re-translate when the progress callback fails", async () => {
+    const translate = vi.fn(async () => "uno");
+    const onProgress = vi.fn(async () => {
+      throw new Error("persist failed");
+    });
+    await expect(runTranslation({ text: "Corto.", settings, translate, onProgress })).rejects.toThrow(
+      "persist failed",
+    );
+    expect(translate).toHaveBeenCalledTimes(1);
+  });
 });
 ```
 
@@ -1891,7 +1902,6 @@ export async function runTranslation(
         if (!output) throw new Error("empty translation");
         translation = translation ? `${translation}\n\n${output}` : output;
         translatedChunks = index + 1;
-        await options.onProgress?.({ translatedChunks, totalChunks, translation });
         done = true;
       } catch (error) {
         lastError = error;
@@ -1904,6 +1914,9 @@ export async function runTranslation(
         totalChunks,
       );
     }
+    // Progress persistence lives outside the retry loop: a failing callback
+    // must not trigger a re-translation (which would duplicate the chunk).
+    await options.onProgress?.({ translatedChunks, totalChunks, translation });
   }
 
   return { translation, totalChunks };
