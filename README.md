@@ -1,0 +1,90 @@
+# Quiosco
+
+Personal Android-first PWA: share an article URL (or manually extracted article
+text) from the Android share sheet, and Quiosco extracts the text, translates it
+via OpenCode Zen with your custom prompt, and keeps it in a local
+read/unread/archived list with copy-to-clipboard.
+
+Design spec: `docs/superpowers/specs/2026-09-30-quiosco-design.md`.
+
+## Architecture
+
+- **PWA** (React + Vite + vite-plugin-pwa) — extraction (DOMParser +
+  Readability), 5-rung fetch ladder orchestration, IndexedDB storage, UI.
+- **Cloudflare Worker** — serves the built PWA and a thin authenticated proxy:
+  `/api/fetch` (rung passthrough), `/api/translate` (Zen), `/api/health`.
+- **Storage** — articles live only on your device. Nothing is stored
+  server-side.
+
+## Development
+
+```bash
+pnpm install
+cp .dev.vars.example .dev.vars   # fill in APP_TOKEN and OPENCODE_API_KEY
+pnpm dev                          # vite + wrangler dev (same-origin /api proxy)
+pnpm test                         # unit tests
+pnpm typecheck && pnpm lint
+pnpm e2e                          # playwright (builds + runs wrangler dev)
+pnpm smoke                        # against a deployed instance (see below)
+```
+
+## Deployment checklist (required)
+
+1. **Zen**: create a dedicated API key for Quiosco; set a workspace monthly
+   usage limit; disable auto-reload. Quiosco also enforces a server-side model
+   allowlist and a daily translate budget as containment layers.
+2. **KV**: `pnpm wrangler kv namespace create BUDGET` — paste the id into
+   `wrangler.toml`.
+3. **Secrets**:
+   `pnpm wrangler secret put OPENCODE_API_KEY` and
+   `pnpm wrangler secret put APP_TOKEN` (generate: `openssl rand -hex 32`).
+4. **Deploy**: `pnpm deploy`.
+5. **Verify**: `GET /` returns the CSP header; `GET /api/health` returns 401
+   without the token.
+
+Optional hardening: a Cloudflare rate-limiting rule on `/api/*`; 2FA on the
+Cloudflare and OpenCode accounts.
+
+## Install on Android
+
+1. Open the deployed URL in **Chrome for Android** → menu → **Install app**.
+2. **Open the app once** so the service worker is active; sharing before that
+   lands on a "Nothing received" screen.
+3. Share an article from Chrome → pick Quiosco. Share selected text the same
+   way (it becomes the article text, with the URL kept as the source link when
+   provided).
+4. After a manifest change, reinstall from Chrome (WebAPK update lag).
+
+## Smoke test
+
+```bash
+QUIOSCO_URL=https://quiosco.<account>.workers.dev QUIOSCO_APP_TOKEN=<token> pnpm smoke
+```
+
+Runs the frozen list in `scripts/smoke-urls.json` through the real ladder and
+prints per-URL results; fails below a 90% pass rate. The token is never
+printed.
+
+## Security notes
+
+- The Zen key never reaches the client; only the Worker holds it, and upstream
+  error bodies are never echoed.
+- The app token lives in device localStorage and is sent only as a bearer
+  header to your Worker. Rotate it by re-running `wrangler secret put APP_TOKEN`
+  and updating Settings — the old token dies immediately.
+- No CORS headers are ever emitted; `/api/*` rejects foreign `Origin` headers;
+  the fetch proxy rejects non-http(s), credentials, non-standard ports, and all
+  IP-literal hosts, and validates every redirect hop.
+- Privacy: article text is sent to Zen for translation. Only the article URL is
+  sent to jina.ai / web.archive.org / archive.ph, and only when earlier rungs
+  fail. The Googlebot rung uses user-agent spoofing, kept for personal reading
+  only.
+- Personal use: read privately, never redistribute. Hard paywalls are not
+  defeated; the manual text path is for content you already have access to.
+
+## Acceptance (manual, Android)
+
+Share a URL from Chrome → article extracts and (with translation enabled)
+translates; share highlighted text → review screen prefills; mark read/unread,
+archive, delete; copy translation; offline → clear error and retry; first-run
+share before the SW is active shows "Nothing received".
