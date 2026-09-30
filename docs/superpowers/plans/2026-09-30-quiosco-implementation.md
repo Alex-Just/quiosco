@@ -153,7 +153,7 @@ playwright-report/
 
 ```ts
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   plugins: [react()],
@@ -279,7 +279,7 @@ export default {
 
 - [ ] **Step 5: Verify**
 
-Run: `pnpm typecheck && pnpm lint && pnpm test --passWithNoTests || pnpm vitest run --passWithNoTests`
+Run: `pnpm typecheck && pnpm lint && pnpm exec vitest run --passWithNoTests`
 Expected: typecheck/lint pass; vitest runs 0 tests cleanly. Then `pnpm build` succeeds and `dist/index.html` exists. `wrangler dev` boots without config errors (Ctrl-C after it prints the local URL).
 
 - [ ] **Step 6: Commit**
@@ -865,7 +865,9 @@ describe("extractArticle", () => {
 
   it("decodes and extracts the El Mundo fixture (ISO-8859-15)", () => {
     const html = decodeHtml(fixture("elmundo.html.gz"), "text/html; charset=iso-8859-15");
-    expect(html).toContain("Rodríguez");
+    // Proves the ISO-8859-15 decode: mojibake would not produce these characters.
+    expect(html).toMatch(/[áéíóúñ]/);
+    expect(html).not.toContain("Ã");
     const article = extractArticle(html);
     expect(article).not.toBeNull();
     if (article) {
@@ -975,7 +977,7 @@ describe("chunkText", () => {
 
   it("splits large multi-paragraph text into chunks <= maxChars", () => {
     const paragraph = Array.from({ length: 20 }, (_, i) => sentence(i)).join(" ");
-    const text = Array.from({ length: 10 }, () => paragraph).join("\n\n");
+    const text = Array.from({ length: 20 }, () => paragraph).join("\n\n");
     const chunks = chunkText(text);
     expect(chunks.length).toBeGreaterThan(1);
     for (const chunk of chunks) expect(chunk.length).toBeLessThanOrEqual(12_000);
@@ -1219,7 +1221,7 @@ describe("store", () => {
     const store = await createStore(`test-${randomUUID()}`);
     const article = makeArticle();
     await store.put(article);
-    expect((await store.findByUrl(article.url!))?.id).toBe(article.id);
+    expect((await store.findByUrl("https://example.com/a"))?.id).toBe(article.id);
     await store.remove(article.id);
     expect(await store.get(article.id)).toBeUndefined();
     store.close();
@@ -1571,9 +1573,9 @@ import type { Rung, RungResponse } from "./types";
 const paragraph = (n: number) =>
   `Párrafo ${n}: este es el contenido real del artículo, con longitud suficiente para contar como párrafo válido en la pasarela de calidad.`;
 
-const goodHtml = `<html><head><title>Buen titular</title></head><body><article>${[0, 1, 2, 3]
+const goodHtml = `<html><head><title>Buen titular</title></head><body><article>${[0, 1, 2, 3, 4, 5]
   .map((n) => `<p>${paragraph(n)}</p>`)
-  .join("")}</article></body></html>`;
+  .join("\n")}</article></body></html>`;
 
 const shortHtml = "<html><body><p>Teaser corto.</p></body></html>";
 
@@ -1598,7 +1600,7 @@ describe("climbLadder", () => {
   });
 
   it("supports the jina markdown rung and strips jina front matter", async () => {
-    const markdown = `Title: Algo\n\nURL Source: https://example.com\n\nMarkdown Content: ${[0, 1, 2, 3]
+    const markdown = `Title: Algo\n\nURL Source: https://example.com\n\nMarkdown Content: ${[0, 1, 2, 3, 4, 5]
       .map((n) => paragraph(n))
       .join("\n\n")}`;
     const fetchRung = async (rung: Rung): Promise<RungResponse> => {
@@ -1772,7 +1774,7 @@ describe("runTranslation", () => {
       if (request.text.includes("segundo")) throw new Error("boom");
       return "primero";
     });
-    const text = `${longText(3000)}\n\n${"segundo bloque ".repeat(500)}`;
+    const text = `${"primero ".repeat(1200)}\n\n${"segundo bloque ".repeat(500)}`;
     const error = (await runTranslation({ text, settings, translate, retries: 0 }).catch((e: unknown) => e)) as TranslationError;
     expect(error).toBeInstanceOf(TranslationError);
     expect(error.translatedChunks).toBe(1);
@@ -1781,7 +1783,7 @@ describe("runTranslation", () => {
 
   it("resumes from the stored chunk position", async () => {
     const translate = vi.fn(async () => "segunda parte");
-    const text = `${"primero ".repeat(2000)}\n\n${"segundo ".repeat(2000)}`;
+    const text = `${"primero ".repeat(1200)}\n\n${"segundo ".repeat(1200)}`;
     const result = await runTranslation({
       text,
       settings,
@@ -1795,11 +1797,6 @@ describe("runTranslation", () => {
 });
 ```
 
-(Chunk math check: `longText(4000)` is 4000 sentences of ~16 chars ≈ 64k chars → 6 chunks with 12k limit. The "segundo" test: first part 3000 sentences ≈ 48k → 4 chunks... then translatedChunks would be 4, not 1. Fix the test: use shorter first block so it makes exactly 1 chunk < 12k chars, and the "segundo" block overflows. Let me recompute: first block `longText(3000)` ≈ 3000 × 16 = 48k chars → 4 chunks. Bad. Use `longText(500)` ≈ 8k chars → 1 chunk. Second block `"segundo bloque ".repeat(500)` ≈ 7500 chars → 1 chunk. Total 2 chunks. ✓. And resume test: `"primero ".repeat(2000)` = 16k chars → 2 chunks... hmm that would give total 3 chunks (16k first + 12k second ≈ ...). Let me simplify resume test with small custom text: text = `A${"\n\n"}B` where A and B each > 12k? Simpler: construct text of exactly 2 chunks: chunk1 = "a".repeat(12000), chunk2 = "b".repeat(8000), joined by "\n\n" — but single paragraphs of 12000 chars get hard-split? chunkText: paragraph of exactly 12000 <= maxChars → 1 piece; second paragraph 8000; packing: candidate = 12000 + 2 + 8000 > 12000 → flush → chunks [12000, 8000]. 2 chunks ✓. Use that.
-
-For the "segundo" failing test: chunk1 = "primero".repeat(1200) ≈ 8400 chars; chunk2 = "segundo bloque ".repeat(500) ≈ 7500; joined "\n\n" → chunks [chunk1, chunk2] (packing candidate 8400+2+7500 > 12000 → flush) ✓. translate fails when request.text includes "segundo" → fails chunk2, translatedChunks=1, total=2 ✓ with retries 0.
-
-Let me fix these test bodies when writing. For "joins multiple chunks" test: text longText(4000) → many chunks; translate mock returns TR(...) fine; assert totalChunks > 1 and parts length == totalChunks; mocked translate count == totalChunks. longText(4000) sentences "Frase número 0. ..." each ≈ 15-17 chars → ~62k chars → 6 chunks. OK.
 
 - [ ] **Step 5: Run tests to verify they fail**
 
@@ -2092,7 +2089,7 @@ Replace `vite.config.ts` with:
 
 ```ts
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
@@ -3517,7 +3514,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     // The share POST normally lands in the service worker, which stores the
     // payload locally and redirects. This path only triggers before the
     // service worker is active (first run): never read or store the body.
-    return Response.redirect(new URL("/share", url.origin).toString(), 303);
+    return applySecurityHeaders(Response.redirect(new URL("/share", url.origin).toString(), 303));
   }
 
   if (url.pathname.startsWith("/api/")) {
@@ -3702,13 +3699,13 @@ git commit -m "test(smoke): frozen spanish-press URL list + ladder smoke runner"
 ### Task 16: UI: shell, list, add/review, settings, share flow, article page
 
 **Files:**
-- Create: `src/lib/useStore.ts`, `src/lib/translateArticle.ts`
+- Create: `src/lib/useStore.ts`, `src/lib/translateArticle.ts`, `src/lib/article.ts`
 - Create: `src/routes/ListPage.tsx`, `src/routes/AddPage.tsx`, `src/routes/SettingsPage.tsx`, `src/routes/SharePage.tsx`, `src/routes/ArticlePage.tsx`
 - Modify: `src/App.tsx` (router), `src/styles.css` (full styles)
 
 **Interfaces:**
 - Consumes: every lib module from Tasks 2-9.
-- Produces: working screens at `/`, `/share`, `/add`, `/article/:id`, `/settings`; `translateArticle(store, article, settings): Promise<void>`.
+- Produces: working screens at `/`, `/share`, `/add`, `/article/:id`, `/settings`; `translateArticle(store, article, settings): Promise<void>`; `newArticle(input): Article` and `MAX_ARTICLE_CHARS` in `src/lib/article.ts`.
 
 - [ ] **Step 1: Shared hooks and translation glue**
 
@@ -3777,6 +3774,42 @@ export async function translateArticle(
       error: error instanceof Error ? error.message : "translation failed",
     });
   }
+}
+```
+
+`src/lib/article.ts`:
+
+```ts
+import type { Article, Via } from "./types";
+
+export const MAX_ARTICLE_CHARS = 150_000;
+
+export function newArticle(input: { url: string | null; title: string; text: string; via: Via }): Article {
+  const now = Date.now();
+  let site: string | null = null;
+  if (input.url) {
+    try {
+      site = new URL(input.url).hostname;
+    } catch {
+      site = null;
+    }
+  }
+  return {
+    id: crypto.randomUUID(),
+    url: input.url,
+    title: input.title.trim() || "Untitled",
+    site,
+    text: input.text.slice(0, MAX_ARTICLE_CHARS),
+    via: input.via,
+    translation: null,
+    translationStatus: "pending",
+    translatedChunks: 0,
+    totalChunks: 0,
+    status: "unread",
+    error: null,
+    createdAt: now,
+    updatedAt: now,
+  };
 }
 ```
 
@@ -4004,14 +4037,12 @@ export default function SettingsPage() {
 ```tsx
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { MAX_ARTICLE_CHARS, newArticle } from "../lib/article";
 import { loadSettings } from "../lib/settings";
 import { clearPendingShare, readPendingShare } from "../lib/sharePayload";
 import { translateArticle } from "../lib/translateArticle";
 import { useStore } from "../lib/useStore";
 import { normalizeUrl } from "../lib/url";
-import type { Article } from "../lib/types";
-
-const MAX_TEXT_CHARS = 150_000;
 
 interface PrefillState {
   prefillText?: string;
@@ -4071,7 +4102,7 @@ export default function AddPage() {
     setError(null);
     try {
       const settings = loadSettings();
-      const clipped = trimmed.slice(0, MAX_TEXT_CHARS);
+      const clipped = trimmed.slice(0, MAX_ARTICLE_CHARS);
       if (editId) {
         await store.update(editId, {
           title: title.trim() || "Untitled",
@@ -4091,23 +4122,7 @@ export default function AddPage() {
           return;
         }
       }
-      const now = Date.now();
-      const article: Article = {
-        id: crypto.randomUUID(),
-        url: canonical,
-        title: title.trim() || "Untitled",
-        site: canonical ? new URL(canonical).hostname : null,
-        text: clipped,
-        via: "manual",
-        translation: null,
-        translationStatus: "pending",
-        translatedChunks: 0,
-        totalChunks: 0,
-        status: "unread",
-        error: null,
-        createdAt: now,
-        updatedAt: now,
-      };
+      const article = newArticle({ url: canonical, title, text: clipped, via: "manual" });
       await store.put(article);
       await clearPendingShare();
       navigate(`/article/${article.id}`);
@@ -4158,6 +4173,7 @@ export default function AddPage() {
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { createApi } from "../lib/api";
+import { newArticle } from "../lib/article";
 import { LadderError, climbLadder } from "../lib/ladder";
 import { loadSettings } from "../lib/settings";
 import { classifyShare, deriveTitle } from "../lib/share";
@@ -4165,7 +4181,6 @@ import { clearPendingShare, readPendingShare } from "../lib/sharePayload";
 import { translateArticle } from "../lib/translateArticle";
 import { useStore } from "../lib/useStore";
 import { normalizeUrl } from "../lib/url";
-import type { Article } from "../lib/types";
 
 type Flow =
   | { phase: "loading" }
@@ -4208,9 +4223,7 @@ export default function SharePage() {
           navigate(`/article/${existing.id}`);
           return;
         }
-        const now = Date.now();
-        const article: Article = {
-          id: crypto.randomUUID(),
+        const article = newArticle({
           url: canonical,
           title: deriveTitle({
             extractedTitle: result.article.title,
@@ -4218,18 +4231,9 @@ export default function SharePage() {
             text: result.article.text,
             url: classification.url,
           }),
-          site: canonical ? new URL(canonical).hostname : null,
-          text: result.article.text.slice(0, 150_000),
+          text: result.article.text,
           via: result.via,
-          translation: null,
-          translationStatus: "pending",
-          translatedChunks: 0,
-          totalChunks: 0,
-          status: "unread",
-          error: null,
-          createdAt: now,
-          updatedAt: now,
-        };
+        });
         await store.put(article);
         await clearPendingShare();
         navigate(`/article/${article.id}`);
@@ -4545,7 +4549,7 @@ export default defineConfig({
   use: { baseURL: "http://127.0.0.1:8787" },
   webServer: {
     command:
-      "pnpm build && pnpm wrangler dev --port 8787 --var APP_TOKEN:e2e-token --var OPENCODE_API_KEY:e2e-zen --var ALLOWED_MODELS:deepseek-v4.1-flash --var DAILY_CHUNK_BUDGET:200",
+      "pnpm build && pnpm exec wrangler dev --port 8787 --var APP_TOKEN:e2e-token --var OPENCODE_API_KEY:e2e-zen --var ALLOWED_MODELS:deepseek-v4.1-flash --var DAILY_CHUNK_BUDGET:200",
     url: "http://127.0.0.1:8787/",
     reuseExistingServer: false,
     timeout: 120_000,
@@ -4563,7 +4567,11 @@ import { expect, test, type Page } from "@playwright/test";
 
 async function waitForServiceWorker(page: Page) {
   await page.goto("/");
-  await page.evaluate(() => navigator.serviceWorker.ready);
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+    return true;
+  });
+  await page.reload();
   await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
 }
 
@@ -4585,24 +4593,18 @@ test("share target POST handoff lands on the review screen with the shared text"
     { length: 20 },
     (_, index) => `Párrafo ${index} del artículo compartido manualmente con suficiente longitud para el modo texto.`,
   ).join("\n\n");
-  await page.evaluate((text) => {
-    const form = document.createElement("form");
-    form.method = "POST";
-    form.enctype = "multipart/form-data";
-    form.action = "/share";
-    const add = (name: string, value: string) => {
-      const input = document.createElement("input");
-      input.type = "hidden";
-      input.name = name;
-      input.value = value;
-      form.appendChild(input);
-    };
-    add("title", "Un titular");
-    add("text", text);
-    add("url", "");
-    document.body.appendChild(form);
-    form.submit();
+  // The production flow is an OS-initiated POST to /share, which the service
+  // worker intercepts. The app's CSP has `form-action 'none'` (global
+  // constraint), so an in-page <form> submit would be blocked; a same-origin
+  // fetch with a FormData body hits the identical service-worker route.
+  await page.evaluate(async (text) => {
+    const formData = new FormData();
+    formData.set("title", "Un titular");
+    formData.set("text", text);
+    formData.set("url", "");
+    await fetch("/share", { method: "POST", body: formData });
   }, longText);
+  await page.goto("/share");
   await page.waitForURL("**/add");
   await expect(page.locator("textarea")).toHaveValue(/Párrafo 19/);
 });
