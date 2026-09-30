@@ -335,10 +335,6 @@ button.danger {
 }
 
 .article-text {
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--card);
   font-size: 1.0625rem;
   line-height: 1.7;
   overflow-wrap: anywhere;
