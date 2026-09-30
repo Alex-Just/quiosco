@@ -28,6 +28,7 @@ export async function cleanWithLlm(
     system: string;
     text: string;
   }) => Promise<string>,
+  title?: string,
 ): Promise<CleanupResult> {
   const segments = chunkText(text, CLEANUP_CHUNK_CHARS);
   const cleanedSegments: string[] = [];
@@ -45,10 +46,26 @@ export async function cleanWithLlm(
     cleanedSegments.push(cleaned.length > 0 ? cleaned : segment);
   }
   const joined = cleanedSegments.join("\n\n").trim();
-  // Syntax pass: strip any markdown artifacts the model left behind.
-  const result = cleanArticleText(joined).trim();
+  // Syntax pass: strip any markdown artifacts the model left behind, then drop
+  // duplicate copies of the headline (raw texts often repeat it in metadata).
+  const result = dedupeTitle(cleanArticleText(joined).trim(), title);
   return {
     text: result.length > 0 ? result : text,
     cleaned: allSucceeded && result.length > 0,
   };
+}
+
+function dedupeTitle(text: string, title?: string): string {
+  const needle = (title ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+  if (needle.length < 10) return text;
+  let seen = false;
+  const blocks = text.split(/\n{2,}/).filter((block) => {
+    const normalized = block.toLowerCase().replace(/\s+/g, " ").trim();
+    if (normalized === needle) {
+      if (seen) return false;
+      seen = true;
+    }
+    return true;
+  });
+  return blocks.join("\n\n").trim();
 }

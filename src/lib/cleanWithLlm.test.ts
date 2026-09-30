@@ -58,4 +58,18 @@ describe("cleanWithLlm", () => {
     expect(result.cleaned).toBe(false);
     expect(result.text).toContain("párrafo 1");
   });
+
+  it("drops duplicate copies of the headline", async () => {
+    const title = "Colombianos lideran el crisol inmigrante en Valencia";
+    const translate = vi.fn(
+      async (_request: { model: string; system: string; text: string }) =>
+        `${title}\n\n${title}\n\nEl Ayuntamiento de Valencia notificó una población de 858.178 residentes.`,
+    );
+    const result = await cleanWithLlm("cualquier cosa", "m", translate, title);
+    const copies = result.text
+      .split(/\n{2,}/)
+      .filter((block) => block.trim() === title);
+    expect(copies).toHaveLength(1);
+    expect(result.text).toContain("El Ayuntamiento de Valencia notificó");
+  });
 });

@@ -24,6 +24,7 @@ export async function translateArticle(
         article.text,
         settings.model,
         (request) => api.translate(request),
+        article.title,
       );
       source = result.text;
       if (result.cleaned) await store.update(article.id, { cleanText: source });
