@@ -50,7 +50,6 @@ export async function runRung(
   env: Env,
   fetchImpl: typeof fetch = fetch,
 ): Promise<RungOutcome> {
-  void env;
   const checked = validateTargetUrl(target);
   if (!checked.ok) throw new RungError(`invalid target: ${checked.reason}`);
   const url = checked.url;
@@ -73,6 +72,87 @@ export async function runRung(
         { "User-Agent": GOOGLEBOT_UA, "Accept-Language": "es-ES,es;q=0.9" },
         fetchImpl,
       );
+    case "jina": {
+      const target = url.toString().split("#")[0] ?? url.toString();
+      const jinaUrl = new URL(`https://r.jina.ai/${target}`);
+      const headers: Record<string, string> = { Accept: "text/plain" };
+      if (env.JINA_API_KEY)
+        headers.Authorization = `Bearer ${env.JINA_API_KEY}`;
+      const { response, finalUrl } = await fetchWithRedirects(
+        jinaUrl,
+        headers,
+        fetchImpl,
+      );
+      if (!response.ok) {
+        await response.body?.cancel().catch(() => undefined);
+        throw new RungError(`upstream status ${response.status}`);
+      }
+      const bytes = await readBodyWithCap(response);
+      return {
+        bytes,
+        contentType: "text/plain; charset=utf-8",
+        kind: "markdown",
+        finalUrl,
+      };
+    }
+    case "wayback": {
+      const availability = await fetchImpl(
+        `https://archive.org/wayback/available?url=${encodeURIComponent(url.toString())}`,
+        { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) },
+      );
+      if (!availability.ok)
+        throw new RungError(`wayback availability ${availability.status}`);
+      const data = (await availability.json()) as {
+        archived_snapshots?: {
+          closest?: { available?: boolean; url?: string };
+        };
+      };
+      const snapshot = data.archived_snapshots?.closest;
+      if (!snapshot?.available || !snapshot.url)
+        throw new RungError("no wayback snapshot");
+      const snapshotUrl = snapshot.url
+        .replace(/^http:/, "https://")
+        .replace(/\/web\/(\d+)\//, "/web/$1id_/");
+      const { response, finalUrl } = await fetchWithRedirects(
+        new URL(snapshotUrl),
+        { "User-Agent": BROWSER_UA },
+        fetchImpl,
+      );
+      if (!response.ok) {
+        await response.body?.cancel().catch(() => undefined);
+        throw new RungError(`upstream status ${response.status}`);
+      }
+      const bytes = await readBodyWithCap(response);
+      return {
+        bytes,
+        contentType: sanitizeContentType(response.headers.get("content-type")),
+        kind: "html",
+        finalUrl,
+      };
+    }
+    case "archive_ph": {
+      const newest = new URL(`https://archive.ph/newest/${url.toString()}`);
+      const { response, finalUrl } = await fetchWithRedirects(
+        newest,
+        { "User-Agent": BROWSER_UA },
+        fetchImpl,
+      );
+      if (!response.ok) {
+        await response.body?.cancel().catch(() => undefined);
+        throw new RungError(`upstream status ${response.status}`);
+      }
+      if (!finalUrl || finalUrl.includes("/newest/")) {
+        await response.body?.cancel().catch(() => undefined);
+        throw new RungError("no archive snapshot");
+      }
+      const bytes = await readBodyWithCap(response);
+      return {
+        bytes,
+        contentType: sanitizeContentType(response.headers.get("content-type")),
+        kind: "html",
+        finalUrl,
+      };
+    }
     default:
       throw new RungError(`unknown mode: ${mode}`);
   }
