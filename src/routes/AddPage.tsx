@@ -160,7 +160,7 @@ export default function AddPage() {
           onClick={onSave}
           disabled={busy}
         >
-          {editId ? "Save" : "Save & translate"}
+          {busy ? "Saving…" : editId ? "Save" : "Save & translate"}
         </button>
         <Link className="button" to="/">
           Cancel

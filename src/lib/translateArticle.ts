@@ -1,4 +1,5 @@
 import { createApi } from "./api";
+import { chunkText } from "./chunk";
 import type { ArticleStore } from "./store";
 import { runTranslation } from "./translator";
 import type { Article, Settings } from "./types";
@@ -12,6 +13,7 @@ export async function translateArticle(
   try {
     await store.update(article.id, {
       translationStatus: "running",
+      totalChunks: chunkText(article.text).length,
       error: null,
     });
     const { translation, totalChunks } = await runTranslation({

@@ -175,7 +175,7 @@ export default function ArticlePage() {
         </button>
       </div>
       {article.translationStatus === "running" && (
-        <p className="muted">
+        <p className="muted pulse">
           Translating… {article.translatedChunks}/{article.totalChunks || "?"}
         </p>
       )}
