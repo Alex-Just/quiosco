@@ -16,6 +16,7 @@
     "icons": "node scripts/make-icons.mjs",
     "smoke": "vite-node scripts/smoke.ts",
     "e2e": "playwright test",
+    "scan": "node scripts/scan-bundle.mjs",
     "deploy": "pnpm build && wrangler deploy"
   },
   "dependencies": {

@@ -27,6 +27,7 @@ const shareRoute = new Route(
       303,
     );
   },
+  "POST",
 );
 
 registerRoute(shareRoute);
