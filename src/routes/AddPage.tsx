@@ -6,6 +6,7 @@ import {
   useSearchParams,
 } from "react-router-dom";
 import { MAX_ARTICLE_CHARS, newArticle } from "../lib/article";
+import { cleanArticleText } from "../lib/clean";
 import { loadSettings } from "../lib/settings";
 import { clearPendingShare, readPendingShare } from "../lib/sharePayload";
 import { translateArticle } from "../lib/translateArticle";
@@ -61,8 +62,8 @@ export default function AddPage() {
 
   async function onSave() {
     if (!store) return;
-    const trimmed = text.trim();
-    if (trimmed.length < 40) {
+    const cleaned = cleanArticleText(text, title);
+    if (cleaned.length < 40) {
       setError("Paste the article text first (at least a paragraph).");
       return;
     }
@@ -70,7 +71,7 @@ export default function AddPage() {
     setError(null);
     try {
       const settings = loadSettings();
-      const clipped = trimmed.slice(0, MAX_ARTICLE_CHARS);
+      const clipped = cleaned.slice(0, MAX_ARTICLE_CHARS);
       if (editId) {
         const existing = await store.get(editId);
         const textChanged = !existing || existing.text !== clipped;
@@ -152,6 +153,10 @@ export default function AddPage() {
           onChange={(event) => setText(event.target.value)}
         />
       </label>
+      <p className="muted">
+        Nav menus, cookie banners, footers and link lists are removed
+        automatically when saving.
+      </p>
       {error && <p className="error">{error}</p>}
       <div className="row">
         <button

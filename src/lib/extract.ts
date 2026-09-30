@@ -1,4 +1,5 @@
 import { Readability } from "@mozilla/readability";
+import { cleanArticleText } from "./clean";
 
 export interface ExtractedArticle {
   title: string | null;
@@ -43,7 +44,7 @@ export function extractArticle(html: string): ExtractedArticle | null {
   }
   const body = doc.body?.textContent ?? "";
   if (body.trim().length > 0)
-    return { title: doc.title.trim() || null, text: body };
+    return { title: doc.title.trim() || null, text: cleanArticleText(body) };
   return null;
 }
 
