@@ -2108,6 +2108,9 @@ const shareRoute = new Route(
     });
     return Response.redirect(new URL("/share", self.location.origin).toString(), 303);
   },
+  // Workbox keys routes by method (default "GET"); without this the POST
+  // share request never consults this route.
+  "POST",
 );
 
 registerRoute(shareRoute);
