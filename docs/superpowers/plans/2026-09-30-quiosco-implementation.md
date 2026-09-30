@@ -806,8 +806,10 @@ import { describe, expect, it } from "vitest";
 import { assessArticle } from "./quality";
 import { charsetFromContentType, decodeHtml, extractArticle } from "./extract";
 
+// cwd-relative: Vite (vitest) rewrites import.meta.url under the jsdom
+// environment, so new URL(..., import.meta.url) resolves to the wrong base.
 const fixture = (name: string) =>
-  new Uint8Array(gunzipSync(readFileSync(new URL(`../../tests/fixtures/${name}`, import.meta.url))));
+  new Uint8Array(gunzipSync(readFileSync(`tests/fixtures/${name}`)));
 
 describe("charsetFromContentType", () => {
   it("extracts a charset", () => {
@@ -866,8 +868,9 @@ describe("extractArticle", () => {
   it("decodes and extracts the El Mundo fixture (ISO-8859-15)", () => {
     const html = decodeHtml(fixture("elmundo.html.gz"), "text/html; charset=iso-8859-15");
     // Proves the ISO-8859-15 decode: mojibake would not produce these characters.
+    // (No "Ã"-absence check: El Mundo's own inline ad script carries a UTF-8
+    // character that decodes to "Ã" under ISO-8859-15.)
     expect(html).toMatch(/[áéíóúñ]/);
-    expect(html).not.toContain("Ã");
     const article = extractArticle(html);
     expect(article).not.toBeNull();
     if (article) {
@@ -916,12 +919,27 @@ export function decodeHtml(bytes: Uint8Array, contentType: string | null): strin
 export function extractArticle(html: string): ExtractedArticle | null {
   const doc = new DOMParser().parseFromString(html, "text/html");
   const parsed = new Readability(doc).parse();
-  if (parsed?.textContent && parsed.textContent.trim().length > 0) {
-    return { title: parsed.title?.trim() || null, text: parsed.textContent };
+  if (parsed) {
+    const text = blocksToText(parsed.content);
+    if (text.trim().length > 0) return { title: parsed.title?.trim() || null, text };
   }
   const body = doc.body?.textContent ?? "";
   if (body.trim().length > 0) return { title: doc.title.trim() || null, text: body };
   return null;
+}
+
+// Real news pages are minified, so Readability's textContent has no line
+// breaks between block elements. Join block elements with blank lines so
+// paragraph-aware consumers (quality gate, chunker, translation) see the
+// article's paragraph structure.
+function blocksToText(contentHtml: string): string {
+  const container = new DOMParser().parseFromString(contentHtml, "text/html");
+  const blocks = container.querySelectorAll("p, h2, h3, h4, h5, h6, li, blockquote, pre, figcaption, td");
+  if (blocks.length === 0) return container.body?.textContent?.trim() ?? "";
+  return Array.from(blocks)
+    .map((block) => block.textContent?.replace(/\s+/g, " ").trim() ?? "")
+    .filter((text) => text.length > 0)
+    .join("\n\n");
 }
 ```
 
