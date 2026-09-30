@@ -38,6 +38,9 @@ pnpm smoke                        # against a deployed instance (see below)
 3. **Secrets**:
    `pnpm wrangler secret put OPENCODE_API_KEY` and
    `pnpm wrangler secret put APP_TOKEN` (generate: `openssl rand -hex 32`).
+   Recommended: `pnpm wrangler secret put JINA_API_KEY` (free key from
+   jina.ai) — Cloudflare's shared egress IPs are rate-limited on the reader's
+   anonymous tier, so the `jina` fallback rung returns 429 without it.
 4. **Deploy**: `pnpm deploy`.
 5. **Verify**: `GET /` returns the CSP header; `GET /api/health` returns 401
    without the token.
