@@ -86,6 +86,8 @@ export default function AddPage() {
                 translationStatus: "pending" as const,
                 translatedChunks: 0,
                 totalChunks: 0,
+                cleanText: null,
+                translationPhase: null,
                 error: null,
               }
             : {}),
@@ -154,8 +156,8 @@ export default function AddPage() {
         />
       </label>
       <p className="muted">
-        Nav menus, cookie banners, footers and link lists are removed
-        automatically when saving.
+        Page noise (nav, cookie banners, footers, link lists) is removed when
+        saving, and the AI strips anything left before translating.
       </p>
       {error && <p className="error">{error}</p>}
       <div className="row">

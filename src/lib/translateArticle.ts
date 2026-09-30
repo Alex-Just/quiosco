@@ -1,5 +1,6 @@
 import { createApi } from "./api";
 import { chunkText } from "./chunk";
+import { cleanWithLlm } from "./cleanWithLlm";
 import type { ArticleStore } from "./store";
 import { runTranslation } from "./translator";
 import type { Article, Settings } from "./types";
@@ -13,11 +14,26 @@ export async function translateArticle(
   try {
     await store.update(article.id, {
       translationStatus: "running",
-      totalChunks: chunkText(article.text).length,
+      translationPhase: "cleaning",
+      totalChunks: 0,
       error: null,
     });
+    let source = article.cleanText ?? null;
+    if (!source) {
+      const result = await cleanWithLlm(
+        article.text,
+        settings.model,
+        (request) => api.translate(request),
+      );
+      source = result.text;
+      if (result.cleaned) await store.update(article.id, { cleanText: source });
+    }
+    await store.update(article.id, {
+      translationPhase: "translating",
+      totalChunks: chunkText(source).length,
+    });
     const { translation, totalChunks } = await runTranslation({
-      text: article.text,
+      text: source,
       settings: {
         targetLanguage: settings.targetLanguage,
         rules: settings.rules,

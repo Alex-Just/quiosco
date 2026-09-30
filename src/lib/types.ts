@@ -14,6 +14,8 @@ export interface Article {
   translationStatus: TranslationStatus;
   translatedChunks: number;
   totalChunks: number;
+  cleanText?: string | null;
+  translationPhase?: "cleaning" | "translating" | null;
   status: ArticleStatus;
   error: string | null;
   createdAt: number;

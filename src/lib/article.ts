@@ -28,6 +28,8 @@ export function newArticle(input: {
     translationStatus: "pending",
     translatedChunks: 0,
     totalChunks: 0,
+    cleanText: null,
+    translationPhase: null,
     status: "unread",
     error: null,
     createdAt: now,

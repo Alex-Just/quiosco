@@ -176,7 +176,9 @@ export default function ArticlePage() {
       </div>
       {article.translationStatus === "running" && (
         <p className="muted pulse">
-          Translating… {article.translatedChunks}/{article.totalChunks || "?"}
+          {article.translationPhase === "cleaning"
+            ? "Cleaning up the text…"
+            : `Translating… ${article.translatedChunks}/${article.totalChunks || "?"}`}
         </p>
       )}
       {article.translationStatus === "error" && article.error && (
