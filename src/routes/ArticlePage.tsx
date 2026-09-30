@@ -5,6 +5,8 @@ import { translateArticle } from "../lib/translateArticle";
 import type { Article } from "../lib/types";
 import { useStore } from "../lib/useStore";
 
+const STALE_RUN_MS = 10 * 60_000;
+
 export default function ArticlePage() {
   const store = useStore();
   const navigate = useNavigate();
@@ -37,9 +39,27 @@ export default function ArticlePage() {
   useEffect(() => {
     if (!store || !id || !(running || busy)) return;
     const timer = window.setInterval(() => {
-      void store.get(id).then((fresh) => {
-        if (fresh) setArticle(fresh);
-      });
+      void (async () => {
+        const fresh = await store.get(id);
+        if (!fresh) return;
+        // A run interrupted mid-flight (tab closed/reloaded) would otherwise
+        // leave "running" forever and keep the translate button disabled.
+        // store.update bumps updatedAt on every write, so a long-stale
+        // timestamp means no live run (worst-case live gap is ~6 min: 3
+        // attempts × 120 s timeout).
+        if (
+          fresh.translationStatus === "running" &&
+          Date.now() - fresh.updatedAt > STALE_RUN_MS
+        ) {
+          const recovered = await store.update(id, {
+            translationStatus: "error",
+            error: "Translation was interrupted — resume to continue.",
+          });
+          setArticle(recovered);
+          return;
+        }
+        setArticle(fresh);
+      })();
     }, 1000);
     return () => window.clearInterval(timer);
   }, [store, id, running, busy]);
