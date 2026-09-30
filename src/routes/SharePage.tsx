@@ -74,6 +74,11 @@ export default function SharePage() {
           via: result.via,
         });
         await store.put(article);
+        if (settings.autoTranslate && settings.appToken) {
+          // Mark the run before navigating so the article page can show
+          // progress and cannot start a second concurrent translation.
+          await store.update(article.id, { translationStatus: "running" });
+        }
         await clearPendingShare();
         navigate(`/article/${article.id}`);
         if (settings.autoTranslate && settings.appToken) {

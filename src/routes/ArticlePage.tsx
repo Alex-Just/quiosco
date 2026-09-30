@@ -14,6 +14,7 @@ export default function ArticlePage() {
   const [copied, setCopied] = useState<"none" | "translation" | "original">(
     "none",
   );
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!store || !id) return;
@@ -31,6 +32,17 @@ export default function ArticlePage() {
       cancelled = true;
     };
   }, [store, id]);
+
+  const running = article?.translationStatus === "running";
+  useEffect(() => {
+    if (!store || !id || !(running || busy)) return;
+    const timer = window.setInterval(() => {
+      void store.get(id).then((fresh) => {
+        if (fresh) setArticle(fresh);
+      });
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [store, id, running, busy]);
 
   if (!article) return <p className="muted">Loading…</p>;
 
@@ -60,20 +72,25 @@ export default function ArticlePage() {
   }
 
   async function onRetranslate() {
-    if (!store || !article) return;
+    if (!store || !article || busy) return;
     const settings = loadSettings();
     if (!settings.appToken) {
       navigate("/settings");
       return;
     }
-    const fresh = await store.update(article.id, {
-      translationStatus: "pending",
-      error: null,
-    });
-    setArticle(fresh);
-    await translateArticle(store, fresh, settings);
-    const reloaded = await store.get(article.id);
-    if (reloaded) setArticle(reloaded);
+    setBusy(true);
+    try {
+      const fresh = await store.update(article.id, {
+        translationStatus: "pending",
+        error: null,
+      });
+      setArticle(fresh);
+      await translateArticle(store, fresh, settings);
+      const reloaded = await store.get(article.id);
+      if (reloaded) setArticle(reloaded);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function copy(kind: "translation" | "original") {
@@ -112,11 +129,17 @@ export default function ArticlePage() {
         <Link className="button" to={`/add?edit=${article.id}`}>
           Edit text
         </Link>
-        <button type="button" onClick={onRetranslate}>
-          {article.translationStatus === "error" ||
-          (article.translation && article.translatedChunks > 0)
-            ? "Resume translation"
-            : "Translate"}
+        <button
+          type="button"
+          onClick={onRetranslate}
+          disabled={busy || running}
+        >
+          {busy || running
+            ? "Translating…"
+            : article.translationStatus === "error" ||
+                (article.translation && article.translatedChunks > 0)
+              ? "Resume translation"
+              : "Translate"}
         </button>
         <button type="button" className="danger" onClick={onDelete}>
           Delete

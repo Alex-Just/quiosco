@@ -72,10 +72,22 @@ export default function AddPage() {
       const settings = loadSettings();
       const clipped = trimmed.slice(0, MAX_ARTICLE_CHARS);
       if (editId) {
+        const existing = await store.get(editId);
+        const textChanged = !existing || existing.text !== clipped;
         await store.update(editId, {
           title: title.trim() || "Untitled",
           url: normalizeUrl(url),
           text: clipped,
+          // Editing the text invalidates any stored translation.
+          ...(textChanged
+            ? {
+                translation: null,
+                translationStatus: "pending" as const,
+                translatedChunks: 0,
+                totalChunks: 0,
+                error: null,
+              }
+            : {}),
         });
         await clearPendingShare();
         navigate(`/article/${editId}`);
@@ -97,6 +109,11 @@ export default function AddPage() {
         via: "manual",
       });
       await store.put(article);
+      if (settings.autoTranslate && settings.appToken) {
+        // Mark the run before navigating so the article page can show progress
+        // and cannot start a second concurrent translation.
+        await store.update(article.id, { translationStatus: "running" });
+      }
       await clearPendingShare();
       navigate(`/article/${article.id}`);
       if (settings.autoTranslate && settings.appToken) {
