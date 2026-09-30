@@ -41,7 +41,19 @@ export default defineConfig({
       },
     }),
   ],
-  server: { proxy: { "/api": "http://127.0.0.1:8787" } },
+  server: {
+    proxy: {
+      "/api": {
+        target: "http://127.0.0.1:8787",
+        configure: (proxy) => {
+          // Dev-only: the page origin (localhost:5173) differs from the
+          // worker's request origin (127.0.0.1:8787), so the worker's /api
+          // Origin check would 403 proxied POSTs. Strip the header.
+          proxy.on("proxyReq", (proxyReq) => proxyReq.removeHeader("origin"));
+        },
+      },
+    },
+  },
   test: {
     environment: "node",
     include: ["src/**/*.test.ts", "worker/**/*.test.ts", "tests/**/*.test.ts"],

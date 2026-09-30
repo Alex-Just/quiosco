@@ -17,7 +17,9 @@ export function validateTargetUrl(raw: string): UrlCheck {
   if (url.port && url.port !== "80" && url.port !== "443")
     return { ok: false, reason: "port" };
 
-  const host = url.hostname.toLowerCase();
+  // Strip a trailing dot so FQDN forms ("localhost.", "foo.local.") cannot
+  // bypass the denylist checks below.
+  const host = url.hostname.toLowerCase().replace(/\.$/, "");
   if (BLOCKED_HOSTS.has(host)) return { ok: false, reason: "blocked-host" };
   if (host.endsWith(".local")) return { ok: false, reason: "blocked-host" };
 

@@ -80,6 +80,23 @@ describe("validateTargetUrl", () => {
     );
   });
 
+  it("rejects trailing-dot FQDN forms of blocked hostnames", () => {
+    expect(validateTargetUrl("http://localhost./")).toMatchObject({
+      ok: false,
+      reason: "blocked-host",
+    });
+    expect(validateTargetUrl("http://foo.local./")).toMatchObject({
+      ok: false,
+      reason: "blocked-host",
+    });
+    expect(
+      validateTargetUrl("http://metadata.google.internal./"),
+    ).toMatchObject({
+      ok: false,
+      reason: "blocked-host",
+    });
+  });
+
   it("rejects invalid URLs", () => {
     expect(validateTargetUrl("not a url")).toMatchObject({
       ok: false,

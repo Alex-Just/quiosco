@@ -100,9 +100,16 @@ export default function ArticlePage() {
     }
     setBusy(true);
     try {
+      // A finished translation is re-run from scratch (the target language or
+      // rules may have changed); partial/error states resume from the stored
+      // position.
+      const done = article.translationStatus === "done";
       const fresh = await store.update(article.id, {
         translationStatus: "pending",
         error: null,
+        ...(done
+          ? { translation: null, translatedChunks: 0, totalChunks: 0 }
+          : {}),
       });
       setArticle(fresh);
       await translateArticle(store, fresh, settings);
@@ -156,10 +163,12 @@ export default function ArticlePage() {
         >
           {busy || running
             ? "Translating…"
-            : article.translationStatus === "error" ||
-                (article.translation && article.translatedChunks > 0)
-              ? "Resume translation"
-              : "Translate"}
+            : article.translationStatus === "done"
+              ? "Re-translate"
+              : article.translationStatus === "error" ||
+                  (article.translation && article.translatedChunks > 0)
+                ? "Resume translation"
+                : "Translate"}
         </button>
         <button type="button" className="danger" onClick={onDelete}>
           Delete
