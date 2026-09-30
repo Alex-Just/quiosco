@@ -4135,10 +4135,22 @@ export default function AddPage() {
       const settings = loadSettings();
       const clipped = trimmed.slice(0, MAX_ARTICLE_CHARS);
       if (editId) {
+        const existing = await store.get(editId);
+        const textChanged = !existing || existing.text !== clipped;
         await store.update(editId, {
           title: title.trim() || "Untitled",
           url: normalizeUrl(url),
           text: clipped,
+          // Editing the text invalidates any stored translation.
+          ...(textChanged
+            ? {
+                translation: null,
+                translationStatus: "pending" as const,
+                translatedChunks: 0,
+                totalChunks: 0,
+                error: null,
+              }
+            : {}),
         });
         await clearPendingShare();
         navigate(`/article/${editId}`);
@@ -4155,6 +4167,11 @@ export default function AddPage() {
       }
       const article = newArticle({ url: canonical, title, text: clipped, via: "manual" });
       await store.put(article);
+      if (settings.autoTranslate && settings.appToken) {
+        // Mark the run before navigating so the article page can show progress
+        // and cannot start a second concurrent translation.
+        await store.update(article.id, { translationStatus: "running" });
+      }
       await clearPendingShare();
       navigate(`/article/${article.id}`);
       if (settings.autoTranslate && settings.appToken) {
@@ -4266,6 +4283,11 @@ export default function SharePage() {
           via: result.via,
         });
         await store.put(article);
+        if (settings.autoTranslate && settings.appToken) {
+          // Mark the run before navigating so the article page can show
+          // progress and cannot start a second concurrent translation.
+          await store.update(article.id, { translationStatus: "running" });
+        }
         await clearPendingShare();
         navigate(`/article/${article.id}`);
         if (settings.autoTranslate && settings.appToken) {
@@ -4353,6 +4375,7 @@ export default function ArticlePage() {
   const [article, setArticle] = useState<Article | null>(null);
   const [view, setView] = useState<"original" | "translation">("translation");
   const [copied, setCopied] = useState<"none" | "translation" | "original">("none");
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!store || !id) return;
@@ -4370,6 +4393,17 @@ export default function ArticlePage() {
       cancelled = true;
     };
   }, [store, id]);
+
+  const running = article?.translationStatus === "running";
+  useEffect(() => {
+    if (!store || !id || !(running || busy)) return;
+    const timer = window.setInterval(() => {
+      void store.get(id).then((fresh) => {
+        if (fresh) setArticle(fresh);
+      });
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [store, id, running, busy]);
 
   if (!article) return <p className="muted">Loading…</p>;
 
@@ -4391,17 +4425,22 @@ export default function ArticlePage() {
   }
 
   async function onRetranslate() {
-    if (!store || !article) return;
+    if (!store || !article || busy) return;
     const settings = loadSettings();
     if (!settings.appToken) {
       navigate("/settings");
       return;
     }
-    const fresh = await store.update(article.id, { translationStatus: "pending", error: null });
-    setArticle(fresh);
-    await translateArticle(store, fresh, settings);
-    const reloaded = await store.get(article.id);
-    if (reloaded) setArticle(reloaded);
+    setBusy(true);
+    try {
+      const fresh = await store.update(article.id, { translationStatus: "pending", error: null });
+      setArticle(fresh);
+      await translateArticle(store, fresh, settings);
+      const reloaded = await store.get(article.id);
+      if (reloaded) setArticle(reloaded);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function copy(kind: "translation" | "original") {
@@ -4439,10 +4478,12 @@ export default function ArticlePage() {
         <Link className="button" to={`/add?edit=${article.id}`}>
           Edit text
         </Link>
-        <button type="button" onClick={onRetranslate}>
-          {article.translationStatus === "error" || (article.translation && article.translatedChunks > 0)
-            ? "Resume translation"
-            : "Translate"}
+        <button type="button" onClick={onRetranslate} disabled={busy || running}>
+          {busy || running
+            ? "Translating…"
+            : article.translationStatus === "error" || (article.translation && article.translatedChunks > 0)
+              ? "Resume translation"
+              : "Translate"}
         </button>
         <button type="button" className="danger" onClick={onDelete}>
           Delete
