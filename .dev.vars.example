@@ -1,3 +1,4 @@
 # Copy to .dev.vars (gitignored) and fill in real values for local development.
 APP_TOKEN=dev-token
 OPENCODE_API_KEY=your-zen-key-here
+JINA_API_KEY=jina_api_key
