@@ -1,4 +1,5 @@
 import { chunkText } from "./chunk";
+import { cleanArticleText } from "./clean";
 
 // Large inputs are cleaned in segments so each model response stays small
 // enough to avoid output-token truncation on the smaller allowlisted models.
@@ -10,6 +11,8 @@ Return ONLY the main article, verbatim, in its original language:
 - Keep the headline, standfirst/subtitle, byline, and every paragraph of the article body, complete and in order.
 - Remove everything that is not part of the article: menus, breadcrumbs, cookie banners, consent text, "subscribe" prompts, ads, share buttons, related links, comment sections, footers, newsletter boxes, tickers.
 - Do not summarize, shorten, reword, translate, or comment. Do not add headings of your own.
+- Do not use markdown syntax: output plain text without "#", links, or image markers.
+- If the headline or any text appears more than once (for example a metadata block and the article heading), keep only one copy.
 - Output the cleaned article text only, preserving paragraph breaks.`;
 
 export interface CleanupResult {
@@ -41,7 +44,9 @@ export async function cleanWithLlm(
     if (cleaned.length === 0) allSucceeded = false;
     cleanedSegments.push(cleaned.length > 0 ? cleaned : segment);
   }
-  const result = cleanedSegments.join("\n\n").trim();
+  const joined = cleanedSegments.join("\n\n").trim();
+  // Syntax pass: strip any markdown artifacts the model left behind.
+  const result = cleanArticleText(joined).trim();
   return {
     text: result.length > 0 ? result : text,
     cleaned: allSucceeded && result.length > 0,
