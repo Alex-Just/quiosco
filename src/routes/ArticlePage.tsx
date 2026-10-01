@@ -1,7 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { formatDateTime } from "../lib/format";
+import { splitSentences } from "../lib/sentences";
 import { loadSettings } from "../lib/settings";
+import {
+  canSpeak,
+  ORIGINAL_LANG,
+  speakSentence,
+  speechLangFor,
+  stopSpeaking,
+} from "../lib/speech";
 import { cancelTranslation, translateArticle } from "../lib/translateArticle";
 import type { Article } from "../lib/types";
 import { useStore } from "../lib/useStore";
@@ -18,6 +26,19 @@ export default function ArticlePage() {
     "none",
   );
   const [busy, setBusy] = useState(false);
+  const [menu, setMenu] = useState<{
+    paragraph: number;
+    sentenceIndex: number;
+    sentence: string;
+  } | null>(null);
+  const [speaking, setSpeaking] = useState<{
+    paragraph: number;
+    sentenceIndex: number;
+  } | null>(null);
+  const [hint, setHint] = useState<string | null>(null);
+  // Invalidates stale utterance callbacks: a replaced or cancelled utterance
+  // may still fire end/error, and those must not clear the new highlight.
+  const speechRun = useRef(0);
 
   useEffect(() => {
     if (!store || !id) return;
@@ -64,6 +85,23 @@ export default function ArticlePage() {
     }, 1000);
     return () => window.clearInterval(timer);
   }, [store, id, running, busy]);
+
+  // Speech belongs to the page that started it: stop it on navigation and
+  // when the visible text changes.
+  useEffect(() => () => stopSpeaking(), []);
+  useEffect(() => {
+    if (!menu) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenu(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [menu]);
+  useEffect(() => {
+    if (!hint) return;
+    const timer = window.setTimeout(() => setHint(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [hint]);
 
   if (!article) return <p className="muted">Loading…</p>;
 
@@ -141,6 +179,74 @@ export default function ArticlePage() {
   }
 
   const body = view === "translation" ? translationBody : article.text;
+  const paragraphs = (body ?? "")
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+
+  function isSpeaking(paragraph: number, sentenceIndex: number): boolean {
+    return (
+      speaking?.paragraph === paragraph &&
+      speaking.sentenceIndex === sentenceIndex
+    );
+  }
+
+  function onListen() {
+    if (!menu) return;
+    const { paragraph, sentenceIndex, sentence } = menu;
+    if (isSpeaking(paragraph, sentenceIndex)) {
+      speechRun.current += 1;
+      stopSpeaking();
+      setSpeaking(null);
+      setMenu(null);
+      return;
+    }
+    if (!canSpeak()) {
+      setHint("Text-to-speech is not available in this browser.");
+      return;
+    }
+    const settings = loadSettings();
+    const lang =
+      view === "translation"
+        ? speechLangFor(settings.targetLanguage)
+        : ORIGINAL_LANG;
+    speechRun.current += 1;
+    const runId = speechRun.current;
+    const started = speakSentence(sentence, lang, {
+      onEnd: () => {
+        if (speechRun.current === runId) setSpeaking(null);
+      },
+      onError: () => {
+        if (speechRun.current !== runId) return;
+        setSpeaking(null);
+        setHint("No system voice is available for this language.");
+      },
+    });
+    setMenu(null);
+    if (started) setSpeaking({ paragraph, sentenceIndex });
+  }
+
+  async function onTranslateSentence() {
+    if (!menu) return;
+    const sentence = menu.sentence;
+    setMenu(null);
+    try {
+      await navigator.clipboard.writeText(sentence);
+      setHint("Copied. Tap the Google Translate bubble to open it there.");
+    } catch {
+      setHint("Could not copy the sentence.");
+    }
+  }
+
+  function switchView(next: "translation" | "original") {
+    if (next === view) return;
+    // Speech indexes the old text; stop it when the visible text changes.
+    speechRun.current += 1;
+    stopSpeaking();
+    setSpeaking(null);
+    setMenu(null);
+    setView(next);
+  }
 
   return (
     <article className="article">
@@ -200,14 +306,14 @@ export default function ArticlePage() {
         <button
           type="button"
           className={view === "translation" ? "active" : ""}
-          onClick={() => setView("translation")}
+          onClick={() => switchView("translation")}
         >
           Translation
         </button>
         <button
           type="button"
           className={view === "original" ? "active" : ""}
-          onClick={() => setView("original")}
+          onClick={() => switchView("original")}
         >
           Original
         </button>
@@ -225,10 +331,75 @@ export default function ArticlePage() {
         </button>
       </div>
       {body ? (
-        <div className="article-text">{body}</div>
+        <>
+          <p className="muted">Tap a sentence to listen or translate it.</p>
+          <div className="article-text">
+            {paragraphs.map((paragraph, paragraphIndex) => {
+              const sentences = splitSentences(paragraph);
+              return (
+                // biome-ignore lint/suspicious/noArrayIndexKey: sentences have no stable id
+                <p className="para" key={paragraphIndex}>
+                  {sentences.map((sentence, sentenceIndex) => (
+                    <button
+                      // biome-ignore lint/suspicious/noArrayIndexKey: sentences have no stable id
+                      key={sentenceIndex}
+                      type="button"
+                      className={
+                        isSpeaking(paragraphIndex, sentenceIndex)
+                          ? "sentence speaking"
+                          : "sentence"
+                      }
+                      onClick={() =>
+                        setMenu({
+                          paragraph: paragraphIndex,
+                          sentenceIndex,
+                          sentence,
+                        })
+                      }
+                    >
+                      {sentence}
+                      {sentenceIndex < sentences.length - 1 ? " " : ""}
+                    </button>
+                  ))}
+                </p>
+              );
+            })}
+          </div>
+        </>
       ) : (
         <p className="muted">No translation yet.</p>
       )}
+      {menu && (
+        <>
+          {/* biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/useKeyWithClickEvents: backdrop tap closes the sheet; Escape is handled globally */}
+          <div
+            className="sheet-backdrop"
+            onClick={(event) => {
+              if (event.target === event.currentTarget) setMenu(null);
+            }}
+          >
+            <div
+              className="sheet"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Sentence actions"
+            >
+              <p className="sheet-sentence">{menu.sentence}</p>
+              <div className="sheet-actions">
+                <button type="button" className="primary" onClick={onListen}>
+                  {isSpeaking(menu.paragraph, menu.sentenceIndex)
+                    ? "Stop"
+                    : "Listen"}
+                </button>
+                <button type="button" onClick={onTranslateSentence}>
+                  Translate
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+      {hint && <p className="toast">{hint}</p>}
     </article>
   );
 }

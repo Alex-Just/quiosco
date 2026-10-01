@@ -330,6 +330,84 @@ button.danger {
   white-space: pre-wrap;
 }
 
+.article-text .para {
+  margin: 0 0 0.9em;
+}
+
+.article-text .para:last-child {
+  margin-bottom: 0;
+}
+
+.sentence {
+  display: inline;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  white-space: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+
+.sentence.speaking {
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+  border-radius: 3px;
+}
+
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.sheet {
+  width: 100%;
+  padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line);
+  border-radius: 16px 16px 0 0;
+  background: var(--card);
+}
+
+.sheet-sentence {
+  margin: 0 0 12px;
+  max-height: 5.4em;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.sheet-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.sheet-actions button {
+  flex: 1;
+  min-height: 44px;
+}
+
+.toast {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  z-index: 50;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--fg);
+  font-size: 0.95rem;
+}
+
 .settings label,
 .add label {
   display: block;
