@@ -2,9 +2,9 @@ const TITLE_INPUT_CHARS = 4000;
 
 export const TITLE_SYSTEM_PROMPT = `You extract the headline of a news article. You receive raw article text (it may start with page noise such as menus or cookie notices).
 
-Return ONLY the article's headline/title as a single plain-text line:
-- If the text contains a discernible headline, return it verbatim (fix nothing, translate nothing).
-- If there is no clear headline, write one short factual title (max ~12 words) summarizing the article, in the same language as the text.
+Return ONLY the headline as a single plain-text line:
+- If the text contains a clear headline (a short standalone line, not a sentence), return it verbatim.
+- Otherwise, write a concise headline-style title of 4-12 words summarizing the article, in the same language as the text. Never copy a full sentence.
 - No quotes, no markdown, no commentary, no trailing period. Output the title line only.`;
 
 export async function extractTitleWithLlm(
