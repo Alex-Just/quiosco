@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { formatDateTime } from "../lib/format";
-import { splitSentences } from "../lib/sentences";
+import { splitSentences, stripSentenceMarkers } from "../lib/sentences";
 import { loadSettings } from "../lib/settings";
 import {
   canSpeak,
@@ -229,7 +229,7 @@ export default function ArticlePage() {
     if (started) setSpeaking({ paragraph, sentenceIndex });
   }
 
-  async function onTranslateSentence() {
+  async function onCopySentence() {
     if (!menu) return;
     const sentence = menu.sentence;
     setMenu(null);
@@ -356,7 +356,7 @@ export default function ArticlePage() {
                         setMenu({
                           paragraph: paragraphIndex,
                           sentenceIndex,
-                          sentence,
+                          sentence: stripSentenceMarkers(sentence),
                         })
                       }
                     >
@@ -394,8 +394,8 @@ export default function ArticlePage() {
                     ? "Stop"
                     : "Listen"}
                 </button>
-                <button type="button" onClick={onTranslateSentence}>
-                  Translate
+                <button type="button" onClick={onCopySentence}>
+                  Copy
                 </button>
               </div>
             </div>

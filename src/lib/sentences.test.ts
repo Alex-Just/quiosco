@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { splitSentences } from "./sentences";
+import { splitSentences, stripSentenceMarkers } from "./sentences";
 
 describe("splitSentences", () => {
   it("splits on sentence-ending punctuation", () => {
@@ -45,5 +45,51 @@ describe("splitSentences", () => {
 
   it("returns an empty list for blank input", () => {
     expect(splitSentences("   ")).toEqual([]);
+  });
+});
+
+describe("stripSentenceMarkers", () => {
+  it("drops a standalone paragraph number line", () => {
+    expect(
+      stripSentenceMarkers(
+        "11\n🇪🇸 Incluso podrán superarse los 250/300 en Castellón y Tarragona.",
+      ),
+    ).toBe("Incluso podrán superarse los 250/300 en Castellón y Tarragona.");
+  });
+
+  it("drops numbered list markers", () => {
+    expect(stripSentenceMarkers("1. El Gobierno anunció medidas.")).toBe(
+      "El Gobierno anunció medidas.",
+    );
+    expect(stripSentenceMarkers("2) Fue puntual.")).toBe("Fue puntual.");
+  });
+
+  it("drops a leading flag emoji", () => {
+    expect(stripSentenceMarkers("🇪🇸 Los rojos se activan a las 18.00.")).toBe(
+      "Los rojos se activan a las 18.00.",
+    );
+  });
+
+  it("drops number and flag together", () => {
+    expect(stripSentenceMarkers("13\n🇷🇺 Обстановка ухудшается.")).toBe(
+      "Обстановка ухудшается.",
+    );
+  });
+
+  it("keeps a sentence that merely starts with a year", () => {
+    expect(stripSentenceMarkers("2026 fue un año récord.")).toBe(
+      "2026 fue un año récord.",
+    );
+  });
+
+  it("keeps mid-sentence numbers and flags", () => {
+    expect(stripSentenceMarkers("Superó los 250/300 en Castellón.")).toBe(
+      "Superó los 250/300 en Castellón.",
+    );
+  });
+
+  it("never returns an empty string", () => {
+    expect(stripSentenceMarkers("11")).toBe("11");
+    expect(stripSentenceMarkers("🇪🇸")).toBe("🇪🇸");
   });
 });
