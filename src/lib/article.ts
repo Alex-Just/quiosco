@@ -31,6 +31,7 @@ export function newArticle(input: {
     totalChunks: 0,
     cleanText: null,
     translationPhase: null,
+    model: null,
     cleanup: input.cleanup ?? true,
     status: "unread",
     error: null,

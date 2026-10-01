@@ -24,6 +24,7 @@ export async function translateArticle(
     await store.update(article.id, {
       translationStatus: "running",
       translationPhase: cleanup ? "cleaning" : "translating",
+      model: settings.model,
       totalChunks: 0,
       error: null,
     });

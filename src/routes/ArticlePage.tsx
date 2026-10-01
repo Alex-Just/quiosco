@@ -141,6 +141,7 @@ export default function ArticlePage() {
       <p className="article-meta">
         {article.site ?? "manual"} ·{" "}
         {new Date(article.createdAt).toLocaleString()} · via {article.via}
+        {article.model ? ` · translated with ${article.model}` : ""}
         {article.url && (
           <>
             {" · "}

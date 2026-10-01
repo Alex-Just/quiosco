@@ -66,6 +66,7 @@ describe("translateArticle", () => {
     expect(updates.some((patch) => patch.cleanText === "Texto limpio.")).toBe(
       true,
     );
+    expect(updates.some((patch) => patch.model === "m")).toBe(true);
     expect(updates.some((patch) => patch.translation === "Translated.")).toBe(
       true,
     );

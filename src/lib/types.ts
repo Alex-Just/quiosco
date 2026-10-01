@@ -16,6 +16,7 @@ export interface Article {
   totalChunks: number;
   cleanText?: string | null;
   translationPhase?: "cleaning" | "translating" | null;
+  model?: string | null;
   cleanup?: boolean;
   status: ArticleStatus;
   error: string | null;
