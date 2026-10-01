@@ -4,14 +4,9 @@ import { loadSettings, saveSettings } from "../lib/settings";
 import type { Settings } from "../lib/types";
 
 const MODEL_SUGGESTIONS = [
+  "space-bunny-free",
   "glm-5.3-flash",
   "deepseek-v4.1-flash",
-  "big-pickle",
-  "space-bunny-free",
-  "longcat-2.5-preview-free",
-  "mimo-v2.6-flash-free",
-  "nemotron-3.5-lightning-free",
-  "gemini-3.5-flash-lite",
 ];
 
 export default function SettingsPage() {
