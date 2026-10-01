@@ -11,6 +11,10 @@ export function cancelTranslation(articleId: string): void {
   inflight.get(articleId)?.abort();
 }
 
+export function isTranslationRunning(): boolean {
+  return inflight.size > 0;
+}
+
 export async function translateArticle(
   store: ArticleStore,
   article: Article,

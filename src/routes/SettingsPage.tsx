@@ -100,6 +100,7 @@ export default function SettingsPage() {
         When earlier rungs fail, only the article URL is sent to jina.ai,
         web.archive.org, or archive.ph.
       </p>
+      <p className="muted">Build {__BUILD_ID__}</p>
     </section>
   );
 }
