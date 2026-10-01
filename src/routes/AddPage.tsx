@@ -5,10 +5,12 @@ import {
   useNavigate,
   useSearchParams,
 } from "react-router-dom";
+import { createApi } from "../lib/api";
 import { MAX_ARTICLE_CHARS, newArticle } from "../lib/article";
 import { cleanArticleText } from "../lib/clean";
 import { loadSettings } from "../lib/settings";
 import { clearPendingShare, readPendingShare } from "../lib/sharePayload";
+import { extractTitleWithLlm } from "../lib/titleWithLlm";
 import { translateArticle } from "../lib/translateArticle";
 import { normalizeUrl } from "../lib/url";
 import { useStore } from "../lib/useStore";
@@ -74,13 +76,23 @@ export default function AddPage() {
     try {
       const settings = loadSettings();
       const clipped = cleaned.slice(0, MAX_ARTICLE_CHARS);
+      let finalTitle = title.trim();
+      if (!finalTitle && settings.appToken) {
+        const api = createApi({ token: settings.appToken });
+        const guessed = await extractTitleWithLlm(
+          clipped,
+          settings.model,
+          (request) => api.translate(request),
+        );
+        if (guessed) finalTitle = guessed;
+      }
       if (editId) {
         const existing = await store.get(editId);
         const textChanged = !existing || existing.text !== clipped;
         const cleanupChanged =
           !existing || (existing.cleanup !== false) !== cleanup;
         await store.update(editId, {
-          title: title.trim() || "Untitled",
+          title: finalTitle || "Untitled",
           url: normalizeUrl(url),
           text: clipped,
           cleanup,
@@ -113,7 +125,7 @@ export default function AddPage() {
       }
       const article = newArticle({
         url: canonical,
-        title,
+        title: finalTitle,
         text: clipped,
         via: "manual",
         cleanup,
@@ -140,7 +152,7 @@ export default function AddPage() {
     <section className="add">
       <h1>{editId ? "Edit article" : "Add article"}</h1>
       <label>
-        Title
+        Title (optional — guessed from the text if left empty)
         <input
           value={title}
           onChange={(event) => setTitle(event.target.value)}
