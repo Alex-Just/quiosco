@@ -12,6 +12,8 @@ export interface TranslationProgress {
   translatedChunks: number;
   totalChunks: number;
   translation: string;
+  /** In-flight text of the chunk being translated; cleared when it lands. */
+  partial?: string;
 }
 
 export class TranslationError extends Error {
@@ -74,20 +76,20 @@ export async function runTranslation(
               text: chunks[index] ?? "",
             },
             (partial) => {
-              // Stream partials into the persisted translation so the reader
-              // sees text grow, throttled to avoid hammering storage.
+              // Stream partials in a separate field so the reader sees text
+              // grow, throttled to avoid hammering storage. Keeping them out
+              // of `translation` means a resume after a cancel/crash never
+              // re-appends a partial chunk.
               const now = Date.now();
               if (now - lastPartialEmit < 600) return;
               lastPartialEmit = now;
-              const preview = translation
-                ? `${translation}\n\n${partial}`
-                : partial;
               partialChain = partialChain
                 .then(() =>
                   options.onProgress?.({
                     translatedChunks: index,
                     totalChunks,
-                    translation: preview,
+                    translation,
+                    partial,
                   }),
                 )
                 .catch(() => undefined);

@@ -124,16 +124,22 @@ export default function ArticlePage() {
     }
   }
 
+  // The streamed tail of the chunk in flight is shown (and copied) after the
+  // committed chunks; it is replaced by the full chunk when it lands.
+  const translationBody = [article.translation, article.partial]
+    .filter((value): value is string => Boolean(value))
+    .join("\n\n");
+
   async function copy(kind: "translation" | "original") {
     if (!article) return;
-    const value = kind === "translation" ? article.translation : article.text;
+    const value = kind === "translation" ? translationBody : article.text;
     if (!value) return;
     await navigator.clipboard.writeText(value);
     setCopied(kind);
     window.setTimeout(() => setCopied("none"), 1500);
   }
 
-  const body = view === "translation" ? article.translation : article.text;
+  const body = view === "translation" ? translationBody : article.text;
 
   return (
     <article className="article">
@@ -209,7 +215,7 @@ export default function ArticlePage() {
         <button
           type="button"
           onClick={() => copy("translation")}
-          disabled={!article.translation}
+          disabled={!translationBody}
         >
           {copied === "translation" ? "Copied!" : "Copy translation"}
         </button>

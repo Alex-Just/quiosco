@@ -101,6 +101,7 @@ export default function AddPage() {
           ...(textChanged || cleanupChanged
             ? {
                 translation: null,
+                partial: null,
                 translationStatus: "pending" as const,
                 translatedChunks: 0,
                 totalChunks: 0,

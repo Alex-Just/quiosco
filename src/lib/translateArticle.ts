@@ -26,6 +26,7 @@ export async function translateArticle(
       translationPhase: cleanup ? "cleaning" : "translating",
       model: settings.model,
       totalChunks: 0,
+      partial: null,
       error: null,
     });
     let source = article.text;
@@ -65,6 +66,7 @@ export async function translateArticle(
       onProgress: async (progress) => {
         await store.update(article.id, {
           translation: progress.translation,
+          partial: progress.partial ?? null,
           translatedChunks: progress.translatedChunks,
           totalChunks: progress.totalChunks,
         });
@@ -75,6 +77,7 @@ export async function translateArticle(
       translationStatus: "done",
       error: null,
       totalChunks,
+      partial: null,
     });
   } catch (error) {
     if (controller.signal.aborted) {
@@ -84,11 +87,13 @@ export async function translateArticle(
         translationStatus: "pending",
         translationPhase: null,
         error: null,
+        partial: null,
       });
     } else {
       await store.update(article.id, {
         translationStatus: "error",
         error: error instanceof Error ? error.message : "translation failed",
+        partial: null,
       });
     }
   } finally {

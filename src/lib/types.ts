@@ -11,6 +11,8 @@ export interface Article {
   text: string;
   via: Via;
   translation: string | null;
+  /** Streamed tail of the chunk in flight; only set while translating. */
+  partial?: string | null;
   translationStatus: TranslationStatus;
   translatedChunks: number;
   totalChunks: number;

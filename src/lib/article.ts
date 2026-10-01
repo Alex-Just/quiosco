@@ -26,6 +26,7 @@ export function newArticle(input: {
     text: input.text.slice(0, MAX_ARTICLE_CHARS),
     via: input.via,
     translation: null,
+    partial: null,
     translationStatus: "pending",
     translatedChunks: 0,
     totalChunks: 0,

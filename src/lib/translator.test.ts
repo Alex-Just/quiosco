@@ -134,8 +134,44 @@ describe("runTranslation", () => {
     expect(result.translation).toBe("Hello world.");
     const partials = onProgress.mock.calls
       .map(([progress]) => progress)
-      .filter((progress) => progress.translatedChunks === 0);
+      .filter((progress) => progress.partial !== undefined);
     expect(partials.length).toBeGreaterThan(0);
-    expect(partials[0]?.translation).toBe("Hel");
+    expect(partials[0]).toMatchObject({
+      translatedChunks: 0,
+      translation: "",
+      partial: "Hel",
+    });
+  });
+
+  it("keeps partial text out of the committed translation on resume", async () => {
+    const onProgress = vi.fn();
+    const translate = vi.fn(
+      async (_request: unknown, onDelta?: (partial: string) => void) => {
+        onDelta?.("mitad");
+        return "completo";
+      },
+    );
+    await runTranslation({
+      text: longText(4000),
+      settings,
+      translate,
+      existingTranslation: "primera parte",
+      translatedChunks: 1,
+      onProgress,
+    });
+    const partials = onProgress.mock.calls
+      .map(([progress]) => progress)
+      .filter((progress) => progress.partial !== undefined);
+    expect(partials.length).toBeGreaterThan(0);
+    expect(partials[0]).toMatchObject({
+      translatedChunks: 1,
+      translation: "primera parte",
+      partial: "mitad",
+    });
+    for (const progress of partials) {
+      // The in-flight text never leaks into the committed translation, so a
+      // resume can never duplicate it.
+      expect(progress.translation).not.toContain("mitad");
+    }
   });
 });

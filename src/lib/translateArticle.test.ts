@@ -121,6 +121,57 @@ describe("translateArticle", () => {
       translationStatus: "pending",
       translationPhase: null,
       error: null,
+      partial: null,
     });
+  });
+
+  it("persists streamed partials separately and clears them on completion", async () => {
+    const sse = [
+      'data: {"choices":[{"delta":{"content":"Mitad"}}]}',
+      "",
+      "data: [DONE]",
+      "",
+    ].join("\n");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(sse, {
+            headers: { "content-type": "text/event-stream" },
+          }),
+      ),
+    );
+    const { store, updates } = fakeStore();
+    await translateArticle(store, makeArticle({ cleanup: false }), settings);
+    expect(
+      updates.some(
+        (patch) => patch.partial === "Mitad" && patch.translation === "",
+      ),
+    ).toBe(true);
+    expect(updates.at(-1)).toMatchObject({
+      translationStatus: "done",
+      translation: "Mitad",
+      partial: null,
+    });
+  });
+
+  it("ignores a stale partial on resume and clears it when the run starts", async () => {
+    stubFetch();
+    const { store, updates } = fakeStore();
+    const text = `${"primero ".repeat(1200)}\n\n${"segundo ".repeat(1200)}`;
+    await translateArticle(
+      store,
+      makeArticle({
+        cleanup: false,
+        text,
+        translation: "Chunk one.",
+        translatedChunks: 1,
+        totalChunks: 2,
+        partial: "half of chunk two",
+      }),
+      settings,
+    );
+    expect(updates[0]).toMatchObject({ partial: null });
+    expect(updates.at(-1)?.translation).toBe("Chunk one.\n\nTranslated.");
   });
 });
