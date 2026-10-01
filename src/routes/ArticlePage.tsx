@@ -5,6 +5,7 @@ import { splitSentences } from "../lib/sentences";
 import { loadSettings } from "../lib/settings";
 import {
   canSpeak,
+  isCancellation,
   ORIGINAL_LANG,
   speakSentence,
   speechLangFor,
@@ -216,10 +217,12 @@ export default function ArticlePage() {
       onEnd: () => {
         if (speechRun.current === runId) setSpeaking(null);
       },
-      onError: () => {
+      onError: (reason) => {
         if (speechRun.current !== runId) return;
         setSpeaking(null);
-        setHint("No system voice is available for this language.");
+        if (!isCancellation(reason)) {
+          setHint("Could not play this sentence with the system voice.");
+        }
       },
     });
     setMenu(null);

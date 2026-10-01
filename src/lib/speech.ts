@@ -41,9 +41,15 @@ export function canSpeak(): boolean {
   return typeof window !== "undefined" && "speechSynthesis" in window;
 }
 
+// Cancellations are expected (stop button, replaced utterance, Android maps
+// pause() to cancel()); they must not surface as "no voice" failures.
+export function isCancellation(reason: string): boolean {
+  return reason === "canceled" || reason === "interrupted";
+}
+
 export interface SpeakHandlers {
   onEnd?: () => void;
-  onError?: () => void;
+  onError?: (reason: string) => void;
 }
 
 export function speakSentence(
@@ -57,7 +63,7 @@ export function speakSentence(
   const utterance = new SpeechSynthesisUtterance(text);
   if (lang) utterance.lang = lang;
   utterance.onend = () => handlers.onEnd?.();
-  utterance.onerror = () => handlers.onError?.();
+  utterance.onerror = (event) => handlers.onError?.(event.error);
   synth.speak(utterance);
   return true;
 }

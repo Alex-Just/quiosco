@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ORIGINAL_LANG, speechLangFor } from "./speech";
+import { isCancellation, ORIGINAL_LANG, speechLangFor } from "./speech";
 
 describe("speechLangFor", () => {
   it("maps the common target languages to BCP-47 codes", () => {
@@ -19,5 +19,18 @@ describe("speechLangFor", () => {
 
   it("exposes the original-article language", () => {
     expect(ORIGINAL_LANG).toBe("es-ES");
+  });
+});
+
+describe("isCancellation", () => {
+  it("treats user and browser cancellations as expected, not as failures", () => {
+    expect(isCancellation("canceled")).toBe(true);
+    expect(isCancellation("interrupted")).toBe(true);
+  });
+
+  it("does not treat real synthesis failures as cancellations", () => {
+    expect(isCancellation("voice-unavailable")).toBe(false);
+    expect(isCancellation("synthesis-failed")).toBe(false);
+    expect(isCancellation("not-allowed")).toBe(false);
   });
 });
