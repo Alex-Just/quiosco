@@ -2,7 +2,7 @@ import { consumeChunks, DEFAULT_DAILY_CHUNK_BUDGET } from "./budget";
 import type { Env } from "./env";
 import { jsonResponse } from "./headers";
 
-export const TRANSLATE_TIMEOUT_MS = 120_000;
+export const TRANSLATE_TIMEOUT_MS = 90_000;
 export const MAX_TRANSLATE_BODY_BYTES = 2 * 1024 * 1024;
 const MAX_CHUNK_TEXT_CHARS = 100_000;
 

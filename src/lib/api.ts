@@ -30,6 +30,11 @@ export interface ApiClient {
   health(): Promise<boolean>;
 }
 
+// Client-side cutoff, slightly above the worker's own upstream timeouts (90s
+// translate, 20s per fetch hop) so its clean error responses win when it is
+// alive. Without this, a dropped connection hangs the fetch forever.
+const CLIENT_TIMEOUT_MS = 130_000;
+
 export function createApi(options: {
   token: string;
   fetchFn?: typeof fetch;
@@ -50,7 +55,10 @@ export function createApi(options: {
       const response = await ensureOk(
         await fetchFn(
           `/api/fetch?mode=${rung}&url=${encodeURIComponent(url)}`,
-          { headers: authHeaders },
+          {
+            headers: authHeaders,
+            signal: AbortSignal.timeout(CLIENT_TIMEOUT_MS),
+          },
         ),
       );
       return {
@@ -71,6 +79,7 @@ export function createApi(options: {
           method: "POST",
           headers: { ...authHeaders, "Content-Type": "application/json" },
           body: JSON.stringify(request),
+          signal: AbortSignal.timeout(CLIENT_TIMEOUT_MS),
         }),
       );
       const data = (await response.json()) as { text?: unknown };
@@ -80,7 +89,12 @@ export function createApi(options: {
     },
 
     async health() {
-      await ensureOk(await fetchFn("/api/health", { headers: authHeaders }));
+      await ensureOk(
+        await fetchFn("/api/health", {
+          headers: authHeaders,
+          signal: AbortSignal.timeout(CLIENT_TIMEOUT_MS),
+        }),
+      );
       return true;
     },
   };

@@ -21,7 +21,10 @@ describe("createApi", () => {
 
     expect(fetchFn).toHaveBeenCalledWith(
       "/api/fetch?mode=direct&url=https%3A%2F%2Fexample.com%2Fa%3Fb%3D1",
-      { headers: { Authorization: "Bearer secret" } },
+      {
+        headers: { Authorization: "Bearer secret" },
+        signal: expect.any(AbortSignal),
+      },
     );
     expect(result.kind).toBe("html");
     expect(result.finalUrl).toBe("https://example.com/final");
@@ -63,6 +66,7 @@ describe("createApi", () => {
       Authorization: "Bearer secret",
       "Content-Type": "application/json",
     });
+    expect(init.signal).toBeInstanceOf(AbortSignal);
   });
 
   it("maps 401/429/other statuses to typed errors", async () => {
