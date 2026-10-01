@@ -28,7 +28,10 @@ export class TranslationError extends Error {
 export interface RunTranslationOptions {
   text: string;
   settings: TranslationSettings;
-  translate: (request: TranslateRequest) => Promise<string>;
+  translate: (
+    request: TranslateRequest,
+    onDelta?: (partial: string) => void,
+  ) => Promise<string>;
   existingTranslation?: string;
   translatedChunks?: number;
   totalChunks?: number;
@@ -61,13 +64,37 @@ export async function runTranslation(
     let done = false;
     for (let attempt = 1; attempt <= maxAttempts && !done; attempt += 1) {
       try {
+        let lastPartialEmit = 0;
+        let partialChain: Promise<void> = Promise.resolve();
         const output = (
-          await options.translate({
-            model: options.settings.model,
-            system,
-            text: chunks[index] ?? "",
-          })
+          await options.translate(
+            {
+              model: options.settings.model,
+              system,
+              text: chunks[index] ?? "",
+            },
+            (partial) => {
+              // Stream partials into the persisted translation so the reader
+              // sees text grow, throttled to avoid hammering storage.
+              const now = Date.now();
+              if (now - lastPartialEmit < 600) return;
+              lastPartialEmit = now;
+              const preview = translation
+                ? `${translation}\n\n${partial}`
+                : partial;
+              partialChain = partialChain
+                .then(() =>
+                  options.onProgress?.({
+                    translatedChunks: index,
+                    totalChunks,
+                    translation: preview,
+                  }),
+                )
+                .catch(() => undefined);
+            },
+          )
         ).trim();
+        await partialChain;
         if (!output) throw new Error("empty translation");
         translation = translation ? `${translation}\n\n${output}` : output;
         translatedChunks = index + 1;

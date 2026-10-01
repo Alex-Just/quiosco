@@ -57,7 +57,8 @@ export async function translateArticle(
         rules: settings.rules,
         model: settings.model,
       },
-      translate: (request) => api.translate(request, controller.signal),
+      translate: (request, onDelta) =>
+        api.translateStream(request, controller.signal, onDelta),
       existingTranslation: article.translation ?? undefined,
       translatedChunks: article.translatedChunks,
       signal: controller.signal,

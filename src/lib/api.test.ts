@@ -97,4 +97,67 @@ describe("createApi", () => {
     });
     await expect(api.health()).resolves.toBe(true);
   });
+
+  it("streams SSE deltas and returns the full text", async () => {
+    const sse = [
+      'data: {"choices":[{"delta":{"content":"Hola"}}]}',
+      "",
+      'data: {"choices":[{"delta":{"content":" mundo"}}]}',
+      "",
+      "data: [DONE]",
+      "",
+    ].join("\n");
+    const fetchFn = vi.fn(
+      async () =>
+        new Response(sse, {
+          headers: { "content-type": "text/event-stream" },
+        }),
+    );
+    const api = createApi({
+      token: "t",
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    const deltas: string[] = [];
+    const text = await api.translateStream(
+      { model: "m", system: "s", text: "t" },
+      undefined,
+      (partial) => deltas.push(partial),
+    );
+    expect(text).toBe("Hola mundo");
+    expect(deltas).toEqual(["Hola", "Hola mundo"]);
+    const [url] = fetchFn.mock.calls[0] as unknown as [string];
+    expect(url).toBe("/api/translate?stream=1");
+  });
+
+  it("falls back to a JSON response when the upstream does not stream", async () => {
+    const fetchFn = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ text: "hola" }), {
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    const api = createApi({
+      token: "t",
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    await expect(
+      api.translateStream({ model: "m", system: "s", text: "t" }, undefined),
+    ).resolves.toBe("hola");
+  });
+
+  it("rejects a stream that ends without a completion marker", async () => {
+    const fetchFn = vi.fn(
+      async () =>
+        new Response('data: {"choices":[{"delta":{"content":"Hola"}}]}\n\n', {
+          headers: { "content-type": "text/event-stream" },
+        }),
+    );
+    const api = createApi({
+      token: "t",
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    await expect(
+      api.translateStream({ model: "m", system: "s", text: "t" }, undefined),
+    ).rejects.toThrow("stream interrupted");
+  });
 });

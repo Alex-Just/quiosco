@@ -3,6 +3,7 @@ import type { Env } from "./env";
 import { jsonResponse } from "./headers";
 
 export const TRANSLATE_TIMEOUT_MS = 90_000;
+export const STREAM_TIMEOUT_MS = 300_000;
 export const MAX_TRANSLATE_BODY_BYTES = 2 * 1024 * 1024;
 const MAX_CHUNK_TEXT_CHARS = 100_000;
 
@@ -99,6 +100,10 @@ export async function handleTranslate(
 
   try {
     const useResponses = responsesModels(env).includes(payload.model);
+    // Stream only chat-protocol models; Responses-protocol models fall back to
+    // a single JSON response the client already understands.
+    const stream =
+      new URL(request.url).searchParams.get("stream") === "1" && !useResponses;
     const upstream = await fetchImpl(
       useResponses
         ? "https://opencode.ai/zen/v1/responses"
@@ -118,20 +123,41 @@ export async function handleTranslate(
                   { role: "user", content: payload.text },
                 ],
               }
-            : {
-                model: payload.model,
-                messages: [
-                  { role: "system", content: payload.system },
-                  { role: "user", content: payload.text },
-                ],
-              },
+            : stream
+              ? {
+                  model: payload.model,
+                  messages: [
+                    { role: "system", content: payload.system },
+                    { role: "user", content: payload.text },
+                  ],
+                  stream: true,
+                }
+              : {
+                  model: payload.model,
+                  messages: [
+                    { role: "system", content: payload.system },
+                    { role: "user", content: payload.text },
+                  ],
+                },
         ),
-        signal: AbortSignal.timeout(TRANSLATE_TIMEOUT_MS),
+        signal: AbortSignal.timeout(
+          stream ? STREAM_TIMEOUT_MS : TRANSLATE_TIMEOUT_MS,
+        ),
       },
     );
     if (!upstream.ok) {
       await upstream.body?.cancel().catch(() => undefined);
       return jsonResponse({ error: "upstream error" }, 502);
+    }
+    if (stream) {
+      const contentType = upstream.headers.get("content-type") ?? "";
+      if (contentType.includes("text/event-stream") && upstream.body) {
+        return new Response(upstream.body, {
+          status: 200,
+          headers: { "content-type": "text/event-stream" },
+        });
+      }
+      // Upstream ignored the stream flag: fall through to the JSON path.
     }
     const data = (await upstream.json()) as unknown;
     const text = useResponses

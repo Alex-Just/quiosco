@@ -114,4 +114,28 @@ describe("runTranslation", () => {
     ).rejects.toThrow("cancelled");
     expect(translate).not.toHaveBeenCalled();
   });
+
+  it("reports streaming partials while a chunk is in flight", async () => {
+    const onProgress = vi.fn();
+    const translate = async (
+      _request: unknown,
+      onDelta?: (partial: string) => void,
+    ) => {
+      onDelta?.("Hel");
+      onDelta?.("Hello");
+      return "Hello world.";
+    };
+    const result = await runTranslation({
+      text: "Hola mundo.",
+      settings,
+      translate,
+      onProgress,
+    });
+    expect(result.translation).toBe("Hello world.");
+    const partials = onProgress.mock.calls
+      .map(([progress]) => progress)
+      .filter((progress) => progress.translatedChunks === 0);
+    expect(partials.length).toBeGreaterThan(0);
+    expect(partials[0]?.translation).toBe("Hel");
+  });
 });

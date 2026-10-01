@@ -38,6 +38,36 @@ const upstreamOk = (content: string) =>
   });
 
 describe("handleTranslate", () => {
+  it("passes an SSE stream through when stream=1 is requested", async () => {
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response('data: {"choices":[{"delta":{"content":"x"}}]}\n\n', {
+          headers: { "content-type": "text/event-stream" },
+        }),
+    );
+    const response = await handleTranslate(
+      new Request("https://app.example/api/translate?stream=1", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "deepseek-v4.1-flash",
+          system: "s",
+          text: "t",
+        }),
+      }),
+      makeEnv(),
+      fetchImpl as unknown as typeof fetch,
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/event-stream");
+    const [, init] = fetchImpl.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect(JSON.parse(String(init.body))).toMatchObject({ stream: true });
+    expect(await response.text()).toContain("data:");
+  });
+
   it("uses the responses protocol for responses-only models", async () => {
     const fetchImpl = vi.fn(
       async () =>
