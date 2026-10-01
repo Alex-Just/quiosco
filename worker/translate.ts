@@ -19,6 +19,39 @@ export function allowedModels(env: Env): string[] {
     .filter((model) => model.length > 0);
 }
 
+// Models that only speak the Responses API on Zen (chat-completions returns
+// "Model does not support this protocol" for them).
+export function responsesModels(env: Env): string[] {
+  return (env.RESPONSES_MODELS ?? "")
+    .split(",")
+    .map((model) => model.trim())
+    .filter((model) => model.length > 0);
+}
+
+function chatOutputText(data: unknown): string | null {
+  const parsed = data as {
+    choices?: Array<{ message?: { content?: unknown } }>;
+  };
+  const content = parsed.choices?.[0]?.message?.content;
+  return typeof content === "string" ? content : null;
+}
+
+function responsesOutputText(data: unknown): string | null {
+  const parsed = data as {
+    output?: Array<{
+      content?: Array<{ type?: string; text?: unknown }>;
+    }>;
+  };
+  for (const item of parsed.output ?? []) {
+    for (const part of item.content ?? []) {
+      if (part.type === "output_text" && typeof part.text === "string") {
+        return part.text;
+      }
+    }
+  }
+  return null;
+}
+
 export function parseDailyBudget(env: Env): number {
   const parsed = Number.parseInt(env.DAILY_CHUNK_BUDGET ?? "", 10);
   return Number.isFinite(parsed) && parsed > 0
@@ -65,21 +98,34 @@ export async function handleTranslate(
   if (!budget.ok) return jsonResponse({ error: "daily budget exceeded" }, 429);
 
   try {
+    const useResponses = responsesModels(env).includes(payload.model);
     const upstream = await fetchImpl(
-      "https://opencode.ai/zen/v1/chat/completions",
+      useResponses
+        ? "https://opencode.ai/zen/v1/responses"
+        : "https://opencode.ai/zen/v1/chat/completions",
       {
         method: "POST",
         headers: {
           Authorization: `Bearer ${env.OPENCODE_API_KEY}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          model: payload.model,
-          messages: [
-            { role: "system", content: payload.system },
-            { role: "user", content: payload.text },
-          ],
-        }),
+        body: JSON.stringify(
+          useResponses
+            ? {
+                model: payload.model,
+                input: [
+                  { role: "system", content: payload.system },
+                  { role: "user", content: payload.text },
+                ],
+              }
+            : {
+                model: payload.model,
+                messages: [
+                  { role: "system", content: payload.system },
+                  { role: "user", content: payload.text },
+                ],
+              },
+        ),
         signal: AbortSignal.timeout(TRANSLATE_TIMEOUT_MS),
       },
     );
@@ -87,10 +133,10 @@ export async function handleTranslate(
       await upstream.body?.cancel().catch(() => undefined);
       return jsonResponse({ error: "upstream error" }, 502);
     }
-    const data = (await upstream.json()) as {
-      choices?: Array<{ message?: { content?: unknown } }>;
-    };
-    const text = data.choices?.[0]?.message?.content;
+    const data = (await upstream.json()) as unknown;
+    const text = useResponses
+      ? responsesOutputText(data)
+      : chatOutputText(data);
     if (typeof text !== "string")
       return jsonResponse({ error: "upstream error" }, 502);
     return jsonResponse({ text });

@@ -7,6 +7,7 @@ const MODEL_SUGGESTIONS = [
   "space-bunny-free",
   "glm-5.3-flash",
   "deepseek-v4.1-flash",
+  "gpt-6-luna",
 ];
 
 export default function SettingsPage() {

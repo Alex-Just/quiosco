@@ -18,5 +18,6 @@ export interface Env {
   BUDGET: KVNamespaceLike;
   ASSETS: AssetsLike;
   ALLOWED_MODELS: string;
+  RESPONSES_MODELS?: string;
   DAILY_CHUNK_BUDGET: string;
 }

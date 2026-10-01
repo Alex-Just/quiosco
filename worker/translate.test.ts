@@ -38,6 +38,35 @@ const upstreamOk = (content: string) =>
   });
 
 describe("handleTranslate", () => {
+  it("uses the responses protocol for responses-only models", async () => {
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            output: [{ content: [{ type: "output_text", text: "hola" }] }],
+          }),
+          { headers: { "content-type": "application/json" } },
+        ),
+    );
+    const response = await handleTranslate(
+      post({ model: "gpt-6-luna", system: "s", text: "t" }),
+      makeEnv({
+        ALLOWED_MODELS: "gpt-6-luna",
+        RESPONSES_MODELS: "gpt-6-luna",
+      }),
+      fetchImpl as unknown as typeof fetch,
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ text: "hola" });
+    const [calledUrl, init] = fetchImpl.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect(calledUrl).toBe("https://opencode.ai/zen/v1/responses");
+    const body = JSON.parse(String(init.body)) as { input?: unknown[] };
+    expect(body.input).toHaveLength(2);
+  });
+
   it("translates via the Zen API with the server-side key", async () => {
     const fetchImpl = vi.fn(async () => upstreamOk("hola"));
     const response = await handleTranslate(

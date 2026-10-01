@@ -14,7 +14,8 @@ binding = "BUDGET"
 id = "1343fc4c1ff24984a5af592619795754"
 
 [vars]
-ALLOWED_MODELS = "space-bunny-free,glm-5.3-flash,deepseek-v4.1-flash"
+ALLOWED_MODELS = "space-bunny-free,glm-5.3-flash,deepseek-v4.1-flash,gpt-6-luna"
+RESPONSES_MODELS = "gpt-6-luna"
 DAILY_CHUNK_BUDGET = "200"
 
 [dev]
