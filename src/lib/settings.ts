@@ -5,7 +5,7 @@ const SETTINGS_KEY = "quiosco.settings.v1";
 export const DEFAULT_SETTINGS: Settings = {
   targetLanguage: "English",
   rules: "",
-  model: "deepseek-v4.1-flash",
+  model: "glm-5.3-flash",
   appToken: "",
   autoTranslate: true,
 };

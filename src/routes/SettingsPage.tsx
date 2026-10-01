@@ -4,6 +4,7 @@ import { loadSettings, saveSettings } from "../lib/settings";
 import type { Settings } from "../lib/types";
 
 const MODEL_SUGGESTIONS = [
+  "glm-5.3-flash",
   "deepseek-v4.1-flash",
   "big-pickle",
   "space-bunny-free",
