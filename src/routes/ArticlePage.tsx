@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { formatDateTime } from "../lib/format";
 import { loadSettings } from "../lib/settings";
 import { cancelTranslation, translateArticle } from "../lib/translateArticle";
 import type { Article } from "../lib/types";
@@ -145,8 +146,8 @@ export default function ArticlePage() {
     <article className="article">
       <h1>{article.title}</h1>
       <p className="article-meta">
-        {article.site ?? "manual"} ·{" "}
-        {new Date(article.createdAt).toLocaleString()} · via {article.via}
+        {article.site ?? "manual"} · {formatDateTime(article.createdAt)} · via{" "}
+        {article.via}
         {article.model ? ` · translated with ${article.model}` : ""}
         {article.url && (
           <>
