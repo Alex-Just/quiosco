@@ -5,11 +5,19 @@ import type { ArticleStore } from "./store";
 import { runTranslation } from "./translator";
 import type { Article, Settings } from "./types";
 
+const inflight = new Map<string, AbortController>();
+
+export function cancelTranslation(articleId: string): void {
+  inflight.get(articleId)?.abort();
+}
+
 export async function translateArticle(
   store: ArticleStore,
   article: Article,
   settings: Settings,
 ): Promise<void> {
+  const controller = new AbortController();
+  inflight.set(article.id, controller);
   const api = createApi({ token: settings.appToken });
   try {
     const cleanup = article.cleanup !== false;
@@ -28,8 +36,9 @@ export async function translateArticle(
         const result = await cleanWithLlm(
           article.text,
           settings.model,
-          (request) => api.translate(request),
+          (request) => api.translate(request, controller.signal),
           article.title,
+          controller.signal,
         );
         source = result.text;
         if (result.cleaned)
@@ -47,9 +56,10 @@ export async function translateArticle(
         rules: settings.rules,
         model: settings.model,
       },
-      translate: (request) => api.translate(request),
+      translate: (request) => api.translate(request, controller.signal),
       existingTranslation: article.translation ?? undefined,
       translatedChunks: article.translatedChunks,
+      signal: controller.signal,
       onProgress: async (progress) => {
         await store.update(article.id, {
           translation: progress.translation,
@@ -65,9 +75,21 @@ export async function translateArticle(
       totalChunks,
     });
   } catch (error) {
-    await store.update(article.id, {
-      translationStatus: "error",
-      error: error instanceof Error ? error.message : "translation failed",
-    });
+    if (controller.signal.aborted) {
+      // User-initiated cancel: keep the partial translation and return to a
+      // resumable state instead of an error.
+      await store.update(article.id, {
+        translationStatus: "pending",
+        translationPhase: null,
+        error: null,
+      });
+    } else {
+      await store.update(article.id, {
+        translationStatus: "error",
+        error: error instanceof Error ? error.message : "translation failed",
+      });
+    }
+  } finally {
+    if (inflight.get(article.id) === controller) inflight.delete(article.id);
   }
 }

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { newArticle } from "./article";
 import { CLEANUP_SYSTEM_PROMPT } from "./cleanWithLlm";
 import type { ArticleStore } from "./store";
-import { translateArticle } from "./translateArticle";
+import { cancelTranslation, translateArticle } from "./translateArticle";
 import type { Article, Settings } from "./types";
 
 const settings: Settings = {
@@ -95,5 +95,31 @@ describe("translateArticle", () => {
     expect(updates.some((patch) => patch.translation === "Translated.")).toBe(
       true,
     );
+  });
+
+  it("cancel keeps the article resumable (pending, no error)", async () => {
+    const article = makeArticle();
+    const { store, updates } = fakeStore();
+    let calls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        calls += 1;
+        if (calls === 1) {
+          return new Response(JSON.stringify({ text: "Texto limpio." }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        cancelTranslation(article.id);
+        throw new DOMException("aborted", "AbortError");
+      }),
+    );
+    await translateArticle(store, article, settings);
+    expect(updates.at(-1)).toMatchObject({
+      translationStatus: "pending",
+      translationPhase: null,
+      error: null,
+    });
   });
 });

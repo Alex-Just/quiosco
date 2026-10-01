@@ -33,6 +33,7 @@ export interface RunTranslationOptions {
   translatedChunks?: number;
   totalChunks?: number;
   retries?: number;
+  signal?: AbortSignal;
   onProgress?: (progress: TranslationProgress) => Promise<void> | void;
 }
 
@@ -55,6 +56,7 @@ export async function runTranslation(
   let translatedChunks = options.translatedChunks ?? 0;
 
   for (let index = translatedChunks; index < chunks.length; index += 1) {
+    if (options.signal?.aborted) throw new Error("translation cancelled");
     let lastError: unknown = null;
     let done = false;
     for (let attempt = 1; attempt <= maxAttempts && !done; attempt += 1) {
@@ -72,6 +74,7 @@ export async function runTranslation(
         done = true;
       } catch (error) {
         lastError = error;
+        if (options.signal?.aborted) break;
       }
     }
     if (!done) {

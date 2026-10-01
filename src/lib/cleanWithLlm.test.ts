@@ -72,4 +72,20 @@ describe("cleanWithLlm", () => {
     expect(copies).toHaveLength(1);
     expect(result.text).toContain("El Ayuntamiento de Valencia notificó");
   });
+
+  it("stops immediately when the signal is already aborted", async () => {
+    const translate = vi.fn(async () => "x");
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      cleanWithLlm(
+        "Texto sucio.",
+        "m",
+        translate,
+        undefined,
+        controller.signal,
+      ),
+    ).rejects.toThrow("cancelled");
+    expect(translate).not.toHaveBeenCalled();
+  });
 });

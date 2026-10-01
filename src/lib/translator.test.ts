@@ -99,4 +99,19 @@ describe("runTranslation", () => {
     ).rejects.toThrow("persist failed");
     expect(translate).toHaveBeenCalledTimes(1);
   });
+
+  it("stops immediately when the signal is already aborted", async () => {
+    const translate = vi.fn(async () => "x");
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      runTranslation({
+        text: "Hola.",
+        settings,
+        translate,
+        signal: controller.signal,
+      }),
+    ).rejects.toThrow("cancelled");
+    expect(translate).not.toHaveBeenCalled();
+  });
 });

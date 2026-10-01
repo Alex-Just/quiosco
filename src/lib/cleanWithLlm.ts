@@ -29,11 +29,13 @@ export async function cleanWithLlm(
     text: string;
   }) => Promise<string>,
   title?: string,
+  signal?: AbortSignal,
 ): Promise<CleanupResult> {
   const segments = chunkText(text, CLEANUP_CHUNK_CHARS);
   const cleanedSegments: string[] = [];
   let allSucceeded = true;
   for (const segment of segments) {
+    if (signal?.aborted) throw new Error("cleanup cancelled");
     let cleaned = "";
     try {
       cleaned = (

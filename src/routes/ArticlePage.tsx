@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { loadSettings } from "../lib/settings";
-import { translateArticle } from "../lib/translateArticle";
+import { cancelTranslation, translateArticle } from "../lib/translateArticle";
 import type { Article } from "../lib/types";
 import { useStore } from "../lib/useStore";
 
@@ -91,6 +91,10 @@ export default function ArticlePage() {
     navigate("/");
   }
 
+  function onCancel() {
+    if (article) cancelTranslation(article.id);
+  }
+
   async function onRetranslate() {
     if (!store || !article || busy) return;
     const settings = loadSettings();
@@ -156,20 +160,20 @@ export default function ArticlePage() {
         <Link className="button" to={`/add?edit=${article.id}`}>
           Edit text
         </Link>
-        <button
-          type="button"
-          onClick={onRetranslate}
-          disabled={busy || running}
-        >
-          {busy || running
-            ? "Translating…"
-            : article.translationStatus === "done"
+        {running || busy ? (
+          <button type="button" className="danger" onClick={onCancel}>
+            Cancel
+          </button>
+        ) : (
+          <button type="button" onClick={onRetranslate}>
+            {article.translationStatus === "done"
               ? "Re-translate"
               : article.translationStatus === "error" ||
                   (article.translation && article.translatedChunks > 0)
                 ? "Resume translation"
                 : "Translate"}
-        </button>
+          </button>
+        )}
         <button type="button" className="danger" onClick={onDelete}>
           Delete
         </button>

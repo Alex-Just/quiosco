@@ -26,7 +26,7 @@ export class QuotaError extends ApiError {
 
 export interface ApiClient {
   fetchRung(rung: Rung, url: string): Promise<RungResponse>;
-  translate(request: TranslateRequest): Promise<string>;
+  translate(request: TranslateRequest, signal?: AbortSignal): Promise<string>;
   health(): Promise<boolean>;
 }
 
@@ -73,13 +73,14 @@ export function createApi(options: {
       };
     },
 
-    async translate(request) {
+    async translate(request, signal) {
+      const timeout = AbortSignal.timeout(CLIENT_TIMEOUT_MS);
       const response = await ensureOk(
         await fetchFn("/api/translate", {
           method: "POST",
           headers: { ...authHeaders, "Content-Type": "application/json" },
           body: JSON.stringify(request),
-          signal: AbortSignal.timeout(CLIENT_TIMEOUT_MS),
+          signal: signal ? AbortSignal.any([timeout, signal]) : timeout,
         }),
       );
       const data = (await response.json()) as { text?: unknown };
