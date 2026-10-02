@@ -94,6 +94,9 @@ function isNoiseLine(line: string): boolean {
   if (/^\[[^\]]*\]\([^)]*\)$/.test(line)) return true;
   if (/^([*+-]|\d+\.)\s*\[[^\]]*\]\([^)]*\)$/.test(line)) return true;
   if (/^([*+-]|\d+\.)?\s*https?:\/\/\S+$/.test(line)) return true;
+  // Chrome reader-mode share artifact: "Including link: chrome-distiller://…".
+  if (/^including link:/i.test(line)) return true;
+  if (/chrome-distiller:\/\//i.test(line)) return true;
   if (/^\*+$/.test(line)) return true;
   // Nested markdown nav items (image inside a link) such as
   // "*   [![Image 1: ...](...svg) Historias visuales](...)".

@@ -47,8 +47,16 @@ describe("extractTitleWithLlm", () => {
   });
 
   it("caps the title at 200 characters", async () => {
-    const translate = vi.fn(async () => "T".repeat(300));
+    const translate = vi.fn(async () => "Titular muy largo ".repeat(20));
     const title = await extractTitleWithLlm(article, "m", translate);
     expect(title?.length).toBe(200);
+  });
+
+  it("rejects URL-like garbage the model may echo", async () => {
+    const translate = vi.fn(
+      async () =>
+        "Including link: chrome-distiller://4d67abef-fceb-4fe6-ba24-e052647073d4_6e7021b4f7948796fbd6c3443a0a9457241b0f45a77a2417652c9d223ba26076/",
+    );
+    expect(await extractTitleWithLlm(article, "m", translate)).toBeNull();
   });
 });

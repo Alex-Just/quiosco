@@ -1,3 +1,4 @@
+import { isGarbageTitle } from "./titleQuality";
 import type { SharePayload } from "./types";
 
 export const TEXT_MIN_CHARS = 400;
@@ -42,13 +43,13 @@ export function deriveTitle(input: {
   url: string | null;
 }): string {
   const extracted = input.extractedTitle?.trim();
-  if (extracted) return extracted.slice(0, 200);
+  if (extracted && !isGarbageTitle(extracted)) return extracted.slice(0, 200);
   const shared = input.sharedTitle.trim();
-  if (shared) return shared.slice(0, 200);
+  if (shared && !isGarbageTitle(shared)) return shared.slice(0, 200);
   const firstLine = input.text
     .split("\n")
     .map((line) => line.trim())
-    .find((line) => line.length > 0);
+    .find((line) => line.length > 0 && !isGarbageTitle(line));
   if (firstLine) return firstLine.slice(0, 200);
   if (input.url) {
     try {

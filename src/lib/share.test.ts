@@ -147,4 +147,34 @@ describe("deriveTitle", () => {
       }),
     ).toBe("Untitled");
   });
+  it("skips a Chrome share artifact in the shared title", () => {
+    expect(
+      deriveTitle({
+        extractedTitle: null,
+        sharedTitle: "Including link: chrome-distiller://abc/",
+        text: "\nReal headline\nrest",
+        url: null,
+      }),
+    ).toBe("Real headline");
+  });
+  it("skips a garbage first line", () => {
+    expect(
+      deriveTitle({
+        extractedTitle: null,
+        sharedTitle: "",
+        text: "chrome-distiller://abc/\nReal headline",
+        url: "https://elpais.com/a.html",
+      }),
+    ).toBe("Real headline");
+  });
+  it("falls back to the hostname when every candidate is garbage", () => {
+    expect(
+      deriveTitle({
+        extractedTitle: "https://x.com/a",
+        sharedTitle: "Including link: chrome-distiller://abc/",
+        text: "chrome-distiller://abc/",
+        url: "https://elpais.com/a.html",
+      }),
+    ).toBe("elpais.com");
+  });
 });

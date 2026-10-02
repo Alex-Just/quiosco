@@ -122,6 +122,22 @@ describe("cleanArticleText", () => {
     expect(cleaned).toContain("Texto final que se conserva.");
   });
 
+  it("removes the Chrome reader-mode share artifact", () => {
+    const paste =
+      "Including link: chrome-distiller://4d67abef-fceb-4fe6-ba24-e052647073d4_6e7021b4f7948796fbd6c3443a0a9457241b0f45a77a2417652c9d223ba26076/\n\nEl Gobierno aprobó este viernes nuevas medidas económicas para contener la inflación.\n\nSegundo párrafo del artículo con el resto de la información.";
+    const cleaned = cleanArticleText(paste);
+    expect(cleaned.startsWith("El Gobierno aprobó")).toBe(true);
+    expect(cleaned).not.toContain("chrome-distiller");
+  });
+
+  it("removes bare distiller link lines", () => {
+    const paste =
+      "chrome-distiller://abc123/\n\nTexto del artículo que se conserva íntegro.";
+    expect(cleanArticleText(paste)).toBe(
+      "Texto del artículo que se conserva íntegro.",
+    );
+  });
+
   it("keeps short blocks that are not nav labels", () => {
     const paste = "—No lo sé.\n\nAyer.\n\nEl resto del texto de la noticia.";
     expect(cleanArticleText(paste)).toBe(paste);

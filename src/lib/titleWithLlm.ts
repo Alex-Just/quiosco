@@ -1,3 +1,5 @@
+import { isGarbageTitle } from "./titleQuality";
+
 const TITLE_INPUT_CHARS = 4000;
 
 export const TITLE_SYSTEM_PROMPT = `You extract the headline of a news article. You receive raw article text (it may start with page noise such as menus or cookie notices).
@@ -5,6 +7,7 @@ export const TITLE_SYSTEM_PROMPT = `You extract the headline of a news article. 
 Return ONLY the headline as a single plain-text line:
 - If the text contains a clear headline (a short standalone line, not a sentence), return it verbatim.
 - Otherwise, write a concise headline-style title of 4-12 words summarizing the article, in the same language as the text. Never copy a full sentence.
+- Never output a URL, a file path, or a line that contains a link.
 - No quotes, no markdown, no commentary, no trailing period. Output the title line only.`;
 
 export async function extractTitleWithLlm(
@@ -35,7 +38,7 @@ export async function extractTitleWithLlm(
       .trim();
     cleaned = cleaned.replace(/^#{1,6}\s*/, "").trim();
     cleaned = cleaned.replace(/\.$/, "").trim();
-    if (cleaned.length === 0) return null;
+    if (cleaned.length === 0 || isGarbageTitle(cleaned)) return null;
     return cleaned.slice(0, 200);
   } catch {
     return null;
