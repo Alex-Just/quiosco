@@ -42,9 +42,19 @@ export async function translateArticle(
         const result = await cleanWithLlm(
           article.text,
           settings.model,
-          (request) => api.translate(request, controller.signal),
+          // Streamed so a slow segment cannot hit the worker's non-stream
+          // timeout and silently degrade to raw text.
+          (request) => api.translateStream(request, controller.signal),
           article.title,
           controller.signal,
+          (done, total) => {
+            void store
+              .update(article.id, {
+                translatedChunks: done,
+                totalChunks: total,
+              })
+              .catch(() => undefined);
+          },
         );
         source = result.text;
         if (result.cleaned)
@@ -54,6 +64,7 @@ export async function translateArticle(
     await store.update(article.id, {
       translationPhase: "translating",
       totalChunks: chunkText(source).length,
+      translatedChunks: article.translatedChunks,
     });
     const { translation, totalChunks } = await runTranslation({
       text: source,

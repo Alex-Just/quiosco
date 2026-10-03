@@ -3,7 +3,10 @@ import { cleanArticleText } from "./clean";
 
 // Large inputs are cleaned in segments so each model response stays small
 // enough to avoid output-token truncation on the smaller allowlisted models.
+// Segments are cleaned with bounded concurrency (they are independent) so a
+// long article does not wait for minutes of sequential model calls.
 const CLEANUP_CHUNK_CHARS = 12_000;
+const CLEANUP_CONCURRENCY = 3;
 
 export const CLEANUP_SYSTEM_PROMPT = `You extract the main content from raw web page text. The text you receive is the raw content of a web page: navigation menus, cookie/consent notices, subscription prompts, advertisements, related-article lists, comments, and footers may be mixed with an article.
 
@@ -30,23 +33,48 @@ export async function cleanWithLlm(
   }) => Promise<string>,
   title?: string,
   signal?: AbortSignal,
+  onProgress?: (done: number, total: number) => void,
 ): Promise<CleanupResult> {
   const segments = chunkText(text, CLEANUP_CHUNK_CHARS);
-  const cleanedSegments: string[] = [];
+  const cleanedSegments = new Array<string>(segments.length).fill("");
   let allSucceeded = true;
-  for (const segment of segments) {
-    if (signal?.aborted) throw new Error("cleanup cancelled");
-    let cleaned = "";
-    try {
-      cleaned = (
-        await translate({ model, system: CLEANUP_SYSTEM_PROMPT, text: segment })
-      ).trim();
-    } catch {
-      cleaned = "";
+  let done = 0;
+  let next = 0;
+  const worker = async () => {
+    for (;;) {
+      const index = next;
+      next += 1;
+      if (index >= segments.length) return;
+      if (signal?.aborted) throw new Error("cleanup cancelled");
+      const segment = segments[index] ?? "";
+      let cleaned = "";
+      try {
+        cleaned = (
+          await translate({
+            model,
+            system: CLEANUP_SYSTEM_PROMPT,
+            text: segment,
+          })
+        ).trim();
+      } catch {
+        cleaned = "";
+      }
+      if (cleaned.length === 0) allSucceeded = false;
+      cleanedSegments[index] = cleaned.length > 0 ? cleaned : segment;
+      done += 1;
+      try {
+        onProgress?.(done, segments.length);
+      } catch {
+        // Progress reporting is best-effort.
+      }
     }
-    if (cleaned.length === 0) allSucceeded = false;
-    cleanedSegments.push(cleaned.length > 0 ? cleaned : segment);
-  }
+  };
+  await Promise.all(
+    Array.from(
+      { length: Math.min(CLEANUP_CONCURRENCY, segments.length) },
+      worker,
+    ),
+  );
   const joined = cleanedSegments.join("\n\n").trim();
   // Syntax pass: strip any markdown artifacts the model left behind, then drop
   // duplicate copies of the headline (raw texts often repeat it in metadata).

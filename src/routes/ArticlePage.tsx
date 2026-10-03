@@ -294,7 +294,9 @@ export default function ArticlePage() {
       {article.translationStatus === "running" && (
         <p className="muted pulse">
           {article.translationPhase === "cleaning"
-            ? "Cleaning up the text…"
+            ? article.totalChunks > 0
+              ? `Cleaning up the text… ${article.translatedChunks}/${article.totalChunks}`
+              : "Cleaning up the text…"
             : `Translating… ${article.translatedChunks}/${article.totalChunks || "?"}`}
         </p>
       )}

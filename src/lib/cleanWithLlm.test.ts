@@ -88,4 +88,58 @@ describe("cleanWithLlm", () => {
     ).rejects.toThrow("cancelled");
     expect(translate).not.toHaveBeenCalled();
   });
+
+  it("reports progress as segments complete", async () => {
+    const text = Array.from(
+      { length: 3 },
+      (_, index) => `párrafo ${index} ${"x".repeat(8000)}`,
+    ).join("\n\n");
+    const translate = vi.fn(async () => "ok");
+    const seen: string[] = [];
+    await cleanWithLlm(
+      text,
+      "m",
+      translate,
+      undefined,
+      undefined,
+      (done, total) => {
+        seen.push(`${done}/${total}`);
+      },
+    );
+    expect(seen.sort()).toEqual(["1/3", "2/3", "3/3"]);
+  });
+
+  it("cleans segments in parallel", async () => {
+    const text = Array.from(
+      { length: 3 },
+      (_, index) => `párrafo ${index} ${"x".repeat(8000)}`,
+    ).join("\n\n");
+    let active = 0;
+    let maxActive = 0;
+    const translate = vi.fn(async () => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      active -= 1;
+      return "ok";
+    });
+    await cleanWithLlm(text, "m", translate);
+    expect(maxActive).toBeGreaterThan(1);
+  });
+
+  it("keeps segment order when responses arrive out of order", async () => {
+    const text = Array.from(
+      { length: 2 },
+      (_, index) => `párrafo ${index} ${"x".repeat(8000)}`,
+    ).join("\n\n");
+    const translate = vi.fn(async (request: { text: string }) => {
+      const first = request.text.startsWith("párrafo 0");
+      if (first) await new Promise((resolve) => setTimeout(resolve, 30));
+      return first ? "PRIMERO" : "SEGUNDO";
+    });
+    const result = await cleanWithLlm(text, "m", translate);
+    expect(result.text.indexOf("PRIMERO")).toBeLessThan(
+      result.text.indexOf("SEGUNDO"),
+    );
+  });
 });
