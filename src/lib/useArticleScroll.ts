@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import type { ArticleStore } from "./store";
 import type { ArticleView } from "./types";
 
@@ -49,14 +49,22 @@ export function useArticleScroll(
     })();
   }, [store, articleId, ready, view, onRestoreView]);
 
-  useEffect(() => {
+  // Layout effect: its cleanup runs before React mutates the DOM, so leaving
+  // the article persists the position it had while on screen — a passive
+  // cleanup would read the next page's clamped offset (usually 0) instead.
+  useLayoutEffect(() => {
     if (!store || !articleId || !ready) return;
     let lastSave = 0;
+    // The last offset seen while this article was on screen. Reading
+    // window.scrollY during unmount would capture the next page's clamped
+    // offset (usually 0), so the tracked value is what gets persisted.
+    let lastY = 0;
     const save = () => {
       lastSave = Date.now();
-      void store.setScrollPosition(articleId, Math.round(window.scrollY), view);
+      void store.setScrollPosition(articleId, lastY, view);
     };
     const onScroll = () => {
+      lastY = Math.round(window.scrollY);
       if (Date.now() - lastSave < SAVE_THROTTLE_MS) return;
       save();
     };

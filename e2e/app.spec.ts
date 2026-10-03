@@ -156,6 +156,18 @@ test("restores the article scroll position after a reload", async ({
   await expect(
     page.getByRole("button", { name: "Original", exact: true }),
   ).toHaveClass(/active/);
+
+  // The SPA flow (list, open, back, reopen) must keep the position too.
+  await page.goto("/");
+  await page.getByRole("link", { name: /Scroll prueba/ }).click();
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY), { timeout: 10_000 })
+    .toBeGreaterThan(900);
+  await page.goBack();
+  await page.getByRole("link", { name: /Scroll prueba/ }).click();
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY), { timeout: 10_000 })
+    .toBeGreaterThan(900);
 });
 
 test("syncs an article between two devices", async ({ browser }) => {
