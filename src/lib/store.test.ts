@@ -100,4 +100,26 @@ describe("store", () => {
     expect(changes.length).toBe(1); // only put() notified
     store.close();
   });
+
+  it("stores a scroll position per article and clears it on remove", async () => {
+    const store = await createStore(`test-${randomUUID()}`);
+    const article = makeArticle();
+    const other = makeArticle();
+    await store.put(article);
+    await store.put(other);
+    expect(await store.getScrollPosition(article.id)).toBeNull();
+
+    await store.setScrollPosition(article.id, 812, "original");
+    await store.setScrollPosition(other.id, 120, "translation");
+    expect(await store.getScrollPosition(article.id)).toMatchObject({
+      y: 812,
+      view: "original",
+    });
+    expect(await store.getScrollPosition(other.id)).toMatchObject({ y: 120 });
+
+    await store.remove(article.id);
+    expect(await store.getScrollPosition(article.id)).toBeNull();
+    expect(await store.getScrollPosition(other.id)).not.toBeNull();
+    store.close();
+  });
 });

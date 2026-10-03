@@ -1,11 +1,15 @@
 import { type DBSchema, type IDBPDatabase, openDB } from "idb";
-import type { Article } from "./types";
+import type { Article, ArticleView, ScrollPosition } from "./types";
 
 interface QuioscoDB extends DBSchema {
   articles: {
     key: string;
     value: Article;
     indexes: { createdAt: number; url: string };
+  };
+  positions: {
+    key: string;
+    value: ScrollPosition;
   };
 }
 
@@ -18,6 +22,12 @@ export interface ArticleStore {
   remove(id: string): Promise<void>;
   findByUrl(url: string): Promise<Article | undefined>;
   applyRemote(articles: Article[]): Promise<void>;
+  getScrollPosition(articleId: string): Promise<ScrollPosition | null>;
+  setScrollPosition(
+    articleId: string,
+    y: number,
+    view: ArticleView,
+  ): Promise<void>;
   close(): void;
 }
 
@@ -25,11 +35,18 @@ export async function createStore(
   dbName = "quiosco",
   onChange?: () => void,
 ): Promise<ArticleStore> {
-  const db = await openDB<QuioscoDB>(dbName, 1, {
-    upgrade(database: IDBPDatabase<QuioscoDB>) {
-      const store = database.createObjectStore("articles", { keyPath: "id" });
-      store.createIndex("createdAt", "createdAt");
-      store.createIndex("url", "url");
+  const db = await openDB<QuioscoDB>(dbName, 2, {
+    upgrade(database: IDBPDatabase<QuioscoDB>, oldVersion: number) {
+      if (oldVersion < 1) {
+        const store = database.createObjectStore("articles", {
+          keyPath: "id",
+        });
+        store.createIndex("createdAt", "createdAt");
+        store.createIndex("url", "url");
+      }
+      if (oldVersion < 2) {
+        database.createObjectStore("positions", { keyPath: "id" });
+      }
     },
   });
 
@@ -71,6 +88,7 @@ export async function createStore(
         dirty: true,
         updatedAt: Date.now(),
       });
+      await db.delete("positions", id);
       onChange?.();
     },
     async findByUrl(url) {
@@ -83,6 +101,17 @@ export async function createStore(
         await tx.store.put({ ...article, dirty: false });
       }
       await tx.done;
+    },
+    async getScrollPosition(articleId) {
+      return (await db.get("positions", articleId)) ?? null;
+    },
+    async setScrollPosition(articleId, y, view) {
+      await db.put("positions", {
+        id: articleId,
+        y,
+        view,
+        updatedAt: Date.now(),
+      });
     },
     close() {
       db.close();

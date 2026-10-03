@@ -126,6 +126,38 @@ test("adds an article by URL from the web form", async ({ page }) => {
   await expect(page.getByText(/858\.178 residentes/).first()).toBeVisible();
 });
 
+test("restores the article scroll position after a reload", async ({
+  page,
+}) => {
+  await page.goto("/settings");
+  await page.getByLabel("App token").fill("e2e-token");
+  await page.getByLabel("Translate automatically after saving").uncheck();
+  await page.getByRole("button", { name: "Save" }).click();
+
+  await page.goto("/add");
+  await page.getByLabel("Title").fill("Scroll prueba");
+  const paragraphs = Array.from(
+    { length: 40 },
+    (_, index) =>
+      `Párrafo ${index} con contenido de prueba suficientemente largo para que la página sea desplazable y se pueda recordar la posición de lectura.`,
+  ).join("\n\n");
+  await page.getByLabel("Article text").fill(paragraphs);
+  await page.getByRole("button", { name: "Save & translate" }).click();
+  await page.waitForURL("**/article/**");
+
+  await page.getByRole("button", { name: "Original", exact: true }).click();
+  await page.evaluate(() => window.scrollTo(0, 1200));
+  await page.waitForTimeout(800); // let the throttled save land
+  await page.reload();
+
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY), { timeout: 10_000 })
+    .toBeGreaterThan(900);
+  await expect(
+    page.getByRole("button", { name: "Original", exact: true }),
+  ).toHaveClass(/active/);
+});
+
 test("syncs an article between two devices", async ({ browser }) => {
   const title = `Prueba sync ${Date.now()}`;
   const contextA = await browser.newContext();

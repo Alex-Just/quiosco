@@ -20,7 +20,8 @@ import {
   hasRunningTranslation,
   translateArticle,
 } from "../lib/translateArticle";
-import type { Article } from "../lib/types";
+import type { Article, ArticleView } from "../lib/types";
+import { useArticleScroll } from "../lib/useArticleScroll";
 import { useStore } from "../lib/useStore";
 
 const STALE_RUN_MS = 10 * 60_000;
@@ -30,7 +31,7 @@ export default function ArticlePage() {
   const navigate = useNavigate();
   const { id } = useParams();
   const [article, setArticle] = useState<Article | null>(null);
-  const [view, setView] = useState<"original" | "translation">("translation");
+  const [view, setView] = useState<ArticleView>("translation");
   const [copied, setCopied] = useState<"none" | "translation" | "original">(
     "none",
   );
@@ -131,6 +132,22 @@ export default function ArticlePage() {
     return () => window.clearTimeout(timer);
   }, [hint]);
 
+  // The streamed tail of the chunk in flight is shown (and copied) after the
+  // committed chunks; it is replaced by the full chunk when it lands.
+  const translationBody = article
+    ? [article.translation, article.partial]
+        .filter((value): value is string => Boolean(value))
+        .join("\n\n")
+    : "";
+  const body = article
+    ? view === "translation"
+      ? translationBody
+      : article.text
+    : "";
+
+  // Restore and persist this article's reading position.
+  useArticleScroll(store, id, body.length > 0, view, setView);
+
   if (!article) return <p className="muted">Loading…</p>;
 
   async function toggleRead() {
@@ -208,12 +225,6 @@ export default function ArticlePage() {
     }
   }
 
-  // The streamed tail of the chunk in flight is shown (and copied) after the
-  // committed chunks; it is replaced by the full chunk when it lands.
-  const translationBody = [article.translation, article.partial]
-    .filter((value): value is string => Boolean(value))
-    .join("\n\n");
-
   async function copy(kind: "translation" | "original") {
     if (!article) return;
     const value = kind === "translation" ? translationBody : article.text;
@@ -223,7 +234,6 @@ export default function ArticlePage() {
     window.setTimeout(() => setCopied("none"), 1500);
   }
 
-  const body = view === "translation" ? translationBody : article.text;
   const paragraphs = (body ?? "")
     .split(/\n{2,}/)
     .map((paragraph) => paragraph.trim())

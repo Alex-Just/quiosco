@@ -81,7 +81,7 @@ describe("syncNow", () => {
     const store = await createStore(dbName);
     const article = makeArticle();
     // Simulate a row written by an app version without sync: no dirty field.
-    const db = await openDB(dbName, 1);
+    const db = await openDB(dbName);
     await db.put("articles", article);
     db.close();
 

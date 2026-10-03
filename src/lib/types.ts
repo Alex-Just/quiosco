@@ -1,3 +1,13 @@
+export type ArticleView = "translation" | "original";
+
+/** Per-article reading position; local only (never synced with the article). */
+export interface ScrollPosition {
+  id: string;
+  y: number;
+  view: ArticleView;
+  updatedAt: number;
+}
+
 export type ArticleStatus = "unread" | "read" | "archived";
 export type TranslationStatus = "pending" | "running" | "done" | "error";
 export type Rung = "direct" | "googlebot" | "jina" | "wayback" | "archive_ph";
