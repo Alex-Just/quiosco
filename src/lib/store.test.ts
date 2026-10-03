@@ -66,4 +66,38 @@ describe("store", () => {
     expect(await store.get(article.id)).toBeUndefined();
     store.close();
   });
+
+  it("marks writes dirty and keeps tombstones for removed rows", async () => {
+    const store = await createStore(`test-${randomUUID()}`);
+    const article = makeArticle();
+    await store.put(article);
+    expect((await store.get(article.id))?.dirty).toBe(true);
+
+    await store.update(article.id, { status: "read" });
+    expect((await store.get(article.id))?.dirty).toBe(true);
+
+    await store.remove(article.id);
+    expect(await store.get(article.id)).toBeUndefined();
+    expect(await store.findByUrl(article.url ?? "")).toBeUndefined();
+    expect((await store.list()).map((a) => a.id)).not.toContain(article.id);
+    const all = await store.listAll();
+    expect(all.find((a) => a.id === article.id)).toMatchObject({
+      deleted: true,
+    });
+    store.close();
+  });
+
+  it("applies remote rows without dirtying them and reports local writes", async () => {
+    const changes: number[] = [];
+    const store = await createStore(`test-${randomUUID()}`, () =>
+      changes.push(1),
+    );
+    const article = makeArticle({ dirty: true });
+    await store.put(article);
+    await store.applyRemote([{ ...article, dirty: false, title: "Remote" }]);
+    expect((await store.get(article.id))?.dirty).toBe(false);
+    expect((await store.get(article.id))?.title).toBe("Remote");
+    expect(changes.length).toBe(1); // only put() notified
+    store.close();
+  });
 });

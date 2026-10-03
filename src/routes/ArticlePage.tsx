@@ -46,13 +46,17 @@ export default function ArticlePage() {
     let cancelled = false;
     void (async () => {
       const loaded = await store.get(id);
-      if (!loaded || cancelled) return;
+      if (cancelled) return;
+      if (!loaded) {
+        navigate("/", { replace: true });
+        return;
+      }
       setArticle(loaded);
     })();
     return () => {
       cancelled = true;
     };
-  }, [store, id]);
+  }, [store, id, navigate]);
 
   const running = article?.translationStatus === "running";
   useEffect(() => {
@@ -60,7 +64,10 @@ export default function ArticlePage() {
     const timer = window.setInterval(() => {
       void (async () => {
         const fresh = await store.get(id);
-        if (!fresh) return;
+        if (!fresh) {
+          navigate("/", { replace: true });
+          return;
+        }
         // A run interrupted mid-flight (tab closed/reloaded) would otherwise
         // leave "running" forever and keep the translate button disabled.
         // store.update bumps updatedAt on every write, so a long-stale
@@ -81,7 +88,7 @@ export default function ArticlePage() {
       })();
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [store, id, running, busy]);
+  }, [store, id, running, busy, navigate]);
 
   // Speech belongs to the page that started it: stop it on navigation and
   // when the visible text changes.

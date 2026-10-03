@@ -24,6 +24,10 @@ export interface Article {
   error: string | null;
   createdAt: number;
   updatedAt: number;
+  /** Local changes not yet acknowledged by sync. */
+  dirty?: boolean;
+  /** Tombstone: deleted locally, kept so the deletion can sync. */
+  deleted?: boolean;
 }
 
 export interface Settings {
