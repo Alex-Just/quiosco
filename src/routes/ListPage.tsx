@@ -15,11 +15,16 @@ export default function ListPage() {
   useEffect(() => {
     if (!store) return;
     let cancelled = false;
-    void store.list().then((all) => {
-      if (!cancelled) setArticles(all);
-    });
+    const reload = () => {
+      void store.list().then((all) => {
+        if (!cancelled) setArticles(all);
+      });
+    };
+    reload();
+    window.addEventListener("quiosco:sync", reload);
     return () => {
       cancelled = true;
+      window.removeEventListener("quiosco:sync", reload);
     };
   }, [store]);
 

@@ -95,3 +95,43 @@ test("settings connection check reflects the worker auth", async ({ page }) => {
   await page.getByRole("button", { name: "Check connection" }).click();
   await expect(page.getByText("Connected")).toBeVisible();
 });
+
+test("syncs an article between two devices", async ({ browser }) => {
+  const title = `Prueba sync ${Date.now()}`;
+  const contextA = await browser.newContext();
+  const contextB = await browser.newContext();
+  const pageA = await contextA.newPage();
+  const pageB = await contextB.newPage();
+
+  for (const page of [pageA, pageB]) {
+    await page.goto("/settings");
+    await page.getByLabel("App token").fill("e2e-token");
+    await page.getByLabel("Translate automatically after saving").uncheck();
+    await page.getByRole("button", { name: "Save" }).click();
+  }
+
+  await pageA.goto("/add");
+  await pageA.getByLabel("Title").fill(title);
+  await pageA
+    .getByLabel("Article text")
+    .fill(
+      "Primer párrafo de prueba con la longitud mínima necesaria para guardar el artículo.\n\nSegundo párrafo del artículo de prueba.",
+    );
+  await pageA.getByRole("button", { name: "Save & translate" }).click();
+  await pageA.waitForURL("**/article/**");
+
+  await pageA.goto("/settings");
+  await pageA.getByRole("button", { name: "Sync now" }).click();
+  await expect(pageA.getByText(/Synced —/)).toBeVisible();
+
+  await pageB.goto("/settings");
+  await pageB.getByRole("button", { name: "Sync now" }).click();
+  await expect(pageB.getByText(/Synced —/)).toBeVisible();
+  await pageB.goto("/");
+  await expect(
+    pageB.getByRole("link", { name: new RegExp(title) }),
+  ).toBeVisible();
+
+  await contextA.close();
+  await contextB.close();
+});

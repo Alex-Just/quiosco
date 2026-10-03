@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createApi } from "../lib/api";
+import { formatDateTime } from "../lib/format";
 import { loadSettings, saveSettings } from "../lib/settings";
+import { runSyncNow } from "../lib/sync";
 import type { Settings } from "../lib/types";
 
 const MODEL_SUGGESTIONS = [
@@ -16,6 +18,31 @@ export default function SettingsPage() {
   const [health, setHealth] = useState<"idle" | "checking" | "ok" | "fail">(
     "idle",
   );
+  const [syncState, setSyncState] = useState<string | null>(null);
+  const [lastSync, setLastSync] = useState(
+    () => Number(localStorage.getItem("quiosco.sync.at") ?? "0") || 0,
+  );
+
+  useEffect(() => {
+    const reload = () => setSettings(loadSettings());
+    window.addEventListener("quiosco:sync", reload);
+    return () => window.removeEventListener("quiosco:sync", reload);
+  }, []);
+
+  async function onSyncNow() {
+    setSyncState("Syncing…");
+    try {
+      const summary = await runSyncNow();
+      setLastSync(Number(localStorage.getItem("quiosco.sync.at") ?? "0") || 0);
+      setSyncState(
+        summary
+          ? `Synced — ${summary.pushed} up, ${summary.pulled} down`
+          : "Set the app token first",
+      );
+    } catch (error) {
+      setSyncState(error instanceof Error ? error.message : "Sync failed");
+    }
+  }
 
   function update(patch: Partial<Settings>) {
     setSettings((current) => ({ ...current, ...patch }));
@@ -94,6 +121,17 @@ export default function SettingsPage() {
         {health === "ok" && <span className="muted">Connected</span>}
         {health === "fail" && <span className="error">Not connected</span>}
       </div>
+      <div className="row">
+        <button type="button" onClick={onSyncNow}>
+          Sync now
+        </button>
+        <span className="muted">
+          {lastSync > 0
+            ? `Last sync: ${formatDateTime(lastSync)}`
+            : "Never synced"}
+        </span>
+      </div>
+      {syncState && <p className="muted">{syncState}</p>}
       <p className="muted">
         Required setup: a dedicated OpenCode Zen key with a workspace monthly
         limit and auto-reload off (see the deployment checklist in the README).

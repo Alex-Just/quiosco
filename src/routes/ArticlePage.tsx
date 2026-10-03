@@ -58,6 +58,22 @@ export default function ArticlePage() {
     };
   }, [store, id, navigate]);
 
+  useEffect(() => {
+    if (!store || !id) return;
+    const reload = () => {
+      void (async () => {
+        const fresh = await store.get(id);
+        if (!fresh) {
+          navigate("/", { replace: true });
+          return;
+        }
+        setArticle(fresh);
+      })();
+    };
+    window.addEventListener("quiosco:sync", reload);
+    return () => window.removeEventListener("quiosco:sync", reload);
+  }, [store, id, navigate]);
+
   const running = article?.translationStatus === "running";
   useEffect(() => {
     if (!store || !id || !(running || busy)) return;

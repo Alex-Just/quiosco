@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { type ArticleStore, createStore } from "./store";
+import { scheduleSync } from "./sync";
 
 let storePromise: Promise<ArticleStore> | null = null;
 
 export function getStore(): Promise<ArticleStore> {
-  storePromise ??= createStore();
+  storePromise ??= createStore("quiosco", () => scheduleSync());
   return storePromise;
 }
 
