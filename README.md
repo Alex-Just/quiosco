@@ -48,6 +48,15 @@ pnpm smoke                        # against a deployed instance (see below)
 Optional hardening: a Cloudflare rate-limiting rule on `/api/*`; 2FA on the
 Cloudflare and OpenCode accounts.
 
+### Sync (D1)
+
+1. `pnpm exec wrangler d1 create quiosco` (once) — the API token needs the D1
+   permission; paste the returned `database_id` into `wrangler.toml`.
+2. Apply the schema: `pnpm exec wrangler d1 execute quiosco --remote --file worker/migrations/0001_sync.sql`.
+3. Deploy as usual (`pnpm deploy`).
+4. On each device: Settings → App token → Save → "Sync now".
+   The app also syncs on open, after local changes, and when the network returns.
+
 ## Install on Android
 
 1. Open the deployed URL in **Chrome for Android** → menu → **Install app**.
