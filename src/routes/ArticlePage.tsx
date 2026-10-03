@@ -376,41 +376,38 @@ export default function ArticlePage() {
         </button>
       </div>
       {body ? (
-        <>
-          <p className="muted">Tap a sentence to listen or translate it.</p>
-          <div className="article-text">
-            {paragraphs.map((paragraph, paragraphIndex) => {
-              const sentences = splitSentences(paragraph);
-              return (
-                // biome-ignore lint/suspicious/noArrayIndexKey: sentences have no stable id
-                <p className="para" key={paragraphIndex}>
-                  {sentences.map((sentence, sentenceIndex) => (
-                    <button
-                      // biome-ignore lint/suspicious/noArrayIndexKey: sentences have no stable id
-                      key={sentenceIndex}
-                      type="button"
-                      className={
-                        isSpeaking(paragraphIndex, sentenceIndex)
-                          ? "sentence speaking"
-                          : "sentence"
-                      }
-                      onClick={() =>
-                        setMenu({
-                          paragraph: paragraphIndex,
-                          sentenceIndex,
-                          sentence: stripSentenceMarkers(sentence),
-                        })
-                      }
-                    >
-                      {sentence}
-                      {sentenceIndex < sentences.length - 1 ? " " : ""}
-                    </button>
-                  ))}
-                </p>
-              );
-            })}
-          </div>
-        </>
+        <div className="article-text">
+          {paragraphs.map((paragraph, paragraphIndex) => {
+            const sentences = splitSentences(paragraph);
+            return (
+              // biome-ignore lint/suspicious/noArrayIndexKey: sentences have no stable id
+              <p className="para" key={paragraphIndex}>
+                {sentences.map((sentence, sentenceIndex) => (
+                  <button
+                    // biome-ignore lint/suspicious/noArrayIndexKey: sentences have no stable id
+                    key={sentenceIndex}
+                    type="button"
+                    className={
+                      isSpeaking(paragraphIndex, sentenceIndex)
+                        ? "sentence speaking"
+                        : "sentence"
+                    }
+                    onClick={() =>
+                      setMenu({
+                        paragraph: paragraphIndex,
+                        sentenceIndex,
+                        sentence: stripSentenceMarkers(sentence),
+                      })
+                    }
+                  >
+                    {sentence}
+                    {sentenceIndex < sentences.length - 1 ? " " : ""}
+                  </button>
+                ))}
+              </p>
+            );
+          })}
+        </div>
       ) : (
         <p className="muted">No translation yet.</p>
       )}
