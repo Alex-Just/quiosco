@@ -203,6 +203,10 @@ button.danger {
   flex-wrap: wrap;
 }
 
+.row + .row {
+  margin-top: 10px;
+}
+
 .tabs {
   display: flex;
   gap: 8px;
