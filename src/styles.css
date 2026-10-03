@@ -338,6 +338,14 @@ button.danger {
   margin-bottom: 0;
 }
 
+.article-end {
+  margin: 24px 0 8px;
+}
+
+.article-end button {
+  width: 100%;
+}
+
 .sentence {
   display: inline;
   min-height: 0;

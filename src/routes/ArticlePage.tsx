@@ -48,10 +48,6 @@ export default function ArticlePage() {
       const loaded = await store.get(id);
       if (!loaded || cancelled) return;
       setArticle(loaded);
-      if (loaded.status === "unread") {
-        const updated = await store.update(id, { status: "read" });
-        if (!cancelled) setArticle(updated);
-      }
     })();
     return () => {
       cancelled = true;
@@ -372,6 +368,15 @@ export default function ArticlePage() {
       ) : (
         <p className="muted">No translation yet.</p>
       )}
+      <div className="article-end">
+        <button
+          type="button"
+          className={article.status === "read" ? "" : "primary"}
+          onClick={toggleRead}
+        >
+          {article.status === "read" ? "Mark as unread" : "Mark as read"}
+        </button>
+      </div>
       {menu && (
         <>
           {/* biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/useKeyWithClickEvents: backdrop tap closes the sheet; Escape is handled globally */}

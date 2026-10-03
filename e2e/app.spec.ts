@@ -71,7 +71,9 @@ test("manual add, read/archive lifecycle, delete", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Prueba E2E" })).toBeVisible();
   await expect(page.getByText("No translation yet.")).toBeVisible();
 
-  await page.getByRole("button", { name: "Mark unread" }).click();
+  // Opening no longer marks the article read; the end-of-article CTA does.
+  await page.getByRole("button", { name: "Mark as read" }).click();
+  await expect(page.getByRole("button", { name: "Mark unread" })).toBeVisible();
   await page.getByRole("button", { name: "Archive" }).click();
   await expect(page.getByRole("button", { name: "Unarchive" })).toBeVisible();
 
