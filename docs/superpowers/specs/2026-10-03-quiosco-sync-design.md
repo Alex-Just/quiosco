@@ -105,9 +105,10 @@ Rules:
   server's stored version — and (b) the pulled rows, deduplicated by id. The
   pushing device therefore converges in a single round trip.
 - **Settings**: same LWW on the single row.
-- **Caps**: request body ≤ 4 MB; ≤ 10 article rows per request; per-row `data`
-  ≤ 1 MB (400 on violation). The client batches by size (≤ 2 MB per request)
-  and count (≤ 10), looping until its dirty queue is drained.
+- **Caps**: request body ≤ 4 MB (413 on violation); ≤ 10 article rows per
+  request; per-row `data` ≤ 1 MB (400 on violation). The client batches by
+  size (≤ 2 MB per request, measured on the encoded row body) and count
+  (≤ 10), looping until its dirty queue is drained.
 - Worker invocation budget: ≤ ~35 D1 queries per request, inside the free
   tier's 50-query-per-invocation limit.
 
@@ -152,8 +153,9 @@ Merge per incoming row:
   with the incoming row and clear `dirty`.
 
 Settings merge: apply the incoming settings when
-`incoming.updatedAt > local.updatedAt` and local settings are not dirty;
-otherwise keep local. The local `appToken` is always preserved.
+`incoming.updatedAt >= local.updatedAt` (an equal timestamp is the
+accepted-push echo), then clear the local dirty flag; otherwise keep local.
+The local `appToken` is always preserved.
 
 ### 5.4 Triggers and UI
 
@@ -172,7 +174,9 @@ otherwise keep local. The local `appToken` is always preserved.
   it once anyway, since sync itself needs it), and syncing credentials is a
   needless risk.
 - `saveSettings` stamps `updatedAt` and sets a dirty flag
-  (`quiosco.settings.dirty`); sync clears it.
+  (`quiosco.settings.dirty`); sync clears it. A remote echo with an equal
+  `updatedAt` applies and clears the flag, so the pushing device converges in
+  the same round trip.
 
 ## 7. Edge cases and accepted limitations
 

@@ -12,9 +12,10 @@ Design spec: `docs/superpowers/specs/2026-09-30-quiosco-design.md`.
 - **PWA** (React + Vite + vite-plugin-pwa) — extraction (DOMParser +
   Readability), 5-rung fetch ladder orchestration, IndexedDB storage, UI.
 - **Cloudflare Worker** — serves the built PWA and a thin authenticated proxy:
-  `/api/fetch` (rung passthrough), `/api/translate` (Zen), `/api/health`.
-- **Storage** — articles live only on your device. Nothing is stored
-  server-side.
+  `/api/fetch` (rung passthrough), `/api/translate` (Zen), `/api/sync`
+  (multi-device sync), `/api/health`.
+- **Storage** — IndexedDB on each device (offline-first), synced across your
+  devices through Cloudflare D1 (`/api/sync`). See "Sync (D1)" below.
 
 ## Development
 
