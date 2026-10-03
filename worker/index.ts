@@ -2,6 +2,7 @@ import { extractBearer, originAllowed, tokensMatch } from "./auth";
 import type { Env } from "./env";
 import { handleFetchRung } from "./fetchRung";
 import { applySecurityHeaders, jsonResponse } from "./headers";
+import { handleSync } from "./sync";
 import { handleTranslate } from "./translate";
 
 export default {
@@ -58,6 +59,8 @@ async function handleApi(
     response = await handleFetchRung(request, env);
   } else if (url.pathname === "/api/translate" && request.method === "POST") {
     response = await handleTranslate(request, env);
+  } else if (url.pathname === "/api/sync" && request.method === "POST") {
+    response = await handleSync(request, env);
   } else {
     response = jsonResponse({ error: "not found" }, 404);
   }

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Env } from "./env";
+import type { D1Like, Env } from "./env";
 import { handleTranslate } from "./translate";
 
 const fakeKv = () => {
@@ -15,10 +15,17 @@ const fakeKv = () => {
   };
 };
 
+const fakeDb = (): D1Like => ({
+  prepare() {
+    throw new Error("DB not used in these tests");
+  },
+});
+
 const makeEnv = (overrides: Partial<Env> = {}): Env => ({
   OPENCODE_API_KEY: "zen-secret",
   APP_TOKEN: "app-secret",
   BUDGET: fakeKv(),
+  DB: fakeDb(),
   ASSETS: { fetch: async () => new Response("shell") },
   ALLOWED_MODELS: "deepseek-v4.1-flash,big-pickle",
   DAILY_CHUNK_BUDGET: "200",
