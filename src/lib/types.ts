@@ -36,6 +36,8 @@ export interface Settings {
   model: string;
   appToken: string;
   autoTranslate: boolean;
+  /** LWW clock for settings sync. */
+  updatedAt?: number;
 }
 
 export interface SharePayload {
