@@ -160,4 +160,30 @@ describe("createApi", () => {
       api.translateStream({ model: "m", system: "s", text: "t" }, undefined),
     ).rejects.toThrow("stream interrupted");
   });
+
+  it("posts a sync request and parses the response", async () => {
+    const payload = {
+      cursor: 7,
+      articles: [{ id: "a", updatedAt: 1, deleted: false, data: "{}" }],
+      settings: null,
+    };
+    const response = { cursor: 9, articles: [], settings: null };
+    const fetchFn = vi.fn(
+      async () =>
+        new Response(JSON.stringify(response), {
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    const api = createApi({
+      token: "t",
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    await expect(api.sync(payload)).resolves.toEqual(response);
+    const [url, init] = fetchFn.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe("/api/sync");
+    expect(JSON.parse(String(init.body))).toEqual(payload);
+  });
 });

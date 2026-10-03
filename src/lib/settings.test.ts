@@ -78,4 +78,14 @@ describe("settings", () => {
     ).toBeNull();
     expect(loadSettings().model).toBe(local.model);
   });
+
+  it("ignores remote data that is not an object", () => {
+    localStorage.clear();
+    saveSettings({ ...DEFAULT_SETTINGS, model: "keep" });
+    const before = loadSettings();
+    expect(
+      applyRemoteSettings({ updatedAt: Date.now(), data: "null" }),
+    ).toBeNull();
+    expect(loadSettings()).toEqual(before);
+  });
 });

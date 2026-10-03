@@ -89,6 +89,7 @@ export function applyRemoteSettings(
   } catch {
     return null;
   }
+  if (parsed === null || typeof parsed !== "object") return null;
   const next: Settings = { ...current, updatedAt: remote.updatedAt };
   for (const field of SYNCED_FIELDS) {
     const value = parsed[field];

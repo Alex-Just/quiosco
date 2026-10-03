@@ -1,4 +1,10 @@
-import type { Rung, RungResponse, TranslateRequest } from "./types";
+import type {
+  Rung,
+  RungResponse,
+  SyncRequest,
+  SyncResponse,
+  TranslateRequest,
+} from "./types";
 
 export class ApiError extends Error {
   constructor(
@@ -33,6 +39,7 @@ export interface ApiClient {
     onDelta?: (partial: string) => void,
   ): Promise<string>;
   health(): Promise<boolean>;
+  sync(request: SyncRequest): Promise<SyncResponse>;
 }
 
 // Client-side cutoff, slightly above the worker's own upstream timeouts (90s
@@ -185,6 +192,18 @@ export function createApi(options: {
         }),
       );
       return true;
+    },
+
+    async sync(request) {
+      const response = await ensureOk(
+        await fetchFn("/api/sync", {
+          method: "POST",
+          headers: { ...authHeaders, "Content-Type": "application/json" },
+          body: JSON.stringify(request),
+          signal: AbortSignal.timeout(CLIENT_TIMEOUT_MS),
+        }),
+      );
+      return (await response.json()) as SyncResponse;
     },
   };
 }

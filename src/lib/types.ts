@@ -60,3 +60,27 @@ export interface TranslateRequest {
   system: string;
   text: string;
 }
+
+export interface SyncArticleRow {
+  id: string;
+  updatedAt: number;
+  deleted: boolean;
+  data: string;
+}
+
+export interface SyncSettingsRow {
+  updatedAt: number;
+  data: string;
+}
+
+export interface SyncRequest {
+  cursor: number;
+  articles: SyncArticleRow[];
+  settings: SyncSettingsRow | null;
+}
+
+export interface SyncResponse {
+  cursor: number;
+  articles: SyncArticleRow[];
+  settings: SyncSettingsRow | null;
+}
