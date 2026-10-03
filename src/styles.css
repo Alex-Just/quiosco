@@ -366,7 +366,8 @@ button.danger {
 }
 
 .para-index {
-  margin-right: 6px;
+  display: block;
+  margin: 0 0 2px;
   color: var(--muted);
   font-size: 0.85em;
   user-select: none;
