@@ -365,6 +365,13 @@ button.danger {
   cursor: pointer;
 }
 
+.para-index {
+  margin-right: 6px;
+  color: var(--muted);
+  font-size: 0.85em;
+  user-select: none;
+}
+
 .sentence.speaking {
   background: color-mix(in srgb, var(--accent) 24%, transparent);
   border-radius: 3px;

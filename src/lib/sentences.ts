@@ -58,25 +58,40 @@ export function splitSentences(paragraph: string): string[] {
 }
 
 // Paragraph numbers ("11", "1.") and flag emojis ("🇪🇸") glued to the front of
-// a sentence are page furniture: strip them from the text that leaves the app
-// (TTS and Copy) while the page itself keeps showing them. A sentence that is
-// nothing but a marker is returned unchanged so nothing speaks an empty line.
-const LIST_NUMBER = /^\d{1,4}\s*[.)º°](?=\s|$)/;
-const STANDALONE_NUMBER = /^\d{1,4}(?=\n)/;
+// a sentence are page furniture: the page renders the number as a dimmed
+// n/total marker outside the tappable sentence, and the text that leaves the
+// app (TTS and Copy) drops both markers. A sentence that is nothing but a
+// marker is returned unchanged so nothing speaks an empty line.
+const LIST_NUMBER = /^(\d{1,4})\s*[.)º°](?=\s|$)/;
+const STANDALONE_NUMBER = /^(\d{1,4})(?=\n)/;
 const LEADING_FLAG = /^[\u{1F1E6}-\u{1F1FF}]{2}\s*/u;
 
-export function stripSentenceMarkers(sentence: string): string {
+export interface LeadingMarkers {
+  /** The paragraph/list number without its punctuation ("11", "1"), if any. */
+  number: string | null;
+  /** The sentence with its leading number and flag markers removed. */
+  text: string;
+}
+
+export function splitLeadingMarkers(sentence: string): LeadingMarkers {
+  let number: string | null = null;
   let text = sentence;
   for (let pass = 0; pass < 4; pass += 1) {
-    const next = text
-      .replace(/^\s+/, "")
-      .replace(LIST_NUMBER, "")
-      .replace(STANDALONE_NUMBER, "")
-      .replace(/^\s+/, "")
-      .replace(LEADING_FLAG, "")
-      .replace(/^\s+/, "");
+    const trimmed = text.replace(/^\s+/, "");
+    const match = LIST_NUMBER.exec(trimmed) ?? STANDALONE_NUMBER.exec(trimmed);
+    let next: string;
+    if (match) {
+      if (number === null) number = match[1] ?? null;
+      next = trimmed.slice(match[0].length).replace(/^\s+/, "");
+    } else {
+      next = trimmed.replace(LEADING_FLAG, "").replace(/^\s+/, "");
+    }
     if (next === text || next === "") break;
     text = next;
   }
-  return text || sentence;
+  return { number, text: text || sentence };
+}
+
+export function stripSentenceMarkers(sentence: string): string {
+  return splitLeadingMarkers(sentence).text;
 }

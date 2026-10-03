@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { formatDateTime } from "../lib/format";
-import { splitSentences, stripSentenceMarkers } from "../lib/sentences";
+import {
+  splitLeadingMarkers,
+  splitSentences,
+  stripSentenceMarkers,
+} from "../lib/sentences";
 import { loadSettings } from "../lib/settings";
 import {
   canSpeak,
@@ -379,9 +383,17 @@ export default function ArticlePage() {
         <div className="article-text">
           {paragraphs.map((paragraph, paragraphIndex) => {
             const sentences = splitSentences(paragraph);
+            const first = sentences[0]
+              ? splitLeadingMarkers(sentences[0])
+              : null;
             return (
               // biome-ignore lint/suspicious/noArrayIndexKey: sentences have no stable id
               <p className="para" key={paragraphIndex}>
+                {first?.number && (
+                  <span className="para-index">
+                    {first.number}/{paragraphs.length}
+                  </span>
+                )}
                 {sentences.map((sentence, sentenceIndex) => (
                   <button
                     // biome-ignore lint/suspicious/noArrayIndexKey: sentences have no stable id
@@ -400,7 +412,7 @@ export default function ArticlePage() {
                       })
                     }
                   >
-                    {sentence}
+                    {sentenceIndex === 0 && first ? first.text : sentence}
                     {sentenceIndex < sentences.length - 1 ? " " : ""}
                   </button>
                 ))}

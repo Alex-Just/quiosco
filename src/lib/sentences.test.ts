@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { splitSentences, stripSentenceMarkers } from "./sentences";
+import {
+  splitLeadingMarkers,
+  splitSentences,
+  stripSentenceMarkers,
+} from "./sentences";
 
 describe("splitSentences", () => {
   it("splits on sentence-ending punctuation", () => {
@@ -91,5 +95,36 @@ describe("stripSentenceMarkers", () => {
   it("never returns an empty string", () => {
     expect(stripSentenceMarkers("11")).toBe("11");
     expect(stripSentenceMarkers("🇪🇸")).toBe("🇪🇸");
+  });
+});
+
+describe("splitLeadingMarkers", () => {
+  it("splits a standalone paragraph number from the sentence", () => {
+    expect(
+      splitLeadingMarkers("11\n🇪🇸 Incluso podrán superarse los 250/300."),
+    ).toEqual({
+      number: "11",
+      text: "Incluso podrán superarse los 250/300.",
+    });
+  });
+
+  it("splits a numbered list marker from the sentence", () => {
+    expect(splitLeadingMarkers("1. El Gobierno anunció medidas.")).toEqual({
+      number: "1",
+      text: "El Gobierno anunció medidas.",
+    });
+  });
+
+  it("reports no number when the sentence has none", () => {
+    expect(splitLeadingMarkers("🇪🇸 Los rojos se activan a las 18.00.")).toEqual(
+      {
+        number: null,
+        text: "Los rojos se activan a las 18.00.",
+      },
+    );
+    expect(splitLeadingMarkers("2026 fue un año récord.")).toEqual({
+      number: null,
+      text: "2026 fue un año récord.",
+    });
   });
 });
