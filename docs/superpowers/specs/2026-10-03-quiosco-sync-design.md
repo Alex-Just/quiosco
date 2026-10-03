@@ -138,7 +138,9 @@ Rules:
 `syncNow(store, settings)`:
 
 1. Read the cursor from localStorage (`quiosco.sync.cursor`, default 0).
-2. Collect dirty articles (`listAll().filter(dirty)`) and dirty settings.
+2. Collect dirty articles (`listAll().filter((article) => article.dirty !== false)`
+   — rows written before sync shipped have no flag and count as dirty once) and
+   dirty settings.
 3. Push in batches (≤ 10 rows / ≤ 2 MB per request) until drained; per batch,
    apply the response (below) and clear `dirty` for acknowledged rows.
 4. Pull loop until a short page arrives.
