@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Link,
   useLocation,
@@ -8,10 +8,12 @@ import {
 import { createApi } from "../lib/api";
 import { MAX_ARTICLE_CHARS, newArticle } from "../lib/article";
 import { cleanArticleText } from "../lib/clean";
+import { climbLadder, LadderError } from "../lib/ladder";
 import { loadSettings } from "../lib/settings";
 import { clearPendingShare, readPendingShare } from "../lib/sharePayload";
 import { extractTitleWithLlm } from "../lib/titleWithLlm";
 import { translateArticle } from "../lib/translateArticle";
+import type { Via } from "../lib/types";
 import { normalizeUrl } from "../lib/url";
 import { useStore } from "../lib/useStore";
 
@@ -35,6 +37,9 @@ export default function AddPage() {
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [cleanup, setCleanup] = useState(true);
+  const [fetchDetail, setFetchDetail] = useState<string | null>(null);
+  // The prefill read is async; never overwrite what the user typed meanwhile.
+  const edited = useRef(false);
 
   useEffect(() => {
     if (!store || loaded) return;
@@ -51,7 +56,7 @@ export default function AddPage() {
       } else {
         const state = (location.state ?? null) as PrefillState | null;
         const payload = await readPendingShare();
-        if (!cancelled) {
+        if (!cancelled && !edited.current) {
           setTitle(state?.prefillTitle ?? payload?.title ?? "");
           setUrl(state?.prefillUrl ?? payload?.url ?? "");
           setText(state?.prefillText ?? payload?.text ?? "");
@@ -66,17 +71,55 @@ export default function AddPage() {
 
   async function onSave() {
     if (!store) return;
-    const cleaned = cleanup ? cleanArticleText(text, title) : text.trim();
-    if (cleaned.length < 40) {
-      setError("Paste the article text first (at least a paragraph).");
-      return;
-    }
     setBusy(true);
     setError(null);
+    setFetchDetail(null);
     try {
       const settings = loadSettings();
+      const canonical = normalizeUrl(url);
+      if (!editId && canonical) {
+        const existing = await store.findByUrl(canonical);
+        if (existing) {
+          await clearPendingShare();
+          navigate(`/article/${existing.id}`);
+          return;
+        }
+      }
+      let source = text;
+      let extractedTitle: string | null = null;
+      let via: Via = "manual";
+      if (!editId && source.trim().length < 40 && canonical) {
+        // No text pasted: fetch and extract the article from the URL, using
+        // the same ladder as the Android share flow.
+        if (!settings.appToken) {
+          setError(
+            "Set your app token in Settings first — it is needed to fetch URLs.",
+          );
+          return;
+        }
+        const api = createApi({ token: settings.appToken });
+        const result = await climbLadder(canonical, async (rung, target) => {
+          setFetchDetail(`Trying ${rung}…`);
+          return api.fetchRung(rung, target);
+        });
+        source = result.article.text;
+        extractedTitle = result.article.title;
+        via = result.via;
+      }
+      const cleaned =
+        cleanup && via === "manual"
+          ? cleanArticleText(source, title)
+          : source.trim();
+      if (cleaned.length < 40) {
+        setError(
+          canonical
+            ? "Could not read that URL. Paste the article text instead."
+            : "Paste the article text first (at least a paragraph).",
+        );
+        return;
+      }
       const clipped = cleaned.slice(0, MAX_ARTICLE_CHARS);
-      let finalTitle = title.trim();
+      let finalTitle = title.trim() || extractedTitle?.trim() || "";
       if (!finalTitle && settings.appToken) {
         const api = createApi({ token: settings.appToken });
         const guessed = await extractTitleWithLlm(
@@ -115,20 +158,11 @@ export default function AddPage() {
         navigate(`/article/${editId}`);
         return;
       }
-      const canonical = normalizeUrl(url);
-      if (canonical) {
-        const existing = await store.findByUrl(canonical);
-        if (existing) {
-          await clearPendingShare();
-          navigate(`/article/${existing.id}`);
-          return;
-        }
-      }
       const article = newArticle({
         url: canonical,
         title: finalTitle,
         text: clipped,
-        via: "manual",
+        via,
         cleanup,
       });
       await store.put(article);
@@ -143,9 +177,16 @@ export default function AddPage() {
         void translateArticle(store, article, settings);
       }
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "save failed");
+      setError(
+        saveError instanceof LadderError
+          ? "Could not extract the article from that URL — paste the text instead."
+          : saveError instanceof Error
+            ? saveError.message
+            : "save failed",
+      );
     } finally {
       setBusy(false);
+      setFetchDetail(null);
     }
   }
 
@@ -156,14 +197,20 @@ export default function AddPage() {
         Title (optional — guessed from the text if left empty)
         <input
           value={title}
-          onChange={(event) => setTitle(event.target.value)}
+          onChange={(event) => {
+            edited.current = true;
+            setTitle(event.target.value);
+          }}
         />
       </label>
       <label>
-        Source URL (optional)
+        Source URL (optional — fetched when no text is pasted)
         <input
           value={url}
-          onChange={(event) => setUrl(event.target.value)}
+          onChange={(event) => {
+            edited.current = true;
+            setUrl(event.target.value);
+          }}
           inputMode="url"
         />
       </label>
@@ -172,7 +219,10 @@ export default function AddPage() {
         <textarea
           rows={7}
           value={text}
-          onChange={(event) => setText(event.target.value)}
+          onChange={(event) => {
+            edited.current = true;
+            setText(event.target.value);
+          }}
         />
       </label>
       <label className="checkbox">
@@ -187,6 +237,7 @@ export default function AddPage() {
         When enabled, menus, cookie banners, footers and link lists are removed
         from the text before it is translated.
       </p>
+      {fetchDetail && <p className="muted">{fetchDetail}</p>}
       {error && <p className="error">{error}</p>}
       <div className="row form-actions">
         <button
@@ -195,7 +246,13 @@ export default function AddPage() {
           onClick={onSave}
           disabled={busy}
         >
-          {busy ? "Saving…" : editId ? "Save" : "Save & translate"}
+          {busy
+            ? fetchDetail
+              ? "Fetching…"
+              : "Saving…"
+            : editId
+              ? "Save"
+              : "Save & translate"}
         </button>
         <Link className="button" to="/">
           Cancel

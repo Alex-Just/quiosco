@@ -96,6 +96,36 @@ test("settings connection check reflects the worker auth", async ({ page }) => {
   await expect(page.getByText("Connected")).toBeVisible();
 });
 
+test("adds an article by URL from the web form", async ({ page }) => {
+  const paragraph =
+    "El Ayuntamiento de Valencia notificó una población de 858.178 residentes a 1 de enero de 2026, según los datos del padrón municipal continuo.";
+  await page.route("**/api/fetch**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "text/html; charset=utf-8",
+      headers: {
+        "x-quiosco-via": "direct",
+        "x-quiosco-final-url": "https://example.com/noticia",
+      },
+      body: `<!doctype html><html><head><title>Prueba URL</title></head><body><article><h1>Prueba URL</h1><p>${paragraph}</p><p>${paragraph}</p><p>${paragraph}</p><p>${paragraph}</p><p>${paragraph}</p><p>${paragraph}</p></article></body></html>`,
+    });
+  });
+
+  await page.goto("/settings");
+  await page.getByLabel("App token").fill("e2e-token");
+  await page.getByLabel("Translate automatically after saving").uncheck();
+  await page.getByRole("button", { name: "Save" }).click();
+
+  await page.goto("/add");
+  await page.getByLabel("Source URL").fill("https://example.com/noticia");
+  await page.getByRole("button", { name: "Save & translate" }).click();
+
+  await page.waitForURL("**/article/**");
+  await expect(page.getByRole("heading", { name: "Prueba URL" })).toBeVisible();
+  await page.getByRole("button", { name: "Original", exact: true }).click();
+  await expect(page.getByText(/858\.178 residentes/).first()).toBeVisible();
+});
+
 test("syncs an article between two devices", async ({ browser }) => {
   const title = `Prueba sync ${Date.now()}`;
   const contextA = await browser.newContext();
