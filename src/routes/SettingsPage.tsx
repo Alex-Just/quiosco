@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { createApi } from "../lib/api";
 import { formatDateTime } from "../lib/format";
 import { loadSettings, saveSettings } from "../lib/settings";
-import { runSyncNow } from "../lib/sync";
+import { LAST_SYNC_KEY, runSyncNow, scheduleSync } from "../lib/sync";
 import type { Settings } from "../lib/types";
 
 const MODEL_SUGGESTIONS = [
@@ -20,7 +20,7 @@ export default function SettingsPage() {
   );
   const [syncState, setSyncState] = useState<string | null>(null);
   const [lastSync, setLastSync] = useState(
-    () => Number(localStorage.getItem("quiosco.sync.at") ?? "0") || 0,
+    () => Number(localStorage.getItem(LAST_SYNC_KEY) ?? "0") || 0,
   );
 
   useEffect(() => {
@@ -33,7 +33,7 @@ export default function SettingsPage() {
     setSyncState("Syncing…");
     try {
       const summary = await runSyncNow();
-      setLastSync(Number(localStorage.getItem("quiosco.sync.at") ?? "0") || 0);
+      setLastSync(Number(localStorage.getItem(LAST_SYNC_KEY) ?? "0") || 0);
       setSyncState(
         summary
           ? `Synced — ${summary.pushed} up, ${summary.pulled} down`
@@ -52,6 +52,8 @@ export default function SettingsPage() {
   function onSave() {
     saveSettings(settings);
     setSaved(true);
+    // Settings are part of the sync payload: schedule a push like any local write.
+    scheduleSync();
   }
 
   async function onCheck() {

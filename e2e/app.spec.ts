@@ -132,6 +132,25 @@ test("syncs an article between two devices", async ({ browser }) => {
     pageB.getByRole("link", { name: new RegExp(title) }),
   ).toBeVisible();
 
+  // Delete on B and verify the tombstone propagates back to A.
+  await pageB.getByRole("link", { name: new RegExp(title) }).click();
+  await pageB.waitForURL("**/article/**");
+  pageB.on("dialog", (dialog) => dialog.accept());
+  await pageB.getByRole("button", { name: "Delete" }).click();
+  await pageB.waitForURL((url) => url.pathname === "/");
+
+  await pageB.goto("/settings");
+  await pageB.getByRole("button", { name: "Sync now" }).click();
+  await expect(pageB.getByText(/Synced —/)).toBeVisible();
+
+  await pageA.goto("/settings");
+  await pageA.getByRole("button", { name: "Sync now" }).click();
+  await expect(pageA.getByText(/Synced —/)).toBeVisible();
+  await pageA.goto("/");
+  await expect(
+    pageA.getByRole("link", { name: new RegExp(title) }),
+  ).toHaveCount(0);
+
   await contextA.close();
   await contextB.close();
 });

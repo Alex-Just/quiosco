@@ -8,10 +8,11 @@ import type { ArticleStore } from "./store";
 import type { Article, Settings, SyncArticleRow, SyncResponse } from "./types";
 
 const CURSOR_KEY = "quiosco.sync.cursor";
-const LAST_SYNC_KEY = "quiosco.sync.at";
+export const LAST_SYNC_KEY = "quiosco.sync.at";
 const MAX_BATCH_ROWS = 10;
 const MAX_BATCH_BYTES = 2_000_000;
 const PAGE_SIZE = 500;
+const MAX_PULL_PAGES = 20;
 
 export interface SyncSummary {
   pushed: number;
@@ -28,8 +29,12 @@ export async function syncNow(
 ): Promise<SyncSummary> {
   let cursor = Number(storage.getItem(CURSOR_KEY) ?? "0") || 0;
   const all = await store.listAll();
-  const dirty = all.filter((article) => article.dirty);
+  // Rows written before the dirty flag existed have no flag at all: treat
+  // them as dirty so an already-deployed library backfills on first sync.
+  // The accepted echo writes `dirty: false`, so this converges.
+  const dirty = all.filter((article) => article.dirty !== false);
   const batches = batchRows(dirty);
+  const pushedIds = new Set<string>();
   let settingsRow =
     isSettingsDirty(storage) && settings.updatedAt
       ? { updatedAt: settings.updatedAt, data: serializeSettings(settings) }
@@ -46,15 +51,19 @@ export async function syncNow(
       settings: settingsRow,
     });
     settingsRow = null;
+    for (const article of batch) pushedIds.add(article.id);
     pushed += batch.length;
-    pulled += response.articles.length;
+    // Push echoes are not "down": count only rows this device did not send.
+    pulled += response.articles.filter((row) => !pushedIds.has(row.id)).length;
     lastCount = response.articles.length;
     cursor = response.cursor;
     await applyResponse(store, storage, response);
   }
-  while (lastCount === PAGE_SIZE) {
+  let pages = 0;
+  while (lastCount === PAGE_SIZE && pages < MAX_PULL_PAGES) {
+    pages += 1;
     const response = await api.sync({ cursor, articles: [], settings: null });
-    pulled += response.articles.length;
+    pulled += response.articles.filter((row) => !pushedIds.has(row.id)).length;
     lastCount = response.articles.length;
     cursor = response.cursor;
     await applyResponse(store, storage, response);
@@ -69,22 +78,30 @@ async function applyResponse(
   storage: StorageLike,
   response: SyncResponse,
 ): Promise<void> {
+  let changed = false;
   if (response.articles.length > 0) {
     const localById = new Map(
       (await store.listAll()).map((article) => [article.id, article]),
     );
     const toApply: Article[] = [];
     for (const row of response.articles) {
-      let parsed: Article;
+      let parsed: unknown;
       try {
-        parsed = JSON.parse(row.data) as Article;
+        parsed = JSON.parse(row.data);
       } catch {
         continue;
       }
+      // `data` is opaque JSON: only a plain object is an article body.
+      if (
+        parsed === null ||
+        typeof parsed !== "object" ||
+        Array.isArray(parsed)
+      )
+        continue;
       const local = localById.get(row.id);
       if (local?.dirty && local.updatedAt > row.updatedAt) continue;
       toApply.push({
-        ...parsed,
+        ...(parsed as Article),
         id: row.id,
         updatedAt: row.updatedAt,
         deleted: row.deleted,
@@ -93,14 +110,18 @@ async function applyResponse(
     }
     if (toApply.length > 0) {
       await store.applyRemote(toApply);
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new Event("quiosco:sync"));
-      }
+      changed = true;
     }
   }
   if (response.settings) {
     const applied = applyRemoteSettings(response.settings, storage);
-    if (applied) clearSettingsDirty(storage);
+    if (applied) {
+      clearSettingsDirty(storage);
+      changed = true;
+    }
+  }
+  if (changed && typeof window !== "undefined") {
+    window.dispatchEvent(new Event("quiosco:sync"));
   }
 }
 
@@ -109,7 +130,9 @@ function batchRows(rows: Article[]): Article[][] {
   let current: Article[] = [];
   let bytes = 0;
   for (const row of rows) {
-    const size = JSON.stringify(row).length;
+    // Measure the encoded row body (what the server actually receives and
+    // caps), not the raw article JSON.
+    const size = JSON.stringify(toRow(row)).length;
     if (current.length >= MAX_BATCH_ROWS || bytes + size > MAX_BATCH_BYTES) {
       if (current.length > 0) batches.push(current);
       current = [];
@@ -143,6 +166,7 @@ function serializeSettings(settings: Settings): string {
 // Trigger plumbing: App registers a runner; pages call scheduleSync().
 let runner: (() => Promise<SyncSummary | null>) | null = null;
 let timer: number | null = null;
+let inFlight: Promise<SyncSummary | null> | null = null;
 
 export function registerSyncRunner(
   fn: () => Promise<SyncSummary | null>,
@@ -160,5 +184,10 @@ export function scheduleSync(delayMs = 3000): void {
 }
 
 export function runSyncNow(): Promise<SyncSummary | null> {
-  return runner ? runner() : Promise.resolve(null);
+  if (inFlight) return inFlight;
+  if (!runner) return Promise.resolve(null);
+  inFlight = runner().finally(() => {
+    inFlight = null;
+  });
+  return inFlight;
 }
