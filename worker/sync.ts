@@ -32,6 +32,13 @@ interface StoredArticle {
   data: string;
 }
 
+interface StoredVersion {
+  updated_at: number;
+  server_seq: number;
+  deleted: number;
+  data: string;
+}
+
 export async function handleSync(
   request: Request,
   env: Env,
@@ -48,14 +55,18 @@ export async function handleSync(
   if (!parsed) return jsonResponse({ error: "bad request" }, 400);
 
   const now = Date.now();
+  const touched: StoredArticle[] = [];
 
   for (const row of parsed.articles) {
     const stored = await env.DB.prepare(
-      "SELECT updated_at FROM articles WHERE id = ?",
+      "SELECT updated_at, server_seq, deleted, data FROM articles WHERE id = ?",
     )
       .bind(row.id)
-      .first<{ updated_at: number }>();
-    if (stored && row.updatedAt < stored.updated_at) continue;
+      .first<StoredVersion>();
+    if (stored && row.updatedAt < stored.updated_at) {
+      touched.push({ id: row.id, ...stored });
+      continue;
+    }
     await env.DB.prepare(
       `INSERT INTO articles (id, updated_at, server_seq, deleted, data)
        VALUES (?, ?, ?, ?, ?)
@@ -67,6 +78,13 @@ export async function handleSync(
     )
       .bind(row.id, row.updatedAt, now, row.deleted ? 1 : 0, row.data)
       .run();
+    touched.push({
+      id: row.id,
+      updated_at: row.updatedAt,
+      server_seq: now,
+      deleted: row.deleted ? 1 : 0,
+      data: row.data,
+    });
   }
 
   if (parsed.settings) {
@@ -99,7 +117,7 @@ export async function handleSync(
     "SELECT updated_at, data FROM settings WHERE id = 'settings'",
   ).first<{ updated_at: number; data: string }>();
 
-  const articles = (pulled.results ?? []).map((row) => ({
+  const articles = dedupeById(pulled.results ?? [], touched).map((row) => ({
     id: row.id,
     updatedAt: row.updated_at,
     deleted: row.deleted === 1,
@@ -117,6 +135,18 @@ export async function handleSync(
       ? { updatedAt: storedSettings.updated_at, data: storedSettings.data }
       : null,
   });
+}
+
+// Union of push-touched rows and pulled rows; the pulled entry wins when both
+// contain the same id.
+function dedupeById(
+  pulled: StoredArticle[],
+  touched: StoredArticle[],
+): StoredArticle[] {
+  const merged = new Map<string, StoredArticle>();
+  for (const row of pulled) merged.set(row.id, row);
+  for (const row of touched) if (!merged.has(row.id)) merged.set(row.id, row);
+  return [...merged.values()];
 }
 
 function parseRequest(body: unknown): SyncRequest | null {

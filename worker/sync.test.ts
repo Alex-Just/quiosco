@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { D1Like, D1Statement, Env } from "./env";
 import { handleSync } from "./sync";
 
@@ -25,9 +25,22 @@ function fakeDb() {
         return stmt;
       },
       async first<T>() {
-        if (text.startsWith("SELECT updated_at FROM articles")) {
+        if (
+          text.startsWith(
+            "SELECT updated_at, server_seq, deleted, data FROM articles",
+          )
+        ) {
           const row = articles.get(String(args[0]));
-          return (row ? { updated_at: row.updated_at } : null) as T | null;
+          return (
+            row
+              ? {
+                  updated_at: row.updated_at,
+                  server_seq: row.server_seq,
+                  deleted: row.deleted,
+                  data: row.data,
+                }
+              : null
+          ) as T | null;
         }
         if (text.startsWith("SELECT updated_at FROM settings")) {
           const row = settings.get("settings");
@@ -166,6 +179,62 @@ describe("handleSync", () => {
     };
     expect(body.articles[0]?.updatedAt).toBe(200);
     expect(body.articles[0]?.data).toBe('{"v":2}');
+  });
+
+  it("returns the stored row when a stale push lands after the cursor passed it", async () => {
+    const db = fakeDb();
+    const clock = vi.spyOn(Date, "now");
+
+    clock.mockReturnValue(1_000);
+    const first = await handleSync(
+      post({
+        cursor: 0,
+        articles: [row("x", 1300, '{"v":2}')],
+        settings: null,
+      }),
+      makeEnv(db),
+    );
+    const firstBody = (await first.json()) as { cursor: number };
+    expect(firstBody.cursor).toBe(1_000);
+
+    clock.mockReturnValue(2_000);
+    const second = await handleSync(
+      post({
+        cursor: firstBody.cursor,
+        articles: [row("y", 1)],
+        settings: null,
+      }),
+      makeEnv(db),
+    );
+    const secondBody = (await second.json()) as { cursor: number };
+    expect(secondBody.cursor).toBe(2_000);
+
+    clock.mockReturnValue(3_000);
+    const third = await handleSync(
+      post({
+        cursor: secondBody.cursor,
+        articles: [row("x", 1210, '{"v":1}')],
+        settings: null,
+      }),
+      makeEnv(db),
+    );
+    clock.mockRestore();
+
+    const thirdBody = (await third.json()) as {
+      articles: Array<{
+        id: string;
+        updatedAt: number;
+        deleted: boolean;
+        data: string;
+      }>;
+    };
+    expect(
+      thirdBody.articles.find((article) => article.id === "x"),
+    ).toMatchObject({
+      updatedAt: 1300,
+      deleted: false,
+      data: '{"v":2}',
+    });
   });
 
   it("round-trips a tombstone", async () => {
