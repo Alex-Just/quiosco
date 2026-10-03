@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { formatDateTime } from "../lib/format";
 import {
-  splitLeadingMarkers,
+  splitLeadingNumber,
   splitSentences,
   stripSentenceMarkers,
 } from "../lib/sentences";
@@ -384,7 +384,7 @@ export default function ArticlePage() {
           {paragraphs.map((paragraph, paragraphIndex) => {
             const sentences = splitSentences(paragraph);
             const first = sentences[0]
-              ? splitLeadingMarkers(sentences[0])
+              ? splitLeadingNumber(sentences[0])
               : null;
             return (
               // biome-ignore lint/suspicious/noArrayIndexKey: sentences have no stable id

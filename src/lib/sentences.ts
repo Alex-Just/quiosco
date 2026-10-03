@@ -95,3 +95,14 @@ export function splitLeadingMarkers(sentence: string): LeadingMarkers {
 export function stripSentenceMarkers(sentence: string): string {
   return splitLeadingMarkers(sentence).text;
 }
+
+// Display-only variant: strips just the number marker (and the whitespace
+// directly after it) so the page keeps the article's own flags, quotes and
+// line breaks while the number becomes a dimmed n/total counter.
+export function splitLeadingNumber(sentence: string): LeadingMarkers {
+  const trimmed = sentence.replace(/^\s+/, "");
+  const match = LIST_NUMBER.exec(trimmed) ?? STANDALONE_NUMBER.exec(trimmed);
+  if (!match) return { number: null, text: sentence };
+  const text = trimmed.slice(match[0].length).replace(/^\s+/, "");
+  return { number: match[1] ?? null, text: text.length > 0 ? text : sentence };
+}

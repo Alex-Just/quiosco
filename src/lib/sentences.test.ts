@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   splitLeadingMarkers,
+  splitLeadingNumber,
   splitSentences,
   stripSentenceMarkers,
 } from "./sentences";
@@ -125,6 +126,44 @@ describe("splitLeadingMarkers", () => {
     expect(splitLeadingMarkers("2026 fue un año récord.")).toEqual({
       number: null,
       text: "2026 fue un año récord.",
+    });
+  });
+});
+
+describe("splitLeadingNumber", () => {
+  it("keeps the flag in the displayed text", () => {
+    expect(
+      splitLeadingNumber(
+        '2\n🇪🇸 "No me preguntaron si quería volver a Marruecos.',
+      ),
+    ).toEqual({
+      number: "2",
+      text: '🇪🇸 "No me preguntaron si quería volver a Marruecos.',
+    });
+  });
+
+  it("drops a numbered list marker", () => {
+    expect(splitLeadingNumber("1. El Gobierno anunció medidas.")).toEqual({
+      number: "1",
+      text: "El Gobierno anunció medidas.",
+    });
+  });
+
+  it("keeps the newline when the flag sits on its own line", () => {
+    expect(
+      splitLeadingNumber("4\n🇪🇸\nLos migrantes llevaban en la ciudad."),
+    ).toEqual({
+      number: "4",
+      text: "🇪🇸\nLos migrantes llevaban en la ciudad.",
+    });
+  });
+
+  it("reports no number when the sentence has none", () => {
+    expect(
+      splitLeadingNumber('🇪🇸 "No me preguntaron si quería volver."'),
+    ).toEqual({
+      number: null,
+      text: '🇪🇸 "No me preguntaron si quería volver."',
     });
   });
 });
