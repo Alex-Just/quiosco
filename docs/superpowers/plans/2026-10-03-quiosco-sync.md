@@ -727,44 +727,42 @@ In `src/lib/types.ts`, add to `Settings`:
 
 - [ ] **Step 2: Write the failing tests**
 
-Append to `src/lib/settings.test.ts`:
+Append to `src/lib/settings.test.ts` (the file runs under `// @vitest-environment jsdom`, so it uses the real `localStorage`; extend the existing import line with `applyRemoteSettings`, `clearSettingsDirty` and `isSettingsDirty`):
 
 ```ts
   it("stamps updatedAt and marks dirty on save", () => {
-    const storage = fakeStorage();
+    localStorage.clear();
     const before = Date.now();
-    saveSettings({ ...DEFAULT_SETTINGS, model: "m" }, storage);
-    const saved = loadSettings(storage);
+    saveSettings({ ...DEFAULT_SETTINGS, model: "m" });
+    const saved = loadSettings();
     expect(saved.updatedAt).toBeGreaterThanOrEqual(before);
-    expect(isSettingsDirty(storage)).toBe(true);
-    clearSettingsDirty(storage);
-    expect(isSettingsDirty(storage)).toBe(false);
+    expect(isSettingsDirty()).toBe(true);
+    clearSettingsDirty();
+    expect(isSettingsDirty()).toBe(false);
   });
 
   it("applies newer remote settings, preserving the app token", () => {
-    const storage = fakeStorage();
-    saveSettings({ ...DEFAULT_SETTINGS, appToken: "local-token", model: "old" }, storage);
-    const applied = applyRemoteSettings(
-      { updatedAt: Date.now() + 1000, data: JSON.stringify({ model: "new", targetLanguage: "French" }) },
-      storage,
-    );
+    localStorage.clear();
+    saveSettings({ ...DEFAULT_SETTINGS, appToken: "local-token", model: "old" });
+    const applied = applyRemoteSettings({
+      updatedAt: Date.now() + 1000,
+      data: JSON.stringify({ model: "new", targetLanguage: "French" }),
+    });
     expect(applied?.model).toBe("new");
     expect(applied?.targetLanguage).toBe("French");
-    expect(loadSettings(storage).appToken).toBe("local-token");
+    expect(loadSettings().appToken).toBe("local-token");
   });
 
   it("ignores older remote settings", () => {
-    const storage = fakeStorage();
-    saveSettings({ ...DEFAULT_SETTINGS, model: "keep" }, storage);
-    const local = loadSettings(storage);
+    localStorage.clear();
+    saveSettings({ ...DEFAULT_SETTINGS, model: "keep" });
+    const local = loadSettings();
     expect(
-      applyRemoteSettings({ updatedAt: 1, data: JSON.stringify({ model: "stale" }) }, storage),
+      applyRemoteSettings({ updatedAt: 1, data: JSON.stringify({ model: "stale" }) }),
     ).toBeNull();
-    expect(loadSettings(storage).model).toBe(local.model);
+    expect(loadSettings().model).toBe(local.model);
   });
 ```
-
-(`fakeStorage` already exists in the test file; if not, define it as a `Map`-backed `Pick<Storage, "getItem" | "setItem" | "removeItem">`.)
 
 - [ ] **Step 3: Run the tests to verify they fail**
 
