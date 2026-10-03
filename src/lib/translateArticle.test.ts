@@ -2,7 +2,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { newArticle } from "./article";
 import { CLEANUP_SYSTEM_PROMPT } from "./cleanWithLlm";
 import type { ArticleStore } from "./store";
-import { cancelTranslation, translateArticle } from "./translateArticle";
+import {
+  cancelTranslation,
+  hasRunningTranslation,
+  translateArticle,
+} from "./translateArticle";
 import type { Article, Settings } from "./types";
 
 const settings: Settings = {
@@ -123,6 +127,26 @@ describe("translateArticle", () => {
       error: null,
       partial: null,
     });
+  });
+
+  it("tracks in-flight runs per article", async () => {
+    const article = makeArticle({ cleanup: false });
+    const { store } = fakeStore();
+    vi.stubGlobal(
+      "fetch",
+      (_input: RequestInfo | URL, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () =>
+            reject(new DOMException("aborted", "AbortError")),
+          );
+        }),
+    );
+    expect(hasRunningTranslation(article.id)).toBe(false);
+    const run = translateArticle(store, article, settings);
+    expect(hasRunningTranslation(article.id)).toBe(true);
+    cancelTranslation(article.id);
+    await run;
+    expect(hasRunningTranslation(article.id)).toBe(false);
   });
 
   it("persists streamed partials separately and clears them on completion", async () => {

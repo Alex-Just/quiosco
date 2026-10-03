@@ -11,7 +11,11 @@ import {
   speechLangFor,
   stopSpeaking,
 } from "../lib/speech";
-import { cancelTranslation, translateArticle } from "../lib/translateArticle";
+import {
+  cancelTranslation,
+  hasRunningTranslation,
+  translateArticle,
+} from "../lib/translateArticle";
 import type { Article } from "../lib/types";
 import { useStore } from "../lib/useStore";
 
@@ -151,7 +155,24 @@ export default function ArticlePage() {
   }
 
   function onCancel() {
-    if (article) cancelTranslation(article.id);
+    if (!article || !store) return;
+    if (hasRunningTranslation(article.id)) {
+      cancelTranslation(article.id);
+      return;
+    }
+    // The run is not alive in this session (the app was closed or reloaded, or
+    // another device started it): return the article to a resumable state
+    // instead of waiting out the stale-run lease.
+    void (async () => {
+      setArticle(
+        await store.update(article.id, {
+          translationStatus: "pending",
+          translationPhase: null,
+          partial: null,
+          error: null,
+        }),
+      );
+    })();
   }
 
   async function onRetranslate() {

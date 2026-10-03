@@ -15,6 +15,10 @@ export function isTranslationRunning(): boolean {
   return inflight.size > 0;
 }
 
+export function hasRunningTranslation(articleId: string): boolean {
+  return inflight.has(articleId);
+}
+
 export async function translateArticle(
   store: ArticleStore,
   article: Article,
