@@ -15,18 +15,16 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const config = existsSync(path.join(root, LOCAL_CONFIG))
   ? LOCAL_CONFIG
   : TEMPLATE_CONFIG;
-// pnpm treats bare -c as its own flag; `--` forwards -c to wrangler.
-// Global flags must still precede the subcommand (deploy/dev/…).
-const args = [
-  "exec",
-  "--",
-  "wrangler",
-  "-c",
-  config,
-  ...process.argv.slice(2),
-];
 
-const child = spawn("pnpm", args, {
+const [command, ...rest] = process.argv.slice(2);
+if (!command) {
+  console.error("usage: node scripts/wrangler-run.mjs <command> [...args]");
+  process.exit(1);
+}
+
+// Subcommand first, then --config: wrangler rejects `-c` before the command.
+const wranglerBin = path.join(root, "node_modules", ".bin", "wrangler");
+const child = spawn(wranglerBin, [command, "--config", config, ...rest], {
   cwd: root,
   stdio: "inherit",
   shell: process.platform === "win32",
