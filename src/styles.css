@@ -65,6 +65,10 @@ body {
   border-bottom: 1px solid var(--line);
 }
 
+body.zen-active .app-header {
+  display: none;
+}
+
 .app-title {
   font-size: 1.125rem;
   font-weight: 700;
@@ -90,6 +94,10 @@ body {
   max-width: 42rem;
   margin: 0 auto;
   padding: 18px 16px calc(28px + env(safe-area-inset-bottom));
+}
+
+body.zen-active .app {
+  padding-top: calc(18px + env(safe-area-inset-top));
 }
 
 h1 {
@@ -402,7 +410,8 @@ button.danger {
 
 .zen-pane {
   min-height: 50vh;
-  touch-action: pan-y;
+  /* Own the gesture so the browser does not steal it for page scroll. */
+  touch-action: none;
   user-select: none;
 }
 
@@ -410,8 +419,28 @@ button.danger {
   margin: 0;
 }
 
+.zen-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.zen-nav-button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.zen-nav-button:disabled {
+  opacity: 0.35;
+}
+
 .zen-hint {
-  margin: 20px 0 0;
+  margin: 0;
   text-align: center;
   font-size: 0.85rem;
 }
@@ -429,6 +458,10 @@ button.danger {
   white-space: inherit;
   text-align: inherit;
   cursor: pointer;
+}
+
+.zen-pane .sentence {
+  touch-action: none;
 }
 
 .para-index {

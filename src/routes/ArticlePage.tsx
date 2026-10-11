@@ -63,7 +63,6 @@ export default function ArticlePage() {
 
   useEffect(() => {
     if (!id) return;
-    setZenMode(false);
     setZenIndex(0);
   }, [id]);
 
@@ -71,9 +70,21 @@ export default function ArticlePage() {
     setZenIndex((index) => clampZenIndex(index, paragraphs.length));
   }, [paragraphs.length]);
 
+  // Finished articles open in Zen; leave Zen off when it is not available.
   useEffect(() => {
-    if (!zenAvailable && zenMode) setZenMode(false);
-  }, [zenAvailable, zenMode]);
+    if (!id) {
+      setZenMode(false);
+      return;
+    }
+    setZenMode(zenAvailable);
+  }, [id, zenAvailable]);
+
+  useEffect(() => {
+    document.body.classList.toggle("zen-active", zenMode);
+    return () => {
+      document.body.classList.remove("zen-active");
+    };
+  }, [zenMode]);
 
   // Restore and persist the reading position; skip while Zen owns navigation.
   useArticleScroll(store, id, body.length > 0 && !zenMode, view, setView);

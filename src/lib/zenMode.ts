@@ -1,5 +1,5 @@
 /** Min vertical travel before a swipe changes Zen paragraph. */
-export const ZEN_SWIPE_MIN_DISTANCE_PX = 48;
+export const ZEN_SWIPE_MIN_DISTANCE_PX = 36;
 /** Ignore swipes that are mostly horizontal. */
 export const ZEN_SWIPE_MAX_HORIZONTAL_RATIO = 1;
 

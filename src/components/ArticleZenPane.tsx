@@ -79,7 +79,27 @@ export function ArticleZenPane({
         ))}
       </p>
       {total > 1 && (
-        <p className="muted zen-hint">Swipe up or down for the next block</p>
+        <div className="zen-nav">
+          <button
+            type="button"
+            className="zen-nav-button"
+            disabled={index <= 0}
+            aria-label="Previous paragraph"
+            onClick={() => onIndexChange(stepZenIndex(index, total, -1))}
+          >
+            ↑
+          </button>
+          <p className="muted zen-hint">Swipe up or down</p>
+          <button
+            type="button"
+            className="zen-nav-button"
+            disabled={index >= total - 1}
+            aria-label="Next paragraph"
+            onClick={() => onIndexChange(stepZenIndex(index, total, 1))}
+          >
+            ↓
+          </button>
+        </div>
       )}
     </div>
   );
