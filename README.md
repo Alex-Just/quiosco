@@ -1,5 +1,7 @@
 # Quiosco
 
+[![Maintainability](https://qlty.sh/gh/Alex-Just/projects/quiosco/maintainability.svg)](https://qlty.sh/gh/Alex-Just/projects/quiosco)
+
 Personal Android-first PWA: share an article URL (or manually extracted article
 text) from the Android share sheet, and Quiosco extracts the text, translates it
 via OpenCode Zen with your custom prompt, and keeps it in a local
