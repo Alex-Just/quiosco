@@ -33,23 +33,39 @@ function splitToMax(paragraph: string, maxChars: number): string[] {
   let current = "";
   for (const sentence of paragraph.split(/(?<=[.!?])\s+/)) {
     if (sentence.length > maxChars) {
-      if (current) {
-        out.push(current);
-        current = "";
-      }
-      for (let i = 0; i < sentence.length; i += maxChars) {
-        out.push(sentence.slice(i, i + maxChars));
-      }
+      flushBuffer(out, current);
+      current = "";
+      pushHardSlices(out, sentence, maxChars);
       continue;
     }
-    const candidate = current ? `${current} ${sentence}` : sentence;
-    if (candidate.length <= maxChars) {
-      current = candidate;
-    } else {
-      out.push(current);
-      current = sentence;
-    }
+    current = appendWithinMax(current, sentence, maxChars, out);
   }
-  if (current) out.push(current);
+  flushBuffer(out, current);
   return out;
+}
+
+function flushBuffer(out: string[], current: string): void {
+  if (current) out.push(current);
+}
+
+function pushHardSlices(
+  out: string[],
+  sentence: string,
+  maxChars: number,
+): void {
+  for (let i = 0; i < sentence.length; i += maxChars) {
+    out.push(sentence.slice(i, i + maxChars));
+  }
+}
+
+function appendWithinMax(
+  current: string,
+  sentence: string,
+  maxChars: number,
+  out: string[],
+): string {
+  const candidate = current ? `${current} ${sentence}` : sentence;
+  if (candidate.length <= maxChars) return candidate;
+  flushBuffer(out, current);
+  return sentence;
 }

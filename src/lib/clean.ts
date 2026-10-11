@@ -61,6 +61,9 @@ const ENGLISH_CONSENT =
 const TICKER_PREFIX =
   /^(última hora|lo más leído|las más leídas|te puede interesar|lee también|más noticias|noticias relacionadas)\b/;
 
+const MARKDOWN_NOISE_LINE =
+  /^!\[[^\]]*\]\([^)]*\)$|^([*+-]|\d+\.)\s*!\[[^\]]*\]\([^)]*\)$|^\[[^\]]*\]\([^)]*\)$|^([*+-]|\d+\.)\s*\[[^\]]*\]\([^)]*\)$|^([*+-]|\d+\.)?\s*https?:\/\/\S+$/;
+
 export function cleanArticleText(raw: string, title?: string): string {
   const normalized = raw.replace(/\r\n?/g, "\n");
   const kept: string[] = [];
@@ -89,20 +92,20 @@ export function cleanArticleText(raw: string, title?: string): string {
 }
 
 function isNoiseLine(line: string): boolean {
-  if (/^!\[[^\]]*\]\([^)]*\)$/.test(line)) return true;
-  if (/^([*+-]|\d+\.)\s*!\[[^\]]*\]\([^)]*\)$/.test(line)) return true;
-  if (/^\[[^\]]*\]\([^)]*\)$/.test(line)) return true;
-  if (/^([*+-]|\d+\.)\s*\[[^\]]*\]\([^)]*\)$/.test(line)) return true;
-  if (/^([*+-]|\d+\.)?\s*https?:\/\/\S+$/.test(line)) return true;
-  // Chrome reader-mode share artifact: "Including link: chrome-distiller://…".
-  if (/^including link:/i.test(line)) return true;
-  if (/chrome-distiller:\/\//i.test(line)) return true;
-  if (/^\*+$/.test(line)) return true;
-  // Nested markdown nav items (image inside a link) such as
-  // "*   [![Image 1: ...](...svg) Historias visuales](...)".
-  if ((line.match(/\]\(/g)?.length ?? 0) >= 2 && line.length <= 250)
-    return true;
-  return false;
+  return (
+    MARKDOWN_NOISE_LINE.test(line) ||
+    isChromeReaderNoise(line) ||
+    /^\*+$/.test(line) ||
+    isNestedMarkdownNav(line)
+  );
+}
+
+function isChromeReaderNoise(line: string): boolean {
+  return /^including link:/i.test(line) || /chrome-distiller:\/\//i.test(line);
+}
+
+function isNestedMarkdownNav(line: string): boolean {
+  return (line.match(/\]\(/g)?.length ?? 0) >= 2 && line.length <= 250;
 }
 
 function isNoiseBlock(text: string): boolean {

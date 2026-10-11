@@ -1,34 +1,18 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   Link,
   useLocation,
   useNavigate,
   useSearchParams,
 } from "react-router-dom";
-import { createApi } from "../lib/api";
-import {
-  MAX_ARTICLE_CHARS,
-  MIN_ARTICLE_TEXT_CHARS,
-  newArticle,
-} from "../lib/article";
-import { cleanArticleText } from "../lib/clean";
-import { LadderError } from "../lib/ladder";
-import { preprocessUrlArticle } from "../lib/preprocessUrl";
-import { loadSettings } from "../lib/settings";
-import { shareBody } from "../lib/share";
-import { clearPendingShare, readPendingShare } from "../lib/sharePayload";
-import { extractTitleWithLlm } from "../lib/titleWithLlm";
+import { saveErrorMessage, TOKEN_REQUIRED_FOR_URL } from "../lib/addPageErrors";
+import { addPageSaveLabel, showAddPageTryAgain } from "../lib/addPageUi";
+import { runAddPagePreprocess } from "../lib/runAddPagePreprocess";
+import { saveAddPageArticle } from "../lib/saveAddPageArticle";
 import { translateArticle } from "../lib/translateArticle";
 import type { Via } from "../lib/types";
-import { normalizeUrl } from "../lib/url";
+import { useAddPagePrefill } from "../lib/useAddPagePrefill";
 import { useStore } from "../lib/useStore";
-
-interface PrefillState {
-  prefillText?: string;
-  prefillTitle?: string;
-  prefillUrl?: string;
-  fromUrlShare?: boolean;
-}
 
 export default function AddPage() {
   const store = useStore();
@@ -49,138 +33,39 @@ export default function AddPage() {
   // The prefill read is async; never overwrite what the user typed meanwhile.
   const edited = useRef(false);
 
-  async function runPreprocess(targetUrl: string) {
-    const settings = loadSettings();
-    const canonical = normalizeUrl(targetUrl);
-    if (!canonical) return;
-    if (!settings.appToken) {
-      setError(
-        "Set your app token in Settings first — it is needed to fetch URLs.",
-      );
-      return;
-    }
-    setPreprocessing(true);
-    setError(null);
-    setCleanup(false);
-    setFetchDetail("Fetching article…");
-    try {
-      const api = createApi({ token: settings.appToken });
-      const result = await preprocessUrlArticle(canonical, api, {
-        sharedTitle: title,
-        onDetail: setFetchDetail,
-      });
-      if (!edited.current) {
-        setText(result.text);
-        setTitle((current) => current.trim() || result.title);
-      }
-      setFetchedVia(result.via);
-      if (!edited.current) setCleanup(result.needsCleanup);
-    } catch (preprocessError) {
-      setError(
-        preprocessError instanceof LadderError
-          ? "Could not extract the article from that URL — paste the text instead, or try again."
-          : preprocessError instanceof Error
-            ? preprocessError.message
-            : "Fetch failed. Check your token and try again.",
-      );
-      setFetchedVia(null);
-    } finally {
-      setPreprocessing(false);
-      setFetchDetail(null);
-    }
-  }
+  useAddPagePrefill({
+    store,
+    editId,
+    locationState: location.state,
+    edited,
+    setTitle,
+    setUrl,
+    setText,
+    setCleanup,
+    setError,
+    setPreprocessing,
+    setFetchDetail,
+    setFetchedVia,
+  });
 
-  useEffect(() => {
-    if (!store) return;
-    let cancelled = false;
-    void (async () => {
-      let nextUrl = "";
-      let nextText = "";
-      let nextTitle = "";
-      // The body a share actually carries: a URL-only share may repeat the URL
-      // (or just the page title) in the text field, which is not article text.
-      let nextBody = "";
-      if (editId) {
-        const article = await store.get(editId);
-        if (!cancelled && article) {
-          setTitle(article.title);
-          setUrl(article.url ?? "");
-          setText(article.text);
-          setCleanup(article.cleanup !== false);
-        }
-      } else {
-        const state = (location.state ?? null) as PrefillState | null;
-        const payload = await readPendingShare();
-        nextUrl = state?.prefillUrl ?? payload?.url ?? "";
-        nextText = state?.prefillText ?? payload?.text ?? "";
-        nextTitle = state?.prefillTitle ?? payload?.title ?? "";
-        // A URL-only share often repeats the URL (or the page title) in the
-        // text field. That is not article text: trusting it would skip the
-        // fetch and save the URL as the body.
-        nextBody = shareBody({
-          text: nextText,
-          title: nextTitle,
-          url: nextUrl,
-        });
-        if (!cancelled && !edited.current) {
-          setTitle(nextTitle);
-          setUrl(nextUrl);
-          setText(nextBody);
-          if (state?.fromUrlShare) setCleanup(false);
-        }
-      }
-      if (cancelled || editId || edited.current) {
-        return;
-      }
-      const canonical = normalizeUrl(nextUrl);
-      if (!canonical || nextBody.trim().length >= MIN_ARTICLE_TEXT_CHARS) {
-        return;
-      }
-      const settings = loadSettings();
-      if (!settings.appToken) {
-        setError(
-          "Set your app token in Settings first — it is needed to fetch URLs.",
-        );
-        return;
-      }
-      setPreprocessing(true);
-      setError(null);
-      setCleanup(false);
-      setFetchDetail("Fetching article…");
-      try {
-        const api = createApi({ token: settings.appToken });
-        const result = await preprocessUrlArticle(canonical, api, {
-          sharedTitle: nextTitle,
-          onDetail: setFetchDetail,
-        });
-        if (!cancelled && !edited.current) {
-          setText(result.text);
-          setTitle((current) => current.trim() || result.title);
-          setCleanup(result.needsCleanup);
-        }
-        if (!cancelled) setFetchedVia(result.via);
-      } catch (preprocessError) {
-        if (!cancelled) {
-          setError(
-            preprocessError instanceof LadderError
-              ? "Could not extract the article from that URL — paste the text instead, or try again."
-              : preprocessError instanceof Error
-                ? preprocessError.message
-                : "Fetch failed. Check your token and try again.",
-          );
-          setFetchedVia(null);
-        }
-      } finally {
-        if (!cancelled) {
-          setPreprocessing(false);
-          setFetchDetail(null);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [store, editId, location.state]);
+  const preprocessApply = {
+    setText,
+    setTitle,
+    setFetchedVia,
+    setCleanup,
+    setError,
+    setPreprocessing,
+    setFetchDetail,
+  };
+
+  async function onTryAgain() {
+    await runAddPagePreprocess({
+      targetUrl: url,
+      sharedTitle: title,
+      edited,
+      apply: preprocessApply,
+    });
+  }
 
   async function onSave() {
     if (!store) return;
@@ -188,121 +73,44 @@ export default function AddPage() {
     setError(null);
     setFetchDetail(null);
     try {
-      const settings = loadSettings();
-      const canonical = normalizeUrl(url);
-      if (!editId && canonical) {
-        const existing = await store.findByUrl(canonical);
-        if (existing) {
-          await clearPendingShare();
-          navigate(`/article/${existing.id}`, { replace: true });
-          return;
-        }
-      }
-      let source = text;
-      let extractedTitle: string | null = null;
-      let via: Via = fetchedVia ?? "manual";
-      let cleanupChoice = cleanup;
-      if (
-        !editId &&
-        source.trim().length < MIN_ARTICLE_TEXT_CHARS &&
-        canonical
-      ) {
-        if (!settings.appToken) {
-          setError(
-            "Set your app token in Settings first — it is needed to fetch URLs.",
-          );
-          return;
-        }
-        const api = createApi({ token: settings.appToken });
-        const result = await preprocessUrlArticle(canonical, api, {
-          sharedTitle: title,
-          onDetail: setFetchDetail,
-        });
-        source = result.text;
-        extractedTitle = result.title;
-        via = result.via;
-        cleanupChoice = result.needsCleanup;
-        setCleanup(cleanupChoice);
-        setText(source);
-        setFetchedVia(via);
-      }
-      const cleaned =
-        cleanupChoice && via === "manual"
-          ? cleanArticleText(source, title)
-          : source.trim();
-      if (cleaned.length < MIN_ARTICLE_TEXT_CHARS) {
-        setError(
-          canonical
-            ? "Could not read that URL. Paste the article text instead."
-            : "Paste the article text first (at least a paragraph).",
-        );
-        return;
-      }
-      const clipped = cleaned.slice(0, MAX_ARTICLE_CHARS);
-      let finalTitle = title.trim() || extractedTitle?.trim() || "";
-      if (!finalTitle && settings.appToken) {
-        const api = createApi({ token: settings.appToken });
-        const guessed = await extractTitleWithLlm(
-          clipped,
-          settings.model,
-          (request) => api.translate(request),
-        );
-        if (guessed) finalTitle = guessed;
-      }
-      if (editId) {
-        const existing = await store.get(editId);
-        const textChanged = !existing || existing.text !== clipped;
-        const cleanupChanged =
-          !existing || (existing.cleanup !== false) !== cleanupChoice;
-        await store.update(editId, {
-          title: finalTitle || "Untitled",
-          url: normalizeUrl(url),
-          text: clipped,
-          cleanup: cleanupChoice,
-          ...(textChanged || cleanupChanged
-            ? {
-                translation: null,
-                partial: null,
-                translationStatus: "pending" as const,
-                translatedChunks: 0,
-                totalChunks: 0,
-                cleanText: null,
-                translationPhase: null,
-                phaseStartedAt: null,
-                cleanDurationMs: null,
-                translateDurationMs: null,
-                error: null,
-              }
-            : {}),
-        });
-        await clearPendingShare();
-        navigate(`/article/${editId}`, { replace: true });
-        return;
-      }
-      const article = newArticle({
-        url: canonical,
-        title: finalTitle,
-        text: clipped,
-        via,
-        cleanup: cleanupChoice,
+      const result = await saveAddPageArticle({
+        store,
+        editId,
+        title,
+        url,
+        text,
+        cleanup,
+        fetchedVia,
+        onFetchDetail: setFetchDetail,
+        onPreprocessApplied: ({
+          text: nextText,
+          cleanup: nextCleanup,
+          via,
+        }) => {
+          setCleanup(nextCleanup);
+          setText(nextText);
+          setFetchedVia(via);
+        },
       });
-      await store.put(article);
-      if (settings.autoTranslate && settings.appToken) {
-        await store.update(article.id, { translationStatus: "running" });
+      if (result.kind === "duplicate") {
+        navigate(`/article/${result.articleId}`, { replace: true });
+        return;
       }
-      await clearPendingShare();
-      navigate(`/article/${article.id}`, { replace: true });
-      if (settings.autoTranslate && settings.appToken) {
+      if (result.kind === "needs-token") {
+        setError(TOKEN_REQUIRED_FOR_URL);
+        return;
+      }
+      if (result.kind === "validation") {
+        setError(result.message);
+        return;
+      }
+      navigate(`/article/${result.articleId}`, { replace: true });
+      if (result.startTranslation) {
+        const { article, settings } = result.startTranslation;
         void translateArticle(store, article, settings);
       }
     } catch (saveError) {
-      setError(
-        saveError instanceof LadderError
-          ? "Could not extract the article from that URL — paste the text instead."
-          : saveError instanceof Error
-            ? saveError.message
-            : "save failed",
-      );
+      setError(saveErrorMessage(saveError));
     } finally {
       setBusy(false);
       setFetchDetail(null);
@@ -310,6 +118,18 @@ export default function AddPage() {
   }
 
   const saveDisabled = busy || preprocessing;
+  const saveLabel = addPageSaveLabel({
+    busy,
+    fetchDetail,
+    preprocessing,
+    editId,
+  });
+  const tryAgainVisible = showAddPageTryAgain({
+    error,
+    preprocessing,
+    editId,
+    url,
+  });
 
   return (
     <section className="add">
@@ -370,23 +190,10 @@ export default function AddPage() {
           onClick={onSave}
           disabled={saveDisabled}
         >
-          {busy
-            ? fetchDetail
-              ? "Fetching…"
-              : "Saving…"
-            : preprocessing
-              ? "Preparing…"
-              : editId
-                ? "Save"
-                : "Save & translate"}
+          {saveLabel}
         </button>
-        {error && !preprocessing && !editId && normalizeUrl(url) && (
-          <button
-            type="button"
-            onClick={() => {
-              void runPreprocess(url);
-            }}
-          >
+        {tryAgainVisible && (
+          <button type="button" onClick={() => void onTryAgain()}>
             Try again
           </button>
         )}

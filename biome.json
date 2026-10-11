@@ -11,6 +11,6 @@
       "!**/.superpowers"
     ]
   },
-  "linter": { "enabled": true, "rules": { "recommended": true } },
+  "linter": { "enabled": true, "rules": { "preset": "recommended" } },
   "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2 }
 }

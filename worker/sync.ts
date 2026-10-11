@@ -152,44 +152,76 @@ function dedupeById(
 function parseRequest(body: unknown): SyncRequest | null {
   if (typeof body !== "object" || body === null) return null;
   const record = body as Record<string, unknown>;
-  const cursor =
-    typeof record.cursor === "number" && Number.isFinite(record.cursor)
-      ? Math.max(0, Math.floor(record.cursor))
-      : 0;
-  const rawArticles = Array.isArray(record.articles) ? record.articles : null;
-  if (!rawArticles || rawArticles.length > MAX_ARTICLES_PER_REQUEST)
-    return null;
-  const articles: ArticleRow[] = [];
-  for (const entry of rawArticles) {
-    if (typeof entry !== "object" || entry === null) return null;
-    const row = entry as Record<string, unknown>;
-    if (
-      typeof row.id !== "string" ||
-      row.id.length === 0 ||
-      row.id.length > 100
-    )
-      return null;
-    if (typeof row.updatedAt !== "number" || !Number.isFinite(row.updatedAt))
-      return null;
-    if (typeof row.deleted !== "boolean") return null;
-    if (typeof row.data !== "string" || row.data.length > MAX_ROW_BYTES)
-      return null;
-    articles.push({
-      id: row.id,
-      updatedAt: row.updatedAt,
-      deleted: row.deleted,
-      data: row.data,
-    });
-  }
-  let settings: SettingsRow | null = null;
-  if (record.settings !== null && record.settings !== undefined) {
-    if (typeof record.settings !== "object") return null;
-    const row = record.settings as Record<string, unknown>;
-    if (typeof row.updatedAt !== "number" || !Number.isFinite(row.updatedAt))
-      return null;
-    if (typeof row.data !== "string" || row.data.length > MAX_ROW_BYTES)
-      return null;
-    settings = { updatedAt: row.updatedAt, data: row.data };
-  }
+  const cursor = parseCursor(record.cursor);
+  const articles = parseArticleRows(record.articles);
+  if (articles === null) return null;
+  const settings = parseSettingsRow(record.settings);
+  if (settings === undefined) return null;
   return { cursor, articles, settings };
+}
+
+function parseCursor(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.max(0, Math.floor(value));
+  }
+  return 0;
+}
+
+function parseArticleRows(value: unknown): ArticleRow[] | null {
+  if (!Array.isArray(value) || value.length > MAX_ARTICLES_PER_REQUEST) {
+    return null;
+  }
+  const articles: ArticleRow[] = [];
+  for (const entry of value) {
+    const row = parseArticleRow(entry);
+    if (!row) return null;
+    articles.push(row);
+  }
+  return articles;
+}
+
+function parseArticleRow(entry: unknown): ArticleRow | null {
+  if (typeof entry !== "object" || entry === null) return null;
+  const row = entry as Record<string, unknown>;
+  if (!isValidArticleFields(row)) return null;
+  return {
+    id: row.id as string,
+    updatedAt: row.updatedAt as number,
+    deleted: row.deleted as boolean,
+    data: row.data as string,
+  };
+}
+
+function isValidArticleFields(row: Record<string, unknown>): boolean {
+  return isValidArticleMeta(row) && isValidArticleData(row.data);
+}
+
+function isValidArticleMeta(row: Record<string, unknown>): boolean {
+  return (
+    isValidArticleId(row.id) &&
+    typeof row.updatedAt === "number" &&
+    Number.isFinite(row.updatedAt) &&
+    typeof row.deleted === "boolean"
+  );
+}
+
+function isValidArticleData(data: unknown): boolean {
+  return typeof data === "string" && data.length <= MAX_ROW_BYTES;
+}
+
+function isValidArticleId(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= 100;
+}
+
+function parseSettingsRow(value: unknown): SettingsRow | null | undefined {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "object") return undefined;
+  const row = value as Record<string, unknown>;
+  if (typeof row.updatedAt !== "number" || !Number.isFinite(row.updatedAt)) {
+    return undefined;
+  }
+  if (typeof row.data !== "string" || row.data.length > MAX_ROW_BYTES) {
+    return undefined;
+  }
+  return { updatedAt: row.updatedAt, data: row.data };
 }

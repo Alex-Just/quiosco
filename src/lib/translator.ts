@@ -51,7 +51,6 @@ export async function runTranslation(
   }
 
   const totalChunks = options.totalChunks ?? chunks.length;
-  const maxAttempts = (options.retries ?? 2) + 1;
   const system = buildSystemPrompt({
     targetLanguage: options.settings.targetLanguage,
     rules: options.settings.rules,
@@ -62,57 +61,16 @@ export async function runTranslation(
 
   for (let index = translatedChunks; index < chunks.length; index += 1) {
     if (options.signal?.aborted) throw new Error("translation cancelled");
-    let lastError: unknown = null;
-    let done = false;
-    for (let attempt = 1; attempt <= maxAttempts && !done; attempt += 1) {
-      try {
-        let lastPartialEmit = 0;
-        let partialChain: Promise<void> = Promise.resolve();
-        const output = (
-          await options.translate(
-            {
-              model: options.settings.model,
-              system,
-              text: chunks[index] ?? "",
-            },
-            (partial) => {
-              // Stream partials in a separate field so the reader sees text
-              // grow, throttled to avoid hammering storage. Keeping them out
-              // of `translation` means a resume after a cancel/crash never
-              // re-appends a partial chunk.
-              const now = Date.now();
-              if (now - lastPartialEmit < 600) return;
-              lastPartialEmit = now;
-              partialChain = partialChain
-                .then(() =>
-                  options.onProgress?.({
-                    translatedChunks: index,
-                    totalChunks,
-                    translation,
-                    partial,
-                  }),
-                )
-                .catch(() => undefined);
-            },
-          )
-        ).trim();
-        await partialChain;
-        if (!output) throw new Error("empty translation");
-        translation = translation ? `${translation}\n\n${output}` : output;
-        translatedChunks = index + 1;
-        done = true;
-      } catch (error) {
-        lastError = error;
-        if (options.signal?.aborted) break;
-      }
-    }
-    if (!done) {
-      throw new TranslationError(
-        lastError instanceof Error ? lastError.message : String(lastError),
-        translatedChunks,
-        totalChunks,
-      );
-    }
+    const output = await translateChunkWithRetries({
+      options,
+      system,
+      chunk: chunks[index] ?? "",
+      index,
+      translation,
+      totalChunks,
+    });
+    translation = translation ? `${translation}\n\n${output}` : output;
+    translatedChunks = index + 1;
     // Progress persistence lives outside the retry loop: a failing callback
     // must not trigger a re-translation (which would duplicate the chunk).
     await options.onProgress?.({
@@ -123,4 +81,87 @@ export async function runTranslation(
   }
 
   return { translation, totalChunks };
+}
+
+async function translateChunkWithRetries(args: {
+  options: RunTranslationOptions;
+  system: string;
+  chunk: string;
+  index: number;
+  translation: string;
+  totalChunks: number;
+}): Promise<string> {
+  const maxAttempts = (args.options.retries ?? 2) + 1;
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await translateChunkOnce(args);
+    } catch (error) {
+      lastError = error;
+      if (args.options.signal?.aborted) break;
+    }
+  }
+  throw new TranslationError(
+    lastError instanceof Error ? lastError.message : String(lastError),
+    args.index,
+    args.totalChunks,
+  );
+}
+
+async function translateChunkOnce(args: {
+  options: RunTranslationOptions;
+  system: string;
+  chunk: string;
+  index: number;
+  translation: string;
+  totalChunks: number;
+}): Promise<string> {
+  let lastPartialEmit = 0;
+  let partialChain: Promise<void> = Promise.resolve();
+  const output = (
+    await args.options.translate(
+      {
+        model: args.options.settings.model,
+        system: args.system,
+        text: args.chunk,
+      },
+      (partial) => {
+        partialChain = partialChain
+          .then(() =>
+            emitPartialProgress(args, partial, lastPartialEmit, (now) => {
+              lastPartialEmit = now;
+            }),
+          )
+          .catch(() => undefined);
+      },
+    )
+  ).trim();
+  await partialChain;
+  if (!output) throw new Error("empty translation");
+  return output;
+}
+
+async function emitPartialProgress(
+  args: {
+    options: RunTranslationOptions;
+    index: number;
+    translation: string;
+    totalChunks: number;
+  },
+  partial: string,
+  lastPartialEmit: number,
+  setLastEmit: (now: number) => void,
+): Promise<void> {
+  // Stream partials in a separate field so the reader sees text grow,
+  // throttled to avoid hammering storage. Keeping them out of `translation`
+  // means a resume after a cancel/crash never re-appends a partial chunk.
+  const now = Date.now();
+  if (now - lastPartialEmit < 600) return;
+  setLastEmit(now);
+  await args.options.onProgress?.({
+    translatedChunks: args.index,
+    totalChunks: args.totalChunks,
+    translation: args.translation,
+    partial,
+  });
 }

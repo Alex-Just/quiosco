@@ -60,12 +60,9 @@ export function parseDailyBudget(env: Env): number {
     : DEFAULT_DAILY_CHUNK_BUDGET;
 }
 
-export async function handleTranslate(
+async function readTranslatePayload(
   request: Request,
-  env: Env,
-  fetchImpl: typeof fetch = fetch,
-): Promise<Response> {
-  let payload: TranslatePayload;
+): Promise<TranslatePayload | Response> {
   try {
     const raw = await request.text();
     if (new TextEncoder().encode(raw).byteLength > MAX_TRANSLATE_BODY_BYTES) {
@@ -79,11 +76,16 @@ export async function handleTranslate(
     ) {
       return jsonResponse({ error: "invalid request" }, 400);
     }
-    payload = { model: data.model, system: data.system, text: data.text };
+    return { model: data.model, system: data.system, text: data.text };
   } catch {
     return jsonResponse({ error: "invalid request" }, 400);
   }
+}
 
+function validateTranslatePayload(
+  payload: TranslatePayload,
+  env: Env,
+): Response | null {
   if (!allowedModels(env).includes(payload.model)) {
     return jsonResponse({ error: "model not allowed" }, 400);
   }
@@ -94,78 +96,101 @@ export async function handleTranslate(
   ) {
     return jsonResponse({ error: "invalid text" }, 400);
   }
+  return null;
+}
+
+function buildUpstreamBody(
+  payload: TranslatePayload,
+  stream: boolean,
+  useResponses: boolean,
+): unknown {
+  if (useResponses) {
+    return {
+      model: payload.model,
+      input: [
+        { role: "system", content: payload.system },
+        { role: "user", content: payload.text },
+      ],
+    };
+  }
+  const messages = [
+    { role: "system", content: payload.system },
+    { role: "user", content: payload.text },
+  ];
+  return stream
+    ? { model: payload.model, messages, stream: true }
+    : { model: payload.model, messages };
+}
+
+async function fetchTranslationText(
+  request: Request,
+  payload: TranslatePayload,
+  env: Env,
+  fetchImpl: typeof fetch,
+): Promise<Response> {
+  const useResponses = responsesModels(env).includes(payload.model);
+  // Stream only chat-protocol models; Responses-protocol models fall back to
+  // a single JSON response the client already understands.
+  const stream =
+    new URL(request.url).searchParams.get("stream") === "1" && !useResponses;
+  const upstream = await fetchImpl(
+    useResponses
+      ? "https://opencode.ai/zen/v1/responses"
+      : "https://opencode.ai/zen/v1/chat/completions",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.OPENCODE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(buildUpstreamBody(payload, stream, useResponses)),
+      signal: AbortSignal.timeout(
+        stream ? STREAM_TIMEOUT_MS : TRANSLATE_TIMEOUT_MS,
+      ),
+    },
+  );
+  if (!upstream.ok) {
+    await upstream.body?.cancel().catch(() => undefined);
+    return jsonResponse({ error: "upstream error" }, 502);
+  }
+  if (stream) {
+    const contentType = upstream.headers.get("content-type") ?? "";
+    if (contentType.includes("text/event-stream") && upstream.body) {
+      return new Response(upstream.body, {
+        status: 200,
+        headers: { "content-type": "text/event-stream" },
+      });
+    }
+    // Upstream ignored the stream flag: fall through to the JSON path.
+  }
+  const data = (await upstream.json()) as unknown;
+  const text = useResponses ? responsesOutputText(data) : chatOutputText(data);
+  if (typeof text !== "string") {
+    return jsonResponse({ error: "upstream error" }, 502);
+  }
+  return jsonResponse({ text });
+}
+
+export async function handleTranslate(
+  request: Request,
+  env: Env,
+  fetchImpl: typeof fetch = fetch,
+): Promise<Response> {
+  const payloadOrResponse = await readTranslatePayload(request);
+  if (payloadOrResponse instanceof Response) return payloadOrResponse;
+  const invalid = validateTranslatePayload(payloadOrResponse, env);
+  if (invalid) return invalid;
 
   const budget = await consumeChunks(env.BUDGET, 1, parseDailyBudget(env));
   if (!budget.ok) return jsonResponse({ error: "daily budget exceeded" }, 429);
 
   try {
-    const useResponses = responsesModels(env).includes(payload.model);
-    // Stream only chat-protocol models; Responses-protocol models fall back to
-    // a single JSON response the client already understands.
-    const stream =
-      new URL(request.url).searchParams.get("stream") === "1" && !useResponses;
-    const upstream = await fetchImpl(
-      useResponses
-        ? "https://opencode.ai/zen/v1/responses"
-        : "https://opencode.ai/zen/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${env.OPENCODE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(
-          useResponses
-            ? {
-                model: payload.model,
-                input: [
-                  { role: "system", content: payload.system },
-                  { role: "user", content: payload.text },
-                ],
-              }
-            : stream
-              ? {
-                  model: payload.model,
-                  messages: [
-                    { role: "system", content: payload.system },
-                    { role: "user", content: payload.text },
-                  ],
-                  stream: true,
-                }
-              : {
-                  model: payload.model,
-                  messages: [
-                    { role: "system", content: payload.system },
-                    { role: "user", content: payload.text },
-                  ],
-                },
-        ),
-        signal: AbortSignal.timeout(
-          stream ? STREAM_TIMEOUT_MS : TRANSLATE_TIMEOUT_MS,
-        ),
-      },
+    return await fetchTranslationText(
+      request,
+      payloadOrResponse,
+      env,
+      fetchImpl,
     );
-    if (!upstream.ok) {
-      await upstream.body?.cancel().catch(() => undefined);
-      return jsonResponse({ error: "upstream error" }, 502);
-    }
-    if (stream) {
-      const contentType = upstream.headers.get("content-type") ?? "";
-      if (contentType.includes("text/event-stream") && upstream.body) {
-        return new Response(upstream.body, {
-          status: 200,
-          headers: { "content-type": "text/event-stream" },
-        });
-      }
-      // Upstream ignored the stream flag: fall through to the JSON path.
-    }
-    const data = (await upstream.json()) as unknown;
-    const text = useResponses
-      ? responsesOutputText(data)
-      : chatOutputText(data);
-    if (typeof text !== "string")
-      return jsonResponse({ error: "upstream error" }, 502);
-    return jsonResponse({ text });
   } catch {
     return jsonResponse({ error: "upstream error" }, 502);
   }

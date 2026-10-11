@@ -78,49 +78,72 @@ async function applyResponse(
   storage: StorageLike,
   response: SyncResponse,
 ): Promise<void> {
-  let changed = false;
-  if (response.articles.length > 0) {
-    const localById = new Map(
-      (await store.listAll()).map((article) => [article.id, article]),
-    );
-    const toApply: Article[] = [];
-    for (const row of response.articles) {
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(row.data);
-      } catch {
-        continue;
-      }
-      // `data` is opaque JSON: only a plain object is an article body.
-      if (
-        parsed === null ||
-        typeof parsed !== "object" ||
-        Array.isArray(parsed)
-      )
-        continue;
-      const local = localById.get(row.id);
-      if (local?.dirty && local.updatedAt > row.updatedAt) continue;
-      toApply.push({
-        ...(parsed as Article),
-        id: row.id,
-        updatedAt: row.updatedAt,
-        deleted: row.deleted,
-        dirty: false,
-      });
-    }
-    if (toApply.length > 0) {
-      await store.applyRemote(toApply);
-      changed = true;
-    }
+  const articlesChanged = await applyRemoteArticles(store, response.articles);
+  const settingsChanged = applyRemoteSettingsIfPresent(response, storage);
+  if (articlesChanged || settingsChanged) {
+    dispatchSyncEvent();
   }
-  if (response.settings) {
-    const applied = applyRemoteSettings(response.settings, storage);
-    if (applied) {
-      clearSettingsDirty(storage);
-      changed = true;
-    }
+}
+
+async function applyRemoteArticles(
+  store: ArticleStore,
+  rows: SyncResponse["articles"],
+): Promise<boolean> {
+  if (rows.length === 0) return false;
+  const localById = new Map(
+    (await store.listAll()).map((article) => [article.id, article]),
+  );
+  const toApply = rows
+    .map((row) => articleFromSyncRow(row, localById.get(row.id)))
+    .filter((article): article is Article => article !== null);
+  if (toApply.length === 0) return false;
+  await store.applyRemote(toApply);
+  return true;
+}
+
+function articleFromSyncRow(
+  row: SyncResponse["articles"][number],
+  local: Article | undefined,
+): Article | null {
+  const parsed = parseArticleData(row.data);
+  if (!parsed) return null;
+  if (local?.dirty && local.updatedAt > row.updatedAt) return null;
+  return {
+    ...parsed,
+    id: row.id,
+    updatedAt: row.updatedAt,
+    deleted: row.deleted,
+    dirty: false,
+  };
+}
+
+function parseArticleData(data: string): Article | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(data);
+  } catch {
+    return null;
   }
-  if (changed && typeof window !== "undefined") {
+  // `data` is opaque JSON: only a plain object is an article body.
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return null;
+  }
+  return parsed as Article;
+}
+
+function applyRemoteSettingsIfPresent(
+  response: SyncResponse,
+  storage: StorageLike,
+): boolean {
+  if (!response.settings) return false;
+  const applied = applyRemoteSettings(response.settings, storage);
+  if (!applied) return false;
+  clearSettingsDirty(storage);
+  return true;
+}
+
+function dispatchSyncEvent(): void {
+  if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("quiosco:sync"));
   }
 }
