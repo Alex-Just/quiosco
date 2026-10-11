@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArticleActionsSheet } from "../components/ArticleActionsSheet";
 import { ArticlePageActions } from "../components/ArticlePageActions";
@@ -7,6 +7,7 @@ import { ArticleReadingToolbar } from "../components/ArticleReadingToolbar";
 import { ArticleText } from "../components/ArticleText";
 import { ArticleTranslationStatus } from "../components/ArticleTranslationStatus";
 import { ArticleViewControls } from "../components/ArticleViewControls";
+import { ArticleZenPane } from "../components/ArticleZenPane";
 import { SentenceSheet } from "../components/SentenceSheet";
 import { articleChromeCompact } from "../lib/articleChrome";
 import {
@@ -20,6 +21,7 @@ import { useArticleDocument } from "../lib/useArticleDocument";
 import { useArticleScroll } from "../lib/useArticleScroll";
 import { useSentenceSpeech } from "../lib/useSentenceSpeech";
 import { useStore } from "../lib/useStore";
+import { clampZenIndex } from "../lib/zenMode";
 
 export default function ArticlePage() {
   const store = useStore();
@@ -27,6 +29,8 @@ export default function ArticlePage() {
   const { id } = useParams();
   const [view, setView] = useState<ArticleView>("translation");
   const [moreOpen, setMoreOpen] = useState(false);
+  const [zenMode, setZenMode] = useState(false);
+  const [zenIndex, setZenIndex] = useState(0);
 
   const { article, setArticle, now, running } = useArticleDocument(
     store,
@@ -54,27 +58,44 @@ export default function ArticlePage() {
   // committed chunks; it is replaced by the full chunk when it lands.
   const translationBody = article ? joinTranslationBody(article) : "";
   const body = article ? articleBody(article, view) : "";
+  const paragraphs = bodyParagraphs(body);
+  const zenAvailable = compactChrome && paragraphs.length > 0;
 
-  // Restore and persist this article's reading position.
-  useArticleScroll(store, id, body.length > 0, view, setView);
+  useEffect(() => {
+    if (!id) return;
+    setZenMode(false);
+    setZenIndex(0);
+  }, [id]);
+
+  useEffect(() => {
+    setZenIndex((index) => clampZenIndex(index, paragraphs.length));
+  }, [paragraphs.length]);
+
+  useEffect(() => {
+    if (!zenAvailable && zenMode) setZenMode(false);
+  }, [zenAvailable, zenMode]);
+
+  // Restore and persist the reading position; skip while Zen owns navigation.
+  useArticleScroll(store, id, body.length > 0 && !zenMode, view, setView);
 
   const switchView = useCallback(
     (next: ArticleView) => {
       if (next === view) return;
       stopSpeechForViewChange();
       setView(next);
+      setZenIndex(0);
     },
     [view, stopSpeechForViewChange],
   );
 
   if (!article) return <p className="muted">Loading…</p>;
 
-  const paragraphs = bodyParagraphs(body);
+  const showMoreSheet = moreOpen && (compactChrome || zenMode);
 
   return (
-    <article className="article">
-      <ArticlePageHeader article={article} />
-      {compactChrome ? (
+    <article className={zenMode ? "article article-zen" : "article"}>
+      {!zenMode && <ArticlePageHeader article={article} />}
+      {zenMode || compactChrome ? (
         <ArticleReadingToolbar
           view={view}
           onSwitchView={switchView}
@@ -102,15 +123,25 @@ export default function ArticlePage() {
         </>
       )}
       {body ? (
-        <ArticleText
-          paragraphs={paragraphs}
-          isSpeaking={isSpeaking}
-          onOpenMenu={setMenu}
-        />
+        zenMode ? (
+          <ArticleZenPane
+            paragraphs={paragraphs}
+            index={zenIndex}
+            onIndexChange={setZenIndex}
+            isSpeaking={isSpeaking}
+            onOpenMenu={setMenu}
+          />
+        ) : (
+          <ArticleText
+            paragraphs={paragraphs}
+            isSpeaking={isSpeaking}
+            onOpenMenu={setMenu}
+          />
+        )
       ) : (
         <p className="muted">No translation yet.</p>
       )}
-      {!working && (
+      {!working && !zenMode && (
         <div className="article-end">
           <button
             type="button"
@@ -121,17 +152,20 @@ export default function ArticlePage() {
           </button>
         </div>
       )}
-      {moreOpen && compactChrome && (
+      {showMoreSheet && (
         <ArticleActionsSheet
           article={article}
           translationBody={translationBody}
           copied={actions.copied}
+          zenMode={zenMode}
+          zenAvailable={zenAvailable || zenMode}
           onClose={() => setMoreOpen(false)}
           onToggleRead={actions.toggleRead}
           onToggleArchive={actions.toggleArchive}
           onRetranslate={actions.onRetranslate}
           onDelete={actions.onDelete}
           onCopy={actions.copy}
+          onToggleZen={() => setZenMode((open) => !open)}
         />
       )}
       {menu && (

@@ -396,6 +396,26 @@ button.danger {
   width: 100%;
 }
 
+.article-zen .article-toolbar {
+  margin-bottom: 16px;
+}
+
+.zen-pane {
+  min-height: 50vh;
+  touch-action: pan-y;
+  user-select: none;
+}
+
+.zen-pane .para {
+  margin: 0;
+}
+
+.zen-hint {
+  margin: 20px 0 0;
+  text-align: center;
+  font-size: 0.85rem;
+}
+
 .sentence {
   display: inline;
   min-height: 0;

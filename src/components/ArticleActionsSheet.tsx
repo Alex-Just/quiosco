@@ -7,24 +7,30 @@ type ArticleActionsSheetProps = {
   article: Article;
   translationBody: string;
   copied: "none" | "translation" | "original";
+  zenMode: boolean;
+  zenAvailable: boolean;
   onClose: () => void;
   onToggleRead: () => void;
   onToggleArchive: () => void;
   onRetranslate: () => void;
   onDelete: () => void;
   onCopy: (kind: "translation" | "original") => void;
+  onToggleZen: () => void;
 };
 
 export function ArticleActionsSheet({
   article,
   translationBody,
   copied,
+  zenMode,
+  zenAvailable,
   onClose,
   onToggleRead,
   onToggleArchive,
   onRetranslate,
   onDelete,
   onCopy,
+  onToggleZen,
 }: ArticleActionsSheetProps) {
   const timings = formatPhaseTimings({
     cleanDurationMs: article.cleanDurationMs,
@@ -68,6 +74,11 @@ export function ArticleActionsSheet({
           <button type="button" onClick={() => runAndClose(onRetranslate)}>
             {translateActionLabel(article)}
           </button>
+          {zenAvailable && (
+            <button type="button" onClick={() => runAndClose(onToggleZen)}>
+              {zenMode ? "Exit Zen mode" : "Zen mode"}
+            </button>
+          )}
           <button
             type="button"
             disabled={!translationBody}
