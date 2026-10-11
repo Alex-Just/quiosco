@@ -84,8 +84,9 @@ export default function ArticlePage() {
   }, [store, id, navigate]);
 
   const running = article?.translationStatus === "running";
+  const working = running || busy;
   useEffect(() => {
-    if (!store || !id || !(running || busy)) return;
+    if (!store || !id || !working) return;
     const timer = window.setInterval(() => {
       void (async () => {
         const fresh = await store.get(id);
@@ -113,7 +114,7 @@ export default function ArticlePage() {
       })();
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [store, id, running, busy, navigate]);
+  }, [store, id, working, navigate]);
 
   // Speech belongs to the page that started it: stop it on navigation and
   // when the visible text changes.
@@ -322,16 +323,20 @@ export default function ArticlePage() {
         )}
       </p>
       <div className="actions">
-        <button type="button" onClick={toggleRead}>
-          Mark {article.status === "read" ? "unread" : "read"}
-        </button>
-        <button type="button" onClick={toggleArchive}>
-          {article.status === "archived" ? "Unarchive" : "Archive"}
-        </button>
+        {!working && (
+          <>
+            <button type="button" onClick={toggleRead}>
+              Mark {article.status === "read" ? "unread" : "read"}
+            </button>
+            <button type="button" onClick={toggleArchive}>
+              {article.status === "archived" ? "Unarchive" : "Archive"}
+            </button>
+          </>
+        )}
         <Link className="button" to={`/add?edit=${article.id}`}>
           Edit text
         </Link>
-        {running || busy ? (
+        {working ? (
           <button type="button" className="danger" onClick={onCancel}>
             Cancel
           </button>
@@ -433,15 +438,17 @@ export default function ArticlePage() {
       ) : (
         <p className="muted">No translation yet.</p>
       )}
-      <div className="article-end">
-        <button
-          type="button"
-          className={article.status === "read" ? "" : "primary"}
-          onClick={toggleRead}
-        >
-          {article.status === "read" ? "Mark as unread" : "Mark as read"}
-        </button>
-      </div>
+      {!working && (
+        <div className="article-end">
+          <button
+            type="button"
+            className={article.status === "read" ? "" : "primary"}
+            onClick={toggleRead}
+          >
+            {article.status === "read" ? "Mark as unread" : "Mark as read"}
+          </button>
+        </div>
+      )}
       {menu && (
         <>
           {/* biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/useKeyWithClickEvents: backdrop tap closes the sheet; Escape is handled globally */}
