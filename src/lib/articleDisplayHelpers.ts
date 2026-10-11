@@ -13,11 +13,36 @@ export function articleBody(article: Article, view: ArticleView): string {
   return view === "translation" ? translationBody : originalText(article);
 }
 
+/** Bare index line the model left alone ("1", "12.", "3)"); not a year. */
+const BARE_PARAGRAPH_NUMBER = /^\d{1,3}\s*[.)º°]?$/;
+
 export function bodyParagraphs(body: string): string[] {
-  return (body ?? "")
+  const parts = (body ?? "")
     .split(/\n{2,}/)
     .map((paragraph) => paragraph.trim())
     .filter(Boolean);
+  return coalesceBareNumberParagraphs(parts);
+}
+
+// Some models put a blank line after the paragraph index, so "1" and the
+// flag/body become two blocks. Glue them so the dimmed n/total marker works.
+function coalesceBareNumberParagraphs(paragraphs: string[]): string[] {
+  const result: string[] = [];
+  for (let index = 0; index < paragraphs.length; index += 1) {
+    const current = paragraphs[index] ?? "";
+    const next = paragraphs[index + 1];
+    if (
+      next != null &&
+      BARE_PARAGRAPH_NUMBER.test(current) &&
+      !BARE_PARAGRAPH_NUMBER.test(next)
+    ) {
+      result.push(`${current}\n${next}`);
+      index += 1;
+      continue;
+    }
+    result.push(current);
+  }
+  return result;
 }
 
 export function runningStatusText(article: Article, now: number): string {
