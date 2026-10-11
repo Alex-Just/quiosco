@@ -1,10 +1,12 @@
 import { type Dispatch, type SetStateAction, useEffect, useState } from "react";
 import type { NavigateFunction } from "react-router-dom";
 import type { ArticleStore } from "./store";
+import { isStoreChangeForArticle, STORE_CHANGE_EVENT } from "./storeEvents";
 import type { Article } from "./types";
 
 export const STALE_RUN_MS = 10 * 60_000;
 export const PHASE_TICK_MS = 1000;
+/** Fallback lease check only; live partials arrive via STORE_CHANGE_EVENT. */
 const STALE_POLL_MS = 1000;
 
 async function loadArticleOrRedirect(
@@ -75,14 +77,26 @@ function useArticleSyncReload(
 ): void {
   useEffect(() => {
     if (!store || !id) return;
+    let requestId = 0;
     const reload = () => {
+      requestId += 1;
+      const myRequest = requestId;
       void (async () => {
         const fresh = await loadArticleOrRedirect(store, id, navigate);
+        // Drop stale reads so a slow reload cannot overwrite a newer partial.
+        if (myRequest !== requestId) return;
         if (fresh) setArticle(fresh);
       })();
     };
+    const onStoreChange = (event: Event) => {
+      if (isStoreChangeForArticle(event, id)) reload();
+    };
     window.addEventListener("quiosco:sync", reload);
-    return () => window.removeEventListener("quiosco:sync", reload);
+    window.addEventListener(STORE_CHANGE_EVENT, onStoreChange);
+    return () => {
+      window.removeEventListener("quiosco:sync", reload);
+      window.removeEventListener(STORE_CHANGE_EVENT, onStoreChange);
+    };
   }, [store, id, navigate, setArticle]);
 }
 

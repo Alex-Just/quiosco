@@ -6,6 +6,9 @@ export const TRANSLATE_TIMEOUT_MS = 90_000;
 export const STREAM_TIMEOUT_MS = 300_000;
 export const MAX_TRANSLATE_BODY_BYTES = 2 * 1024 * 1024;
 const MAX_CHUNK_TEXT_CHARS = 100_000;
+// Translation does not need chain-of-thought. GLM-5.3(-flash) cannot disable
+// thinking (API 400), but Zen honors reasoning_effort=low with ~0 reasoning tokens.
+export const TRANSLATE_REASONING_EFFORT = "low";
 
 export interface TranslatePayload {
   model: string;
@@ -117,9 +120,12 @@ function buildUpstreamBody(
     { role: "system", content: payload.system },
     { role: "user", content: payload.text },
   ];
-  return stream
-    ? { model: payload.model, messages, stream: true }
-    : { model: payload.model, messages };
+  const body = {
+    model: payload.model,
+    messages,
+    reasoning_effort: TRANSLATE_REASONING_EFFORT,
+  };
+  return stream ? { ...body, stream: true } : body;
 }
 
 async function fetchTranslationText(

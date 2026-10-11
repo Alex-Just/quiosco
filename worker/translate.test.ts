@@ -71,8 +71,27 @@ describe("handleTranslate", () => {
       string,
       RequestInit,
     ];
-    expect(JSON.parse(String(init.body))).toMatchObject({ stream: true });
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      stream: true,
+      reasoning_effort: "low",
+    });
     expect(await response.text()).toContain("data:");
+  });
+
+  it("asks chat models for low reasoning effort (translation needs no chain-of-thought)", async () => {
+    const fetchImpl = vi.fn(async () => upstreamOk("hola"));
+    await handleTranslate(
+      post({ model: "deepseek-v4.1-flash", system: "s", text: "t" }),
+      makeEnv(),
+      fetchImpl as unknown as typeof fetch,
+    );
+    const [, init] = fetchImpl.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      reasoning_effort: "low",
+    });
   });
 
   it("uses the responses protocol for responses-only models", async () => {

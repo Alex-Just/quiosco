@@ -1,7 +1,9 @@
+// @vitest-environment jsdom
 import "fake-indexeddb/auto";
 import { randomUUID } from "node:crypto";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createStore } from "./store";
+import { STORE_CHANGE_EVENT } from "./storeEvents";
 import type { Article } from "./types";
 
 const makeArticle = (patch: Partial<Article> = {}): Article => ({
@@ -44,6 +46,20 @@ describe("store", () => {
     const updated = await store.update(article.id, { status: "read" });
     expect(updated.status).toBe("read");
     expect(updated.updatedAt).toBeGreaterThan(1);
+    store.close();
+  });
+
+  it("notifies local listeners when a streamed partial is persisted", async () => {
+    const store = await createStore(`test-${randomUUID()}`);
+    const article = makeArticle();
+    await store.put(article);
+    const handler = vi.fn();
+    window.addEventListener(STORE_CHANGE_EVENT, handler);
+    await store.update(article.id, { partial: "Hola" });
+    window.removeEventListener(STORE_CHANGE_EVENT, handler);
+    expect(handler).toHaveBeenCalled();
+    const event = handler.mock.calls.at(-1)?.[0] as CustomEvent;
+    expect(event.detail).toEqual({ id: article.id });
     store.close();
   });
 

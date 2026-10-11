@@ -2,6 +2,9 @@ import { chunkText } from "./chunk";
 import { buildSystemPrompt } from "./prompt";
 import type { TranslateRequest } from "./types";
 
+/** Min gap between persisted stream partials (keeps IndexedDB writes light). */
+export const PARTIAL_PROGRESS_MIN_INTERVAL_MS = 600;
+
 export interface TranslationSettings {
   targetLanguage: string;
   rules: string;
@@ -156,7 +159,7 @@ async function emitPartialProgress(
   // throttled to avoid hammering storage. Keeping them out of `translation`
   // means a resume after a cancel/crash never re-appends a partial chunk.
   const now = Date.now();
-  if (now - lastPartialEmit < 600) return;
+  if (now - lastPartialEmit < PARTIAL_PROGRESS_MIN_INTERVAL_MS) return;
   setLastEmit(now);
   await args.options.onProgress?.({
     translatedChunks: args.index,

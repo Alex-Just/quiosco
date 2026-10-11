@@ -1,4 +1,5 @@
 import { type DBSchema, type IDBPDatabase, openDB } from "idb";
+import { notifyStoreChange } from "./storeEvents";
 import type { Article, ArticleView, ScrollPosition } from "./types";
 
 interface QuioscoDB extends DBSchema {
@@ -64,6 +65,7 @@ export async function createStore(
     },
     async put(article) {
       await db.put("articles", { ...article, dirty: true });
+      notifyStoreChange(article.id);
       onChange?.();
     },
     async update(id, patch) {
@@ -76,6 +78,7 @@ export async function createStore(
         updatedAt: Date.now(),
       };
       await db.put("articles", updated);
+      notifyStoreChange(id);
       onChange?.();
       return updated;
     },
@@ -89,6 +92,7 @@ export async function createStore(
         updatedAt: Date.now(),
       });
       await db.delete("positions", id);
+      notifyStoreChange(id);
       onChange?.();
     },
     async findByUrl(url) {
