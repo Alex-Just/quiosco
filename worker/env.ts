@@ -31,5 +31,7 @@ export interface Env {
   ASSETS: AssetsLike;
   ALLOWED_MODELS: string;
   RESPONSES_MODELS?: string;
+  /** Models allowed on /api/decide (System One / Jev). */
+  DECISION_MODELS?: string;
   DAILY_CHUNK_BUDGET: string;
 }

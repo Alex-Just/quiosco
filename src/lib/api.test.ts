@@ -161,6 +161,39 @@ describe("createApi", () => {
     ).rejects.toThrow("stream interrupted");
   });
 
+  it("decide posts JSON and returns answers", async () => {
+    const fetchFn = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            answers: { needs_cleanup: { type: "noul", noul: 0.9 } },
+          }),
+          { headers: { "content-type": "application/json" } },
+        ),
+    );
+    const api = createApi({
+      token: "secret",
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    await expect(
+      api.decide({
+        model: "jev-1.13-free",
+        state: "noisy article",
+        questions: {
+          needs_cleanup: { type: "noul", instructions: "cleanup?" },
+        },
+      }),
+    ).resolves.toEqual({
+      answers: { needs_cleanup: { type: "noul", noul: 0.9 } },
+    });
+    const [url, init] = fetchFn.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe("/api/decide");
+    expect(init.method).toBe("POST");
+  });
+
   it("posts a sync request and parses the response", async () => {
     const payload = {
       cursor: 7,

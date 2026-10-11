@@ -1,26 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { createApi } from "../lib/api";
-import { newArticle } from "../lib/article";
-import { climbLadder, LadderError } from "../lib/ladder";
-import { loadSettings } from "../lib/settings";
-import { classifyShare, deriveTitle } from "../lib/share";
-import { clearPendingShare, readPendingShare } from "../lib/sharePayload";
-import { translateArticle } from "../lib/translateArticle";
-import { normalizeUrl } from "../lib/url";
+import { classifyShare } from "../lib/share";
+import { readPendingShare } from "../lib/sharePayload";
 import { useStore } from "../lib/useStore";
 
-type Flow =
-  | { phase: "loading" }
-  | { phase: "empty" }
-  | { phase: "fetching"; detail: string }
-  | {
-      phase: "error";
-      message: string;
-      partialText: string | null;
-      url: string;
-      title: string;
-    };
+type Flow = { phase: "loading" } | { phase: "empty" };
 
 export default function SharePage() {
   const store = useStore();
@@ -38,77 +22,19 @@ export default function SharePage() {
         return;
       }
       const classification = classifyShare(payload);
-      if (classification.mode !== "url") {
-        navigate("/add", { state: { fromShare: true } });
+      if (classification.mode === "url") {
+        navigate("/add", {
+          state: {
+            fromUrlShare: true,
+            prefillUrl: classification.url,
+            prefillTitle: classification.title,
+          },
+        });
         return;
       }
-      const settings = loadSettings();
-      setFlow({ phase: "fetching", detail: "Fetching article…" });
-      try {
-        const api = createApi({ token: settings.appToken });
-        const result = await climbLadder(
-          classification.url,
-          async (rung, url) => {
-            setFlow({ phase: "fetching", detail: `Trying ${rung}…` });
-            return api.fetchRung(rung, url);
-          },
-        );
-        const canonical = normalizeUrl(classification.url);
-        const existing = canonical
-          ? await store.findByUrl(canonical)
-          : undefined;
-        if (existing) {
-          await clearPendingShare();
-          navigate(`/article/${existing.id}`);
-          return;
-        }
-        const article = newArticle({
-          url: canonical,
-          title: deriveTitle({
-            extractedTitle: result.article.title,
-            sharedTitle: classification.title,
-            text: result.article.text,
-            url: classification.url,
-          }),
-          text: result.article.text,
-          via: result.via,
-        });
-        await store.put(article);
-        if (settings.autoTranslate && settings.appToken) {
-          // Mark the run before navigating so the article page can show
-          // progress and cannot start a second concurrent translation.
-          await store.update(article.id, { translationStatus: "running" });
-        }
-        await clearPendingShare();
-        navigate(`/article/${article.id}`);
-        if (settings.autoTranslate && settings.appToken) {
-          void translateArticle(store, article, settings);
-        }
-      } catch (error) {
-        setFlow({
-          phase: "error",
-          message:
-            error instanceof LadderError
-              ? "Could not extract the article text."
-              : "Fetch failed. Check your token and try again.",
-          partialText: error instanceof LadderError ? error.partialText : null,
-          url: classification.url,
-          title: classification.title,
-        });
-      }
+      navigate("/add", { state: { fromShare: true } });
     })();
   }, [store, navigate]);
-
-  if (flow.phase === "loading" || flow.phase === "fetching") {
-    return (
-      <section className="flow">
-        <h1>Adding article…</h1>
-        <p className="muted">
-          {flow.phase === "fetching" ? flow.detail : "Loading…"}
-        </p>
-      </section>
-    );
-  }
 
   if (flow.phase === "empty") {
     return (
@@ -131,31 +57,8 @@ export default function SharePage() {
 
   return (
     <section className="flow">
-      <h1>Extraction failed</h1>
-      <p className="error">{flow.message}</p>
-      <div className="row">
-        <button
-          type="button"
-          className="primary"
-          onClick={() => window.location.reload()}
-        >
-          Try again
-        </button>
-        <Link
-          className="button"
-          to="/add"
-          state={{
-            prefillText: flow.partialText ?? "",
-            prefillUrl: flow.url,
-            prefillTitle: flow.title,
-          }}
-        >
-          Paste or edit text
-        </Link>
-        <a className="button" href={flow.url} target="_blank" rel="noreferrer">
-          Open original
-        </a>
-      </div>
+      <h1>Adding article…</h1>
+      <p className="muted">Loading…</p>
     </section>
   );
 }

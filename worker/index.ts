@@ -1,4 +1,5 @@
 import { extractBearer, originAllowed, tokensMatch } from "./auth";
+import { handleDecide } from "./decide";
 import type { Env } from "./env";
 import { handleFetchRung } from "./fetchRung";
 import { applySecurityHeaders, jsonResponse } from "./headers";
@@ -59,6 +60,8 @@ async function handleApi(
     response = await handleFetchRung(request, env);
   } else if (url.pathname === "/api/translate" && request.method === "POST") {
     response = await handleTranslate(request, env);
+  } else if (url.pathname === "/api/decide" && request.method === "POST") {
+    response = await handleDecide(request, env);
   } else if (url.pathname === "/api/sync" && request.method === "POST") {
     response = await handleSync(request, env);
   } else {

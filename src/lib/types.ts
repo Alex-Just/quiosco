@@ -71,6 +71,16 @@ export interface TranslateRequest {
   text: string;
 }
 
+export interface DecideRequest {
+  model: string;
+  state: string;
+  questions: Record<string, unknown>;
+}
+
+export interface DecideResponse {
+  answers: Record<string, unknown>;
+}
+
 export interface SyncArticleRow {
   id: string;
   updatedAt: number;

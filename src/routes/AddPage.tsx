@@ -6,9 +6,14 @@ import {
   useSearchParams,
 } from "react-router-dom";
 import { createApi } from "../lib/api";
-import { MAX_ARTICLE_CHARS, newArticle } from "../lib/article";
+import {
+  MAX_ARTICLE_CHARS,
+  MIN_ARTICLE_TEXT_CHARS,
+  newArticle,
+} from "../lib/article";
 import { cleanArticleText } from "../lib/clean";
-import { climbLadder, LadderError } from "../lib/ladder";
+import { LadderError } from "../lib/ladder";
+import { preprocessUrlArticle } from "../lib/preprocessUrl";
 import { loadSettings } from "../lib/settings";
 import { clearPendingShare, readPendingShare } from "../lib/sharePayload";
 import { extractTitleWithLlm } from "../lib/titleWithLlm";
@@ -21,6 +26,7 @@ interface PrefillState {
   prefillText?: string;
   prefillTitle?: string;
   prefillUrl?: string;
+  fromUrlShare?: boolean;
 }
 
 export default function AddPage() {
@@ -38,13 +44,60 @@ export default function AddPage() {
   const [loaded, setLoaded] = useState(false);
   const [cleanup, setCleanup] = useState(true);
   const [fetchDetail, setFetchDetail] = useState<string | null>(null);
+  const [preprocessing, setPreprocessing] = useState(false);
+  const [fetchedVia, setFetchedVia] = useState<Via | null>(null);
   // The prefill read is async; never overwrite what the user typed meanwhile.
   const edited = useRef(false);
+  const preprocessStarted = useRef(false);
+
+  async function runPreprocess(targetUrl: string) {
+    const settings = loadSettings();
+    const canonical = normalizeUrl(targetUrl);
+    if (!canonical) return;
+    if (!settings.appToken) {
+      setError(
+        "Set your app token in Settings first — it is needed to fetch URLs.",
+      );
+      return;
+    }
+    setPreprocessing(true);
+    setError(null);
+    setCleanup(false);
+    setFetchDetail("Fetching article…");
+    try {
+      const api = createApi({ token: settings.appToken });
+      const result = await preprocessUrlArticle(canonical, api, {
+        sharedTitle: title,
+        onDetail: setFetchDetail,
+      });
+      if (!edited.current) {
+        setText(result.text);
+        setTitle((current) => current.trim() || result.title);
+      }
+      setFetchedVia(result.via);
+      if (!edited.current) setCleanup(result.needsCleanup);
+    } catch (preprocessError) {
+      setError(
+        preprocessError instanceof LadderError
+          ? "Could not extract the article from that URL — paste the text instead, or try again."
+          : preprocessError instanceof Error
+            ? preprocessError.message
+            : "Fetch failed. Check your token and try again.",
+      );
+      setFetchedVia(null);
+    } finally {
+      setPreprocessing(false);
+      setFetchDetail(null);
+    }
+  }
 
   useEffect(() => {
     if (!store || loaded) return;
     let cancelled = false;
     void (async () => {
+      let nextUrl = "";
+      let nextText = "";
+      let nextTitle = "";
       if (editId) {
         const article = await store.get(editId);
         if (!cancelled && article) {
@@ -56,13 +109,65 @@ export default function AddPage() {
       } else {
         const state = (location.state ?? null) as PrefillState | null;
         const payload = await readPendingShare();
+        nextUrl = state?.prefillUrl ?? payload?.url ?? "";
+        nextText = state?.prefillText ?? payload?.text ?? "";
+        nextTitle = state?.prefillTitle ?? payload?.title ?? "";
         if (!cancelled && !edited.current) {
-          setTitle(state?.prefillTitle ?? payload?.title ?? "");
-          setUrl(state?.prefillUrl ?? payload?.url ?? "");
-          setText(state?.prefillText ?? payload?.text ?? "");
+          setTitle(nextTitle);
+          setUrl(nextUrl);
+          setText(nextText);
+          if (state?.fromUrlShare) setCleanup(false);
         }
       }
       if (!cancelled) setLoaded(true);
+      if (cancelled || editId || edited.current || preprocessStarted.current) {
+        return;
+      }
+      const canonical = normalizeUrl(nextUrl);
+      if (!canonical || nextText.trim().length >= MIN_ARTICLE_TEXT_CHARS) {
+        return;
+      }
+      preprocessStarted.current = true;
+      const settings = loadSettings();
+      if (!settings.appToken) {
+        setError(
+          "Set your app token in Settings first — it is needed to fetch URLs.",
+        );
+        return;
+      }
+      setPreprocessing(true);
+      setError(null);
+      setCleanup(false);
+      setFetchDetail("Fetching article…");
+      try {
+        const api = createApi({ token: settings.appToken });
+        const result = await preprocessUrlArticle(canonical, api, {
+          sharedTitle: nextTitle,
+          onDetail: setFetchDetail,
+        });
+        if (!cancelled && !edited.current) {
+          setText(result.text);
+          setTitle((current) => current.trim() || result.title);
+          setCleanup(result.needsCleanup);
+        }
+        if (!cancelled) setFetchedVia(result.via);
+      } catch (preprocessError) {
+        if (!cancelled) {
+          setError(
+            preprocessError instanceof LadderError
+              ? "Could not extract the article from that URL — paste the text instead, or try again."
+              : preprocessError instanceof Error
+                ? preprocessError.message
+                : "Fetch failed. Check your token and try again.",
+          );
+          setFetchedVia(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setPreprocessing(false);
+          setFetchDetail(null);
+        }
+      }
     })();
     return () => {
       cancelled = true;
@@ -87,10 +192,13 @@ export default function AddPage() {
       }
       let source = text;
       let extractedTitle: string | null = null;
-      let via: Via = "manual";
-      if (!editId && source.trim().length < 40 && canonical) {
-        // No text pasted: fetch and extract the article from the URL, using
-        // the same ladder as the Android share flow.
+      let via: Via = fetchedVia ?? "manual";
+      let cleanupChoice = cleanup;
+      if (
+        !editId &&
+        source.trim().length < MIN_ARTICLE_TEXT_CHARS &&
+        canonical
+      ) {
         if (!settings.appToken) {
           setError(
             "Set your app token in Settings first — it is needed to fetch URLs.",
@@ -98,19 +206,23 @@ export default function AddPage() {
           return;
         }
         const api = createApi({ token: settings.appToken });
-        const result = await climbLadder(canonical, async (rung, target) => {
-          setFetchDetail(`Trying ${rung}…`);
-          return api.fetchRung(rung, target);
+        const result = await preprocessUrlArticle(canonical, api, {
+          sharedTitle: title,
+          onDetail: setFetchDetail,
         });
-        source = result.article.text;
-        extractedTitle = result.article.title;
+        source = result.text;
+        extractedTitle = result.title;
         via = result.via;
+        cleanupChoice = result.needsCleanup;
+        setCleanup(cleanupChoice);
+        setText(source);
+        setFetchedVia(via);
       }
       const cleaned =
-        cleanup && via === "manual"
+        cleanupChoice && via === "manual"
           ? cleanArticleText(source, title)
           : source.trim();
-      if (cleaned.length < 40) {
+      if (cleaned.length < MIN_ARTICLE_TEXT_CHARS) {
         setError(
           canonical
             ? "Could not read that URL. Paste the article text instead."
@@ -133,14 +245,12 @@ export default function AddPage() {
         const existing = await store.get(editId);
         const textChanged = !existing || existing.text !== clipped;
         const cleanupChanged =
-          !existing || (existing.cleanup !== false) !== cleanup;
+          !existing || (existing.cleanup !== false) !== cleanupChoice;
         await store.update(editId, {
           title: finalTitle || "Untitled",
           url: normalizeUrl(url),
           text: clipped,
-          cleanup,
-          // Editing the text or the cleanup choice invalidates any stored
-          // translation.
+          cleanup: cleanupChoice,
           ...(textChanged || cleanupChanged
             ? {
                 translation: null,
@@ -163,12 +273,10 @@ export default function AddPage() {
         title: finalTitle,
         text: clipped,
         via,
-        cleanup,
+        cleanup: cleanupChoice,
       });
       await store.put(article);
       if (settings.autoTranslate && settings.appToken) {
-        // Mark the run before navigating so the article page can show progress
-        // and cannot start a second concurrent translation.
         await store.update(article.id, { translationStatus: "running" });
       }
       await clearPendingShare();
@@ -189,6 +297,8 @@ export default function AddPage() {
       setFetchDetail(null);
     }
   }
+
+  const saveDisabled = busy || preprocessing;
 
   return (
     <section className="add">
@@ -230,6 +340,7 @@ export default function AddPage() {
           type="checkbox"
           checked={cleanup}
           onChange={(event) => setCleanup(event.target.checked)}
+          disabled={preprocessing}
         />
         Clean up the text before translating
       </label>
@@ -237,23 +348,37 @@ export default function AddPage() {
         When enabled, menus, cookie banners, footers and link lists are removed
         from the text before it is translated.
       </p>
-      {fetchDetail && <p className="muted">{fetchDetail}</p>}
+      {(preprocessing || fetchDetail) && (
+        <p className="muted">{fetchDetail ?? "Preparing…"}</p>
+      )}
       {error && <p className="error">{error}</p>}
       <div className="row form-actions">
         <button
           type="button"
           className="primary"
           onClick={onSave}
-          disabled={busy}
+          disabled={saveDisabled}
         >
           {busy
             ? fetchDetail
               ? "Fetching…"
               : "Saving…"
-            : editId
-              ? "Save"
-              : "Save & translate"}
+            : preprocessing
+              ? "Preparing…"
+              : editId
+                ? "Save"
+                : "Save & translate"}
         </button>
+        {error && !preprocessing && !editId && normalizeUrl(url) && (
+          <button
+            type="button"
+            onClick={() => {
+              void runPreprocess(url);
+            }}
+          >
+            Try again
+          </button>
+        )}
         <Link className="button" to="/">
           Cancel
         </Link>
