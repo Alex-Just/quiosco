@@ -51,6 +51,54 @@ test("share target POST handoff lands on the review screen with the shared text"
   await expect(page.locator("textarea")).toHaveValue(/Párrafo 19/);
 });
 
+test("URL-only share fetches the article instead of saving the shared URL", async ({
+  page,
+}) => {
+  const paragraph =
+    "El Ayuntamiento de Valencia notificó una población de 858.178 residentes a 1 de enero de 2026, según los datos del padrón municipal continuo.";
+  await page.route("**/api/fetch**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "text/html; charset=utf-8",
+      headers: {
+        "x-quiosco-via": "direct",
+        "x-quiosco-final-url": "https://example.com/noticia",
+      },
+      body: `<!doctype html><html><head><title>Prueba URL</title></head><body><article><h1>Prueba URL</h1><p>${paragraph}</p><p>${paragraph}</p><p>${paragraph}</p><p>${paragraph}</p><p>${paragraph}</p><p>${paragraph}</p></article></body></html>`,
+    });
+  });
+  await page.route("**/api/decide**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ answers: {} }),
+    });
+  });
+
+  await waitForServiceWorker(page);
+  await page.goto("/settings");
+  await page.getByLabel("App token").fill("e2e-token");
+  await page.getByLabel("Translate automatically after saving").uncheck();
+  await page.getByRole("button", { name: "Save" }).click();
+
+  const url =
+    "https://example.com/noticia-con-un-titulo-largo-para-superar-el-minimo";
+  // Chrome repeats the shared URL in the text field for a URL-only share.
+  await page.evaluate(async (sharedUrl) => {
+    const formData = new FormData();
+    formData.set("title", "");
+    formData.set("text", sharedUrl);
+    formData.set("url", sharedUrl);
+    await fetch("/share", { method: "POST", body: formData });
+  }, url);
+
+  await page.goto("/share");
+  await page.waitForURL("**/add");
+  // The shared URL must never be treated as article text.
+  await expect(page.getByLabel("Article text")).not.toHaveValue(url);
+  await expect(page.getByLabel("Article text")).toHaveValue(/858\.178/);
+});
+
 test("manual add, read/archive lifecycle, delete", async ({ page }) => {
   await page.goto("/settings");
   await page.getByLabel("App token").fill("e2e-token");

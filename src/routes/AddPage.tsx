@@ -15,6 +15,7 @@ import { cleanArticleText } from "../lib/clean";
 import { LadderError } from "../lib/ladder";
 import { preprocessUrlArticle } from "../lib/preprocessUrl";
 import { loadSettings } from "../lib/settings";
+import { shareBody } from "../lib/share";
 import { clearPendingShare, readPendingShare } from "../lib/sharePayload";
 import { extractTitleWithLlm } from "../lib/titleWithLlm";
 import { translateArticle } from "../lib/translateArticle";
@@ -41,14 +42,12 @@ export default function AddPage() {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [loaded, setLoaded] = useState(false);
   const [cleanup, setCleanup] = useState(true);
   const [fetchDetail, setFetchDetail] = useState<string | null>(null);
   const [preprocessing, setPreprocessing] = useState(false);
   const [fetchedVia, setFetchedVia] = useState<Via | null>(null);
   // The prefill read is async; never overwrite what the user typed meanwhile.
   const edited = useRef(false);
-  const preprocessStarted = useRef(false);
 
   async function runPreprocess(targetUrl: string) {
     const settings = loadSettings();
@@ -92,12 +91,15 @@ export default function AddPage() {
   }
 
   useEffect(() => {
-    if (!store || loaded) return;
+    if (!store) return;
     let cancelled = false;
     void (async () => {
       let nextUrl = "";
       let nextText = "";
       let nextTitle = "";
+      // The body a share actually carries: a URL-only share may repeat the URL
+      // (or just the page title) in the text field, which is not article text.
+      let nextBody = "";
       if (editId) {
         const article = await store.get(editId);
         if (!cancelled && article) {
@@ -112,22 +114,28 @@ export default function AddPage() {
         nextUrl = state?.prefillUrl ?? payload?.url ?? "";
         nextText = state?.prefillText ?? payload?.text ?? "";
         nextTitle = state?.prefillTitle ?? payload?.title ?? "";
+        // A URL-only share often repeats the URL (or the page title) in the
+        // text field. That is not article text: trusting it would skip the
+        // fetch and save the URL as the body.
+        nextBody = shareBody({
+          text: nextText,
+          title: nextTitle,
+          url: nextUrl,
+        });
         if (!cancelled && !edited.current) {
           setTitle(nextTitle);
           setUrl(nextUrl);
-          setText(nextText);
+          setText(nextBody);
           if (state?.fromUrlShare) setCleanup(false);
         }
       }
-      if (!cancelled) setLoaded(true);
-      if (cancelled || editId || edited.current || preprocessStarted.current) {
+      if (cancelled || editId || edited.current) {
         return;
       }
       const canonical = normalizeUrl(nextUrl);
-      if (!canonical || nextText.trim().length >= MIN_ARTICLE_TEXT_CHARS) {
+      if (!canonical || nextBody.trim().length >= MIN_ARTICLE_TEXT_CHARS) {
         return;
       }
-      preprocessStarted.current = true;
       const settings = loadSettings();
       if (!settings.appToken) {
         setError(
@@ -172,7 +180,7 @@ export default function AddPage() {
     return () => {
       cancelled = true;
     };
-  }, [store, loaded, editId, location.state]);
+  }, [store, editId, location.state]);
 
   async function onSave() {
     if (!store) return;

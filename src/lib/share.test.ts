@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyShare, deriveTitle, firstUrl } from "./share";
+import { classifyShare, deriveTitle, firstUrl, shareBody } from "./share";
 import type { SharePayload } from "./types";
 
 const payload = (partial: Partial<SharePayload>): SharePayload => ({
@@ -22,6 +22,45 @@ describe("firstUrl", () => {
   });
   it("returns null when there is none", () => {
     expect(firstUrl("no links here")).toBeNull();
+  });
+});
+
+describe("shareBody", () => {
+  it("returns empty for a URL-only share that repeats the URL in text", () => {
+    expect(
+      shareBody({
+        text: "https://elpais.com/a.html",
+        title: "Un titular",
+        url: "https://elpais.com/a.html",
+      }),
+    ).toBe("");
+  });
+
+  it("returns empty when the text field only repeats the shared title", () => {
+    expect(
+      shareBody({
+        text: "Un titular",
+        title: "Un titular",
+        url: "https://elpais.com/a.html",
+      }),
+    ).toBe("");
+  });
+
+  it("keeps a long body and strips the attached URL", () => {
+    const body = longText(500);
+    expect(
+      shareBody({
+        text: `${body} https://elpais.com/a.html`,
+        title: "Un titular",
+        url: "https://elpais.com/a.html",
+      }),
+    ).toBe(body);
+  });
+
+  it("keeps short manual text", () => {
+    expect(shareBody({ text: "mira esto", title: "t", url: "" })).toBe(
+      "mira esto",
+    );
   });
 });
 

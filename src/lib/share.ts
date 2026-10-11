@@ -36,6 +36,21 @@ export function classifyShare(payload: SharePayload): ShareClassification {
   return { mode: "manual", text: remainderNoTitle, title, url };
 }
 
+/**
+ * The article body a share actually carries. Browsers often repeat the URL (or
+ * only the page title) in the text field for a URL-only share; that is not
+ * article text, so it must never be prefilled — saving it would skip the fetch
+ * and store the URL as the article body.
+ */
+export function shareBody(input: {
+  text: string;
+  title: string;
+  url: string;
+}): string {
+  const classification = classifyShare({ ...input, receivedAt: 0 });
+  return classification.mode === "url" ? "" : classification.text;
+}
+
 export function deriveTitle(input: {
   extractedTitle: string | null;
   sharedTitle: string;
