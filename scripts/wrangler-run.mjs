@@ -5,8 +5,8 @@
  */
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const LOCAL_CONFIG = "wrangler.local.toml";
 const TEMPLATE_CONFIG = "wrangler.toml";
