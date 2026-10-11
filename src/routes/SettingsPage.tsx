@@ -134,12 +134,6 @@ export default function SettingsPage() {
         </span>
       </div>
       {syncState && <p className="muted">{syncState}</p>}
-      <p className="muted">
-        Required setup: a dedicated OpenCode Zen key with a workspace monthly
-        limit and auto-reload off (see the deployment checklist in the README).
-        When earlier rungs fail, only the article URL is sent to jina.ai,
-        web.archive.org, or archive.ph.
-      </p>
       <p className="muted">Build {__BUILD_ID__}</p>
     </section>
   );
