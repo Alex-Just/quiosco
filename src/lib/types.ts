@@ -28,6 +28,12 @@ export interface Article {
   totalChunks: number;
   cleanText?: string | null;
   translationPhase?: "cleaning" | "translating" | null;
+  /** Wall-clock start of the current clean/translate phase (live timer). */
+  phaseStartedAt?: number | null;
+  /** How long cleanup took, once that phase finished. */
+  cleanDurationMs?: number | null;
+  /** How long translation took (summed across resumes), once finished. */
+  translateDurationMs?: number | null;
   model?: string | null;
   cleanup?: boolean;
   status: ArticleStatus;

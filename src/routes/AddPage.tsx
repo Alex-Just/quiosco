@@ -260,6 +260,9 @@ export default function AddPage() {
                 totalChunks: 0,
                 cleanText: null,
                 translationPhase: null,
+                phaseStartedAt: null,
+                cleanDurationMs: null,
+                translateDurationMs: null,
                 error: null,
               }
             : {}),

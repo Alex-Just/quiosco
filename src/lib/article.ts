@@ -4,6 +4,11 @@ export const MAX_ARTICLE_CHARS = 150_000;
 /** Minimum pasted/fetched body length before Save accepts the article. */
 export const MIN_ARTICLE_TEXT_CHARS = 40;
 
+/** Text shown in the Original view: cleaned body when cleanup has finished. */
+export function originalText(article: Article): string {
+  return article.cleanText || article.text;
+}
+
 export function newArticle(input: {
   url: string | null;
   title: string;
@@ -34,6 +39,9 @@ export function newArticle(input: {
     totalChunks: 0,
     cleanText: null,
     translationPhase: null,
+    phaseStartedAt: null,
+    cleanDurationMs: null,
+    translateDurationMs: null,
     model: null,
     cleanup: input.cleanup ?? true,
     status: "unread",

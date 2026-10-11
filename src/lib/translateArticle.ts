@@ -29,44 +29,54 @@ export async function translateArticle(
   const api = createApi({ token: settings.appToken });
   try {
     const cleanup = article.cleanup !== false;
+    const cached = cleanup ? (article.cleanText ?? null) : null;
+    const needsClean = cleanup && !cached;
+    const resetTranslateTiming = article.translatedChunks === 0;
     await store.update(article.id, {
       translationStatus: "running",
-      translationPhase: cleanup ? "cleaning" : "translating",
+      translationPhase: needsClean ? "cleaning" : "translating",
+      phaseStartedAt: Date.now(),
       model: settings.model,
       totalChunks: 0,
       partial: null,
       error: null,
+      ...(needsClean ? { cleanDurationMs: null } : {}),
+      ...(resetTranslateTiming ? { translateDurationMs: null } : {}),
     });
     let source = article.text;
-    if (cleanup) {
-      const cached = article.cleanText ?? null;
-      if (cached) {
-        source = cached;
-      } else {
-        const result = await cleanWithLlm(
-          article.text,
-          settings.model,
-          // Streamed so a slow segment cannot hit the worker's non-stream
-          // timeout and silently degrade to raw text.
-          (request) => api.translateStream(request, controller.signal),
-          article.title,
-          controller.signal,
-          (done, total) => {
-            void store
-              .update(article.id, {
-                translatedChunks: done,
-                totalChunks: total,
-              })
-              .catch(() => undefined);
-          },
-        );
-        source = result.text;
-        if (result.cleaned)
-          await store.update(article.id, { cleanText: source });
-      }
+    if (needsClean) {
+      const cleanStartedAt = Date.now();
+      const result = await cleanWithLlm(
+        article.text,
+        settings.model,
+        // Streamed so a slow segment cannot hit the worker's non-stream
+        // timeout and silently degrade to raw text.
+        (request) => api.translateStream(request, controller.signal),
+        article.title,
+        controller.signal,
+        (done, total) => {
+          void store
+            .update(article.id, {
+              translatedChunks: done,
+              totalChunks: total,
+            })
+            .catch(() => undefined);
+        },
+      );
+      source = result.text;
+      await store.update(article.id, {
+        ...(result.cleaned ? { cleanText: source } : {}),
+        cleanDurationMs: Date.now() - cleanStartedAt,
+        translationPhase: "translating",
+        phaseStartedAt: Date.now(),
+      });
+    } else if (cached) {
+      source = cached;
     }
+    const translateStartedAt = Date.now();
     await store.update(article.id, {
       translationPhase: "translating",
+      phaseStartedAt: translateStartedAt,
       totalChunks: chunkText(source).length,
       translatedChunks: article.translatedChunks,
     });
@@ -91,12 +101,18 @@ export async function translateArticle(
         });
       },
     });
+    const priorTranslateMs = resetTranslateTiming
+      ? 0
+      : (article.translateDurationMs ?? 0);
     await store.update(article.id, {
       translation,
       translationStatus: "done",
+      translationPhase: null,
       error: null,
       totalChunks,
       partial: null,
+      phaseStartedAt: null,
+      translateDurationMs: priorTranslateMs + (Date.now() - translateStartedAt),
     });
   } catch (error) {
     if (controller.signal.aborted) {
@@ -105,12 +121,15 @@ export async function translateArticle(
       await store.update(article.id, {
         translationStatus: "pending",
         translationPhase: null,
+        phaseStartedAt: null,
         error: null,
         partial: null,
       });
     } else {
       await store.update(article.id, {
         translationStatus: "error",
+        translationPhase: null,
+        phaseStartedAt: null,
         error: error instanceof Error ? error.message : "translation failed",
         partial: null,
       });

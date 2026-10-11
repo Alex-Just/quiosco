@@ -76,6 +76,49 @@ describe("translateArticle", () => {
     );
   });
 
+  it("records clean and translate durations", async () => {
+    stubFetch();
+    const { store, updates } = fakeStore();
+    await translateArticle(store, makeArticle(), settings);
+    expect(updates[0]).toMatchObject({
+      translationPhase: "cleaning",
+      phaseStartedAt: expect.any(Number),
+    });
+    expect(
+      updates.some(
+        (patch) =>
+          typeof patch.cleanDurationMs === "number" &&
+          patch.translationPhase === "translating",
+      ),
+    ).toBe(true);
+    expect(updates.at(-1)).toMatchObject({
+      translationStatus: "done",
+      phaseStartedAt: null,
+      translateDurationMs: expect.any(Number),
+    });
+  });
+
+  it("skips clean duration when cleaned text is cached", async () => {
+    stubFetch();
+    const { store, updates } = fakeStore();
+    await translateArticle(
+      store,
+      makeArticle({
+        cleanText: "Ya limpio.",
+        cleanDurationMs: 12_000,
+      }),
+      settings,
+    );
+    expect(updates[0]).toMatchObject({
+      translationPhase: "translating",
+      phaseStartedAt: expect.any(Number),
+    });
+    expect(updates.some((patch) => "cleanDurationMs" in patch)).toBe(false);
+    expect(updates.at(-1)).toMatchObject({
+      translateDurationMs: expect.any(Number),
+    });
+  });
+
   it("skips cleaning when cleanup is false", async () => {
     const systems = stubFetch();
     const { store, updates } = fakeStore();

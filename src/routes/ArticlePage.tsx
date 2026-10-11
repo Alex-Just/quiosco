@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { formatDateTime } from "../lib/format";
+import { originalText } from "../lib/article";
+import {
+  formatDateTime,
+  formatDurationMs,
+  formatPhaseTimings,
+} from "../lib/format";
 import {
   splitLeadingNumber,
   splitSentences,
@@ -25,6 +30,7 @@ import { useArticleScroll } from "../lib/useArticleScroll";
 import { useStore } from "../lib/useStore";
 
 const STALE_RUN_MS = 10 * 60_000;
+const PHASE_TICK_MS = 1000;
 
 export default function ArticlePage() {
   const store = useStore();
@@ -46,6 +52,7 @@ export default function ArticlePage() {
     sentenceIndex: number;
   } | null>(null);
   const [hint, setHint] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
   // Invalidates stale utterance callbacks: a replaced or cancelled utterance
   // may still fire end/error, and those must not clear the new highlight.
   const speechRun = useRef(0);
@@ -85,6 +92,12 @@ export default function ArticlePage() {
 
   const running = article?.translationStatus === "running";
   const working = running || busy;
+  useEffect(() => {
+    if (!working || !article?.phaseStartedAt) return;
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), PHASE_TICK_MS);
+    return () => window.clearInterval(timer);
+  }, [working, article?.phaseStartedAt]);
   useEffect(() => {
     if (!store || !id || !working) return;
     const timer = window.setInterval(() => {
@@ -143,7 +156,7 @@ export default function ArticlePage() {
   const body = article
     ? view === "translation"
       ? translationBody
-      : article.text
+      : originalText(article)
     : "";
 
   // Restore and persist this article's reading position.
@@ -190,6 +203,7 @@ export default function ArticlePage() {
         await store.update(article.id, {
           translationStatus: "pending",
           translationPhase: null,
+          phaseStartedAt: null,
           partial: null,
           error: null,
         }),
@@ -228,7 +242,8 @@ export default function ArticlePage() {
 
   async function copy(kind: "translation" | "original") {
     if (!article) return;
-    const value = kind === "translation" ? translationBody : article.text;
+    const value =
+      kind === "translation" ? translationBody : originalText(article);
     if (!value) return;
     await navigator.clipboard.writeText(value);
     setCopied(kind);
@@ -306,6 +321,11 @@ export default function ArticlePage() {
     setView(next);
   }
 
+  const finishedTimings = formatPhaseTimings({
+    cleanDurationMs: article.cleanDurationMs,
+    translateDurationMs: article.translateDurationMs,
+  });
+
   return (
     <article className="article">
       <h1>{article.title}</h1>
@@ -356,12 +376,26 @@ export default function ArticlePage() {
       </div>
       {article.translationStatus === "running" && (
         <p className="muted pulse">
-          {article.translationPhase === "cleaning"
-            ? article.totalChunks > 0
-              ? `Cleaning up the text… ${article.translatedChunks}/${article.totalChunks}`
-              : "Cleaning up the text…"
-            : `Translating… ${article.translatedChunks}/${article.totalChunks || "?"}`}
+          {[
+            article.translationPhase === "translating" &&
+            article.cleanDurationMs != null
+              ? `Cleaned in ${formatDurationMs(article.cleanDurationMs)}`
+              : null,
+            article.translationPhase === "cleaning"
+              ? article.totalChunks > 0
+                ? `Cleaning up the text… ${article.translatedChunks}/${article.totalChunks}`
+                : "Cleaning up the text…"
+              : `Translating… ${article.translatedChunks}/${article.totalChunks || "?"}`,
+            article.phaseStartedAt != null
+              ? formatDurationMs(now - article.phaseStartedAt)
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
         </p>
+      )}
+      {article.translationStatus !== "running" && finishedTimings && (
+        <p className="muted">{finishedTimings}</p>
       )}
       {article.translationStatus === "error" && article.error && (
         <p className="error">{article.error}</p>
