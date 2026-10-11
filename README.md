@@ -1,6 +1,6 @@
 # Quiosco
 
-[![Maintainability](https://qlty.sh/gh/Alex-Just/projects/quiosco/maintainability.svg)](https://qlty.sh/gh/Alex-Just/projects/quiosco)
+[![Maintainability](https://qlty.sh/badges/53a72b39-2838-49ea-b4ca-ecad2b1ce54e/maintainability.svg)](https://qlty.sh/gh/Alex-Just/projects/quiosco)
 
 Personal Android-first PWA: share an article URL (or manually extracted article
 text) from the Android share sheet, and Quiosco extracts the text, translates it
