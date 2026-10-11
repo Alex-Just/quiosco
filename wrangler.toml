@@ -9,9 +9,12 @@ binding = "ASSETS"
 not_found_handling = "single-page-application"
 run_worker_first = true
 
+# Replace the zero ids with your own (see README). Do not commit personal
+# production ids: keep them in gitignored wrangler.local.toml, or let CI
+# inject them from repository secrets before deploy.
 [[kv_namespaces]]
 binding = "BUDGET"
-id = "1343fc4c1ff24984a5af592619795754"
+id = "00000000000000000000000000000000"
 
 [vars]
 ALLOWED_MODELS = "space-bunny-free,glm-5.3-flash,deepseek-v4.1-flash,gpt-6-luna"
@@ -25,4 +28,4 @@ port = 8787
 [[d1_databases]]
 binding = "DB"
 database_name = "quiosco"
-database_id = "7c5c848e-b0dd-4c17-a8d6-4f9a2e34c164"
+database_id = "00000000-0000-0000-0000-000000000000"

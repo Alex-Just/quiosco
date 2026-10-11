@@ -4,11 +4,11 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -n api,web -c blue,green \"wrangler dev\" \"vite\"",
-    "dev:api": "wrangler dev",
+    "dev": "concurrently -n api,web -c blue,green \"node scripts/wrangler-run.mjs dev\" \"vite\"",
+    "dev:api": "node scripts/wrangler-run.mjs dev",
     "dev:web": "vite",
     "build": "vite build",
-    "preview:api": "wrangler dev",
+    "preview:api": "node scripts/wrangler-run.mjs dev",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
@@ -17,7 +17,7 @@
     "smoke": "vite-node scripts/smoke.ts",
     "e2e": "playwright test",
     "scan": "node scripts/scan-bundle.mjs",
-    "deploy": "pnpm build && wrangler deploy"
+    "deploy": "pnpm build && node scripts/wrangler-run.mjs deploy"
   },
   "dependencies": {
     "@mozilla/readability": "^0.6.0",

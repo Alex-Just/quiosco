@@ -7,8 +7,6 @@ text) from the Android share sheet, and Quiosco extracts the text, translates it
 via OpenCode Zen with your custom prompt, and keeps it in a local
 read/unread/archived list with copy-to-clipboard.
 
-Design spec: `docs/superpowers/specs/2026-09-30-quiosco-design.md`.
-
 ## Architecture
 
 - **PWA** (React + Vite + vite-plugin-pwa) — extraction (DOMParser +
@@ -24,12 +22,18 @@ Design spec: `docs/superpowers/specs/2026-09-30-quiosco-design.md`.
 ```bash
 pnpm install
 cp .dev.vars.example .dev.vars   # fill in APP_TOKEN and OPENCODE_API_KEY
+cp wrangler.toml wrangler.local.toml   # then paste your KV/D1 ids (gitignored)
 pnpm dev                          # vite + wrangler dev (same-origin /api proxy)
 pnpm test                         # unit tests
 pnpm typecheck && pnpm lint
 pnpm e2e                          # playwright (builds + runs wrangler dev)
 pnpm smoke                        # against a deployed instance (see below)
 ```
+
+`wrangler.toml` ships with zeroed placeholder resource ids so forks do not
+advertise someone else's Cloudflare bindings. Put your real KV namespace id and
+D1 `database_id` in gitignored `wrangler.local.toml` (the `pnpm` scripts prefer
+that file when it exists).
 
 This repository tracks hooks in `.githooks/`. Enable them in your clone once:
 
@@ -69,43 +73,53 @@ hook.
 1. **Zen**: create a dedicated API key for Quiosco; set a workspace monthly
    usage limit; disable auto-reload. Quiosco also enforces a server-side model
    allowlist and a daily translate budget as containment layers.
-2. **KV**: `pnpm wrangler kv namespace create BUDGET` — paste the id into
-   `wrangler.toml`.
-3. **Secrets**:
-   `pnpm wrangler secret put OPENCODE_API_KEY` and
-   `pnpm wrangler secret put APP_TOKEN` (generate: `openssl rand -hex 32`).
-   Recommended: `pnpm wrangler secret put JINA_API_KEY` (free key from
+2. **KV**: `pnpm exec wrangler kv namespace create BUDGET` — paste the id into
+   gitignored `wrangler.local.toml` (and into the `QUIOSCO_KV_NAMESPACE_ID`
+   GitHub secret if you use CI deploy).
+3. **D1**: `pnpm exec wrangler d1 create quiosco` — paste `database_id` into
+   `wrangler.local.toml` and the `QUIOSCO_D1_DATABASE_ID` GitHub secret. Apply
+   the schema:
+   `pnpm exec wrangler d1 execute quiosco --remote --file worker/migrations/0001_sync.sql`.
+4. **Secrets**:
+   `pnpm exec wrangler secret put OPENCODE_API_KEY` and
+   `pnpm exec wrangler secret put APP_TOKEN` (generate: `openssl rand -hex 32`).
+   Recommended: `pnpm exec wrangler secret put JINA_API_KEY` (free key from
    jina.ai) — Cloudflare's shared egress IPs are rate-limited on the reader's
    anonymous tier, so the `jina` fallback rung returns 429 without it.
-4. **Deploy**: `pnpm deploy` (or push to `main` — CI deploys after checks pass).
-5. **Verify**: `GET /` returns the CSP header; `GET /api/health` returns 401
+5. **Deploy**: `pnpm deploy` (or push to `main` — CI deploys after checks pass).
+6. **Verify**: `GET /` returns the CSP header; `GET /api/health` returns 401
    without the token.
+7. **Rate limit**: add a Cloudflare rate-limiting rule on `/api/*`. One shared
+   `APP_TOKEN` gates the fetch proxy, Zen spend, and sync — treat it as the
+   crown jewel.
 
 ### CI deploy (GitHub Actions)
 
-Every push to `main` runs the check job, then `pnpm deploy`. Required repository
-secrets:
+Every push to `main` runs the check job, then injects resource ids into
+`wrangler.toml` and runs `pnpm deploy`. Required repository secrets:
 
 1. `CLOUDFLARE_ACCOUNT_ID` — from `pnpm exec wrangler whoami`.
 2. `CLOUDFLARE_API_TOKEN` — create at
    [API Tokens](https://dash.cloudflare.com/profile/api-tokens) with the
    **Edit Cloudflare Workers** template, scoped to this account.
+3. `QUIOSCO_KV_NAMESPACE_ID` — KV namespace id for `BUDGET`.
+4. `QUIOSCO_D1_DATABASE_ID` — D1 `database_id` for `quiosco`.
 
 ```bash
 gh secret set CLOUDFLARE_ACCOUNT_ID
 gh secret set CLOUDFLARE_API_TOKEN
+gh secret set QUIOSCO_KV_NAMESPACE_ID
+gh secret set QUIOSCO_D1_DATABASE_ID
 ```
 
-Optional hardening: a Cloudflare rate-limiting rule on `/api/*`; 2FA on the
-Cloudflare and OpenCode accounts.
+Also enable 2FA on the Cloudflare and OpenCode accounts.
 
 ### Sync (D1)
 
-1. `pnpm exec wrangler d1 create quiosco` (once) — the API token needs the D1
-   permission; paste the returned `database_id` into `wrangler.toml`.
-2. Apply the schema: `pnpm exec wrangler d1 execute quiosco --remote --file worker/migrations/0001_sync.sql`.
-3. Deploy as usual (`pnpm deploy`).
-4. On each device: Settings → App token → Save → "Sync now".
+After D1 is created and the schema is applied (see checklist above):
+
+1. Deploy as usual (`pnpm deploy`).
+2. On each device: Settings → App token → Save → "Sync now".
    The app also syncs on open, after local changes, and when the network returns.
 
 ## Install on Android

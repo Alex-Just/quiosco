@@ -37,6 +37,11 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Inject Cloudflare resource ids
+        run: node scripts/inject-wrangler-ids.mjs
+        env:
+          QUIOSCO_KV_NAMESPACE_ID: ${{ secrets.QUIOSCO_KV_NAMESPACE_ID }}
+          QUIOSCO_D1_DATABASE_ID: ${{ secrets.QUIOSCO_D1_DATABASE_ID }}
       - run: pnpm deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

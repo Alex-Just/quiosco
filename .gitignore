@@ -2,6 +2,8 @@ node_modules/
 dist/
 .wrangler/
 .dev.vars
+# Personal Cloudflare KV/D1 ids (copy from wrangler.toml and fill in).
+wrangler.local.toml
 coverage/
 test-results/
 playwright-report/
