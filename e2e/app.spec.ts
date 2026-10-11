@@ -99,6 +99,58 @@ test("URL-only share fetches the article instead of saving the shared URL", asyn
   await expect(page.getByLabel("Article text")).toHaveValue(/858\.178/);
 });
 
+test("back from a just-saved shared article returns to the list", async ({
+  page,
+}) => {
+  const paragraph =
+    "El Ayuntamiento de Valencia notificó una población de 858.178 residentes a 1 de enero de 2026, según los datos del padrón municipal continuo.";
+  await page.route("**/api/fetch**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "text/html; charset=utf-8",
+      headers: {
+        "x-quiosco-via": "direct",
+        "x-quiosco-final-url": "https://example.com/noticia",
+      },
+      body: `<!doctype html><html><head><title>Prueba URL</title></head><body><article><h1>Prueba URL</h1><p>${paragraph}</p><p>${paragraph}</p><p>${paragraph}</p><p>${paragraph}</p><p>${paragraph}</p><p>${paragraph}</p></article></body></html>`,
+    });
+  });
+  await page.route("**/api/decide**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ answers: {} }),
+    });
+  });
+
+  await waitForServiceWorker(page);
+  await page.goto("/settings");
+  await page.getByLabel("App token").fill("e2e-token");
+  await page.getByLabel("Translate automatically after saving").uncheck();
+  await page.getByRole("button", { name: "Save" }).click();
+
+  // The list is the screen the user expects Back to land on.
+  await page.goto("/");
+  const url = "https://example.com/otra-noticia-larga-para-superar-el-minimo";
+  await page.evaluate(async (sharedUrl) => {
+    const formData = new FormData();
+    formData.set("title", "");
+    formData.set("text", sharedUrl);
+    formData.set("url", sharedUrl);
+    await fetch("/share", { method: "POST", body: formData });
+  }, url);
+
+  await page.goto("/share");
+  await page.waitForURL("**/add");
+  await expect(page.getByLabel("Article text")).toHaveValue(/858\.178/);
+  await page.getByRole("button", { name: "Save & translate" }).click();
+  await page.waitForURL("**/article/**");
+
+  await page.goBack();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("link", { name: "+ Add" })).toBeVisible();
+});
+
 test("manual add, read/archive lifecycle, delete", async ({ page }) => {
   await page.goto("/settings");
   await page.getByLabel("App token").fill("e2e-token");

@@ -24,6 +24,7 @@ export default function SharePage() {
       const classification = classifyShare(payload);
       if (classification.mode === "url") {
         navigate("/add", {
+          replace: true,
           state: {
             fromUrlShare: true,
             prefillUrl: classification.url,
@@ -32,7 +33,7 @@ export default function SharePage() {
         });
         return;
       }
-      navigate("/add", { state: { fromShare: true } });
+      navigate("/add", { replace: true, state: { fromShare: true } });
     })();
   }, [store, navigate]);
 

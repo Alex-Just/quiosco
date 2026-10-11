@@ -194,7 +194,7 @@ export default function AddPage() {
         const existing = await store.findByUrl(canonical);
         if (existing) {
           await clearPendingShare();
-          navigate(`/article/${existing.id}`);
+          navigate(`/article/${existing.id}`, { replace: true });
           return;
         }
       }
@@ -276,7 +276,7 @@ export default function AddPage() {
             : {}),
         });
         await clearPendingShare();
-        navigate(`/article/${editId}`);
+        navigate(`/article/${editId}`, { replace: true });
         return;
       }
       const article = newArticle({
@@ -291,7 +291,7 @@ export default function AddPage() {
         await store.update(article.id, { translationStatus: "running" });
       }
       await clearPendingShare();
-      navigate(`/article/${article.id}`);
+      navigate(`/article/${article.id}`, { replace: true });
       if (settings.autoTranslate && settings.appToken) {
         void translateArticle(store, article, settings);
       }
