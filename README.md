@@ -42,9 +42,24 @@ pnpm smoke                        # against a deployed instance (see below)
    Recommended: `pnpm wrangler secret put JINA_API_KEY` (free key from
    jina.ai) — Cloudflare's shared egress IPs are rate-limited on the reader's
    anonymous tier, so the `jina` fallback rung returns 429 without it.
-4. **Deploy**: `pnpm deploy`.
+4. **Deploy**: `pnpm deploy` (or push to `main` — CI deploys after checks pass).
 5. **Verify**: `GET /` returns the CSP header; `GET /api/health` returns 401
    without the token.
+
+### CI deploy (GitHub Actions)
+
+Every push to `main` runs the check job, then `pnpm deploy`. Required repository
+secrets:
+
+1. `CLOUDFLARE_ACCOUNT_ID` — from `pnpm exec wrangler whoami`.
+2. `CLOUDFLARE_API_TOKEN` — create at
+   [API Tokens](https://dash.cloudflare.com/profile/api-tokens) with the
+   **Edit Cloudflare Workers** template, scoped to this account.
+
+```bash
+gh secret set CLOUDFLARE_ACCOUNT_ID
+gh secret set CLOUDFLARE_API_TOKEN
+```
 
 Optional hardening: a Cloudflare rate-limiting rule on `/api/*`; 2FA on the
 Cloudflare and OpenCode accounts.
