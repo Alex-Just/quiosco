@@ -15,8 +15,16 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const config = existsSync(path.join(root, LOCAL_CONFIG))
   ? LOCAL_CONFIG
   : TEMPLATE_CONFIG;
-// Global flags (-c) must precede the subcommand (deploy/dev/…).
-const args = ["exec", "wrangler", "-c", config, ...process.argv.slice(2)];
+// pnpm treats bare -c as its own flag; `--` forwards -c to wrangler.
+// Global flags must still precede the subcommand (deploy/dev/…).
+const args = [
+  "exec",
+  "--",
+  "wrangler",
+  "-c",
+  config,
+  ...process.argv.slice(2),
+];
 
 const child = spawn("pnpm", args, {
   cwd: root,
