@@ -1,0 +1,52 @@
+#!/bin/sh
+#
+# pre-push hook: block the push when Qlty finds new issues in the commits
+# that are being pushed. No pull request is required.
+#
+# Enable it in a clone with:
+#   git config core.hooksPath .githooks
+#
+# Install the Qlty CLI once:
+#   curl https://qlty.sh | sh
+#
+# This is a guardrail, not a guarantee: `git push --no-verify` bypasses it.
+# The hook stays out of the way when Qlty is not installed, so a clone
+# without the CLI can still push.
+#
+
+if ! command -v qlty >/dev/null 2>&1; then
+    echo "pre-push: qlty is not installed, skipping the quality check."
+    echo "pre-push: install it with: curl https://qlty.sh | sh"
+    exit 0
+fi
+
+if [ ! -f .qlty/qlty.toml ]; then
+    echo "pre-push: .qlty/qlty.toml is missing, skipping the quality check."
+    exit 0
+fi
+
+# Git passes the refs that are being pushed on stdin.
+input=$(cat)
+
+# Qlty prints a stray upgrade-check line ("Tap enter to skip...") whenever
+# stdin is not a terminal, which is always true here. Capture the output so
+# the exit code is kept and that one line can be dropped.
+report=$(mktemp) || exit 0
+printf '%s\n' "$input" | qlty check \
+    --trigger pre-push \
+    --upstream-from-pre-push \
+    --no-formatters \
+    --skip-errored-plugins \
+    --no-upgrade-check > "$report" 2>&1
+status=$?
+grep -v '^Tap enter to skip\.\.\.$' "$report" || true
+rm -f "$report"
+
+if [ "$status" -ne 0 ]; then
+    echo
+    echo "pre-push: push blocked by the Qlty quality check."
+    echo "pre-push: fix the issues above, or bypass once with: git push --no-verify"
+    exit 1
+fi
+
+exit 0

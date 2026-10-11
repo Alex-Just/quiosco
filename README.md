@@ -29,6 +29,39 @@ pnpm e2e                          # playwright (builds + runs wrangler dev)
 pnpm smoke                        # against a deployed instance (see below)
 ```
 
+This repository tracks hooks in `.githooks/`. Enable them in your clone once:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+`pre-push` runs the Qlty quality check on the commits being pushed and blocks
+the push when new issues appear. It is a guardrail, not a guarantee:
+`--no-verify` skips it, and a clone that did not run the `git config` command
+has no hooks at all.
+
+## Code quality
+
+The `pre-push` hook runs [Qlty](https://qlty.sh) over the files in the commits
+being pushed. It compares them with the upstream branch, so existing issues
+never block a push. Only new issues in changed files do. The check is free,
+runs locally, and needs no account.
+
+```bash
+curl https://qlty.sh | sh
+git config core.hooksPath .githooks
+```
+
+`.qlty/qlty.toml` holds the configuration. It enables `biome` for TypeScript,
+JavaScript, JSON, and CSS, `markdownlint` for Markdown, and `trufflehog` for
+secrets. Add a linter with `qlty plugins enable <name>` and commit the change.
+`qlty check --all` runs the same checks over the whole repository.
+
+Qlty Cloud offers a score-based block and works without pull requests:
+`qlty slop-one` fails a push that lowers the score of the changed files. It
+needs a `TYPESAFE_API_KEY` and spends API credit per run, so it is not in the
+hook.
+
 ## Deployment checklist (required)
 
 1. **Zen**: create a dedicated API key for Quiosco; set a workspace monthly
