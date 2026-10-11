@@ -1,7 +1,10 @@
 import type { Article } from "./types";
 
-/** Finished articles hide the action chrome behind a disclosure by default. */
-export function articleChromeCollapsible(
+/**
+ * Finished idle articles use a compact reading chrome: view toggle + ⋯ menu.
+ * Active translation / errors keep the full action rows visible.
+ */
+export function articleChromeCompact(
   article: Article,
   working: boolean,
 ): boolean {

@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArticleChromeDisclosure } from "../components/ArticleChromeDisclosure";
+import { ArticleActionsSheet } from "../components/ArticleActionsSheet";
 import { ArticlePageActions } from "../components/ArticlePageActions";
 import { ArticlePageHeader } from "../components/ArticlePageHeader";
+import { ArticleReadingToolbar } from "../components/ArticleReadingToolbar";
 import { ArticleText } from "../components/ArticleText";
 import { ArticleTranslationStatus } from "../components/ArticleTranslationStatus";
 import { ArticleViewControls } from "../components/ArticleViewControls";
 import { SentenceSheet } from "../components/SentenceSheet";
-import { articleChromeCollapsible } from "../lib/articleChrome";
+import { articleChromeCompact } from "../lib/articleChrome";
 import {
   articleBody,
   bodyParagraphs,
@@ -25,7 +26,7 @@ export default function ArticlePage() {
   const navigate = useNavigate();
   const { id } = useParams();
   const [view, setView] = useState<ArticleView>("translation");
-  const [actionsOpen, setActionsOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
 
   const { article, setArticle, now, running } = useArticleDocument(
     store,
@@ -45,15 +46,9 @@ export default function ArticlePage() {
   } = useSentenceSpeech(view);
 
   const working = running || actions.busy;
-  const chromeCollapsible = article
-    ? articleChromeCollapsible(article, working)
+  const compactChrome = article
+    ? articleChromeCompact(article, working)
     : false;
-  const showChrome = !chromeCollapsible || actionsOpen;
-
-  useEffect(() => {
-    // Finished articles start collapsed; active/error runs keep chrome open.
-    setActionsOpen(!chromeCollapsible);
-  }, [chromeCollapsible]);
 
   // The streamed tail of the chunk in flight is shown (and copied) after the
   // committed chunks; it is replaced by the full chunk when it lands.
@@ -79,13 +74,13 @@ export default function ArticlePage() {
   return (
     <article className="article">
       <ArticlePageHeader article={article} />
-      {chromeCollapsible && (
-        <ArticleChromeDisclosure
-          open={actionsOpen}
-          onToggle={() => setActionsOpen((open) => !open)}
+      {compactChrome ? (
+        <ArticleReadingToolbar
+          view={view}
+          onSwitchView={switchView}
+          onOpenMore={() => setMoreOpen(true)}
         />
-      )}
-      {showChrome && (
+      ) : (
         <>
           <ArticlePageActions
             article={article}
@@ -125,6 +120,19 @@ export default function ArticlePage() {
             {article.status === "read" ? "Mark as unread" : "Mark as read"}
           </button>
         </div>
+      )}
+      {moreOpen && compactChrome && (
+        <ArticleActionsSheet
+          article={article}
+          translationBody={translationBody}
+          copied={actions.copied}
+          onClose={() => setMoreOpen(false)}
+          onToggleRead={actions.toggleRead}
+          onToggleArchive={actions.toggleArchive}
+          onRetranslate={actions.onRetranslate}
+          onDelete={actions.onDelete}
+          onCopy={actions.copy}
+        />
       )}
       {menu && (
         <SentenceSheet

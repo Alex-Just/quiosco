@@ -313,28 +313,50 @@ button.danger {
   overflow-wrap: anywhere;
 }
 
-.chrome-disclosure {
-  display: inline-flex;
+.article-toolbar {
+  display: flex;
   align-items: center;
-  gap: 6px;
-  margin: 4px 0 8px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  font-size: 0.9rem;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 4px 0 12px;
 }
 
-.chrome-disclosure:active {
-  opacity: 0.75;
+.article-toolbar .toggle {
+  margin: 0;
 }
 
-.chrome-disclosure-chevron {
-  font-size: 0.75em;
+.more-button {
+  flex: 0 0 auto;
+  min-width: 44px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--fg);
+  font-size: 1.25rem;
   line-height: 1;
+  letter-spacing: 0.05em;
+}
+
+.sheet-meta {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.sheet-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sheet-list .button,
+.sheet-list button {
+  width: 100%;
+  min-height: 44px;
+  justify-content: center;
+  text-align: center;
 }
 
 .article-meta {
