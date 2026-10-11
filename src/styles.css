@@ -329,6 +329,10 @@ button.danger {
   margin: 4px 0 12px;
 }
 
+.article-toolbar-zen {
+  justify-content: flex-end;
+}
+
 .article-toolbar .toggle {
   margin: 0;
 }
@@ -413,34 +417,15 @@ button.danger {
   /* Own the gesture so the browser does not steal it for page scroll. */
   touch-action: none;
   user-select: none;
+  white-space: pre-wrap;
 }
 
 .zen-pane .para {
   margin: 0;
 }
 
-.zen-nav {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  margin-top: 20px;
-}
-
-.zen-nav-button {
-  min-width: 44px;
-  min-height: 44px;
-  padding: 0;
-  font-size: 1.1rem;
-  line-height: 1;
-}
-
-.zen-nav-button:disabled {
-  opacity: 0.35;
-}
-
 .zen-hint {
-  margin: 0;
+  margin: 20px 0 0;
   text-align: center;
   font-size: 0.85rem;
 }

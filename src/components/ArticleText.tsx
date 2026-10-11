@@ -1,3 +1,4 @@
+import { gapBeforeSentence, spaceFlagLines } from "../lib/flagLines";
 import {
   splitLeadingNumber,
   splitSentences,
@@ -29,28 +30,32 @@ export function ArticleText({
                 {first.number}/{paragraphs.length}
               </span>
             )}
-            {sentences.map((sentence, sentenceIndex) => (
-              <button
-                // biome-ignore lint/suspicious/noArrayIndexKey: sentences have no stable id
-                key={sentenceIndex}
-                type="button"
-                className={
-                  isSpeaking(paragraphIndex, sentenceIndex)
-                    ? "sentence speaking"
-                    : "sentence"
-                }
-                onClick={() =>
-                  onOpenMenu({
-                    paragraph: paragraphIndex,
-                    sentenceIndex,
-                    sentence: stripSentenceMarkers(sentence),
-                  })
-                }
-              >
-                {sentenceIndex === 0 && first ? first.text : sentence}
-                {sentenceIndex < sentences.length - 1 ? " " : ""}
-              </button>
-            ))}
+            {sentences.map((sentence, sentenceIndex) => {
+              const raw = sentenceIndex === 0 && first ? first.text : sentence;
+              const next = sentences[sentenceIndex + 1];
+              return (
+                <button
+                  // biome-ignore lint/suspicious/noArrayIndexKey: sentences have no stable id
+                  key={sentenceIndex}
+                  type="button"
+                  className={
+                    isSpeaking(paragraphIndex, sentenceIndex)
+                      ? "sentence speaking"
+                      : "sentence"
+                  }
+                  onClick={() =>
+                    onOpenMenu({
+                      paragraph: paragraphIndex,
+                      sentenceIndex,
+                      sentence: stripSentenceMarkers(sentence),
+                    })
+                  }
+                >
+                  {spaceFlagLines(raw)}
+                  {next ? gapBeforeSentence(next) : ""}
+                </button>
+              );
+            })}
           </p>
         );
       })}

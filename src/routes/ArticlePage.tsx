@@ -111,6 +111,7 @@ export default function ArticlePage() {
           view={view}
           onSwitchView={switchView}
           onOpenMore={() => setMoreOpen(true)}
+          showViewToggle={!zenMode}
         />
       ) : (
         <>

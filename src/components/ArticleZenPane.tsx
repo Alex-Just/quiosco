@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { gapBeforeSentence, spaceFlagLines } from "../lib/flagLines";
 import {
   splitLeadingNumber,
   splitSentences,
@@ -55,52 +56,34 @@ export function ArticleZenPane({
         <span className="para-index">
           {index + 1}/{total}
         </span>
-        {sentences.map((sentence, sentenceIndex) => (
-          <button
-            // biome-ignore lint/suspicious/noArrayIndexKey: sentences have no stable id
-            key={sentenceIndex}
-            type="button"
-            className={
-              isSpeaking(index, sentenceIndex)
-                ? "sentence speaking"
-                : "sentence"
-            }
-            onClick={() =>
-              onOpenMenu({
-                paragraph: index,
-                sentenceIndex,
-                sentence: stripSentenceMarkers(sentence),
-              })
-            }
-          >
-            {sentenceIndex === 0 && first ? first.text : sentence}
-            {sentenceIndex < sentences.length - 1 ? " " : ""}
-          </button>
-        ))}
+        {sentences.map((sentence, sentenceIndex) => {
+          const raw = sentenceIndex === 0 && first ? first.text : sentence;
+          const next = sentences[sentenceIndex + 1];
+          return (
+            <button
+              // biome-ignore lint/suspicious/noArrayIndexKey: sentences have no stable id
+              key={sentenceIndex}
+              type="button"
+              className={
+                isSpeaking(index, sentenceIndex)
+                  ? "sentence speaking"
+                  : "sentence"
+              }
+              onClick={() =>
+                onOpenMenu({
+                  paragraph: index,
+                  sentenceIndex,
+                  sentence: stripSentenceMarkers(sentence),
+                })
+              }
+            >
+              {spaceFlagLines(raw)}
+              {next ? gapBeforeSentence(next) : ""}
+            </button>
+          );
+        })}
       </p>
-      {total > 1 && (
-        <div className="zen-nav">
-          <button
-            type="button"
-            className="zen-nav-button"
-            disabled={index <= 0}
-            aria-label="Previous paragraph"
-            onClick={() => onIndexChange(stepZenIndex(index, total, -1))}
-          >
-            ↑
-          </button>
-          <p className="muted zen-hint">Swipe up or down</p>
-          <button
-            type="button"
-            className="zen-nav-button"
-            disabled={index >= total - 1}
-            aria-label="Next paragraph"
-            onClick={() => onIndexChange(stepZenIndex(index, total, 1))}
-          >
-            ↓
-          </button>
-        </div>
-      )}
+      {total > 1 && <p className="muted zen-hint">Swipe up or down</p>}
     </div>
   );
 }
