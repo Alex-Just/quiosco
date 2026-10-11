@@ -1,6 +1,8 @@
 import type { Article, Via } from "./types";
 
 export const MAX_ARTICLE_CHARS = 150_000;
+/** Minimum pasted/fetched body length before Save accepts the article. */
+export const MIN_ARTICLE_TEXT_CHARS = 40;
 
 export function newArticle(input: {
   url: string | null;

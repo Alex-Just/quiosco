@@ -1,4 +1,6 @@
 import type {
+  DecideRequest,
+  DecideResponse,
   Rung,
   RungResponse,
   SyncRequest,
@@ -39,6 +41,7 @@ export interface ApiClient {
     onDelta?: (partial: string) => void,
   ): Promise<string>;
   health(): Promise<boolean>;
+  decide(request: DecideRequest, signal?: AbortSignal): Promise<DecideResponse>;
   sync(request: SyncRequest): Promise<SyncResponse>;
 }
 
@@ -192,6 +195,23 @@ export function createApi(options: {
         }),
       );
       return true;
+    },
+
+    async decide(request, signal) {
+      const timeout = AbortSignal.timeout(CLIENT_TIMEOUT_MS);
+      const response = await ensureOk(
+        await fetchFn("/api/decide", {
+          method: "POST",
+          headers: { ...authHeaders, "Content-Type": "application/json" },
+          body: JSON.stringify(request),
+          signal: signal ? AbortSignal.any([timeout, signal]) : timeout,
+        }),
+      );
+      const data = (await response.json()) as { answers?: unknown };
+      if (!data.answers || typeof data.answers !== "object") {
+        throw new ApiError("malformed decide response", 502);
+      }
+      return { answers: data.answers as Record<string, unknown> };
     },
 
     async sync(request) {
