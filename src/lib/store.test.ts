@@ -138,4 +138,23 @@ describe("store", () => {
     expect(await store.getScrollPosition(other.id)).not.toBeNull();
     store.close();
   });
+
+  it("keeps zenIndex when scroll y is updated, and the reverse", async () => {
+    const store = await createStore(`test-${randomUUID()}`);
+    const article = makeArticle();
+    await store.put(article);
+    await store.setScrollPosition(article.id, 0, "translation", 11);
+    await store.setScrollPosition(article.id, 400, "translation");
+    expect(await store.getScrollPosition(article.id)).toMatchObject({
+      y: 400,
+      zenIndex: 11,
+    });
+    await store.setScrollPosition(article.id, 400, "original", 3);
+    expect(await store.getScrollPosition(article.id)).toMatchObject({
+      y: 400,
+      view: "original",
+      zenIndex: 3,
+    });
+    store.close();
+  });
 });

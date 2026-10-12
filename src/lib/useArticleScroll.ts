@@ -106,6 +106,7 @@ function attachScrollPersistence(
   let lastY = 0;
   const save = () => {
     lastSave = Date.now();
+    // Preserve any stored Zen index; scroll saves only y + view.
     void store.setScrollPosition(articleId, lastY, view);
   };
   const onScroll = () => {

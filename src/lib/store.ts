@@ -28,6 +28,7 @@ export interface ArticleStore {
     articleId: string,
     y: number,
     view: ArticleView,
+    zenIndex?: number,
   ): Promise<void>;
   close(): void;
 }
@@ -109,11 +110,13 @@ export async function createStore(
     async getScrollPosition(articleId) {
       return (await db.get("positions", articleId)) ?? null;
     },
-    async setScrollPosition(articleId, y, view) {
+    async setScrollPosition(articleId, y, view, zenIndex) {
+      const existing = (await db.get("positions", articleId)) ?? null;
       await db.put("positions", {
         id: articleId,
         y,
         view,
+        zenIndex: zenIndex !== undefined ? zenIndex : existing?.zenIndex,
         updatedAt: Date.now(),
       });
     },

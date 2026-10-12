@@ -21,6 +21,7 @@ import { useArticleDocument } from "../lib/useArticleDocument";
 import { useArticleScroll } from "../lib/useArticleScroll";
 import { useSentenceSpeech } from "../lib/useSentenceSpeech";
 import { useStore } from "../lib/useStore";
+import { useZenPosition } from "../lib/useZenPosition";
 import { clampZenIndex } from "../lib/zenMode";
 
 export default function ArticlePage() {
@@ -62,11 +63,6 @@ export default function ArticlePage() {
   const zenAvailable = compactChrome && paragraphs.length > 0;
 
   useEffect(() => {
-    if (!id) return;
-    setZenIndex(0);
-  }, [id]);
-
-  useEffect(() => {
     setZenIndex((index) => clampZenIndex(index, paragraphs.length));
   }, [paragraphs.length]);
 
@@ -86,15 +82,27 @@ export default function ArticlePage() {
     };
   }, [zenMode]);
 
-  // Restore and persist the reading position; skip while Zen owns navigation.
+  const onRestoreZenIndex = useCallback((index: number) => {
+    setZenIndex(index);
+  }, []);
+
+  // Restore and persist the reading position; skip scroll while Zen owns nav.
   useArticleScroll(store, id, body.length > 0 && !zenMode, view, setView);
+  useZenPosition(
+    store,
+    id,
+    paragraphs.length > 0,
+    view,
+    zenIndex,
+    paragraphs.length,
+    onRestoreZenIndex,
+  );
 
   const switchView = useCallback(
     (next: ArticleView) => {
       if (next === view) return;
       stopSpeechForViewChange();
       setView(next);
-      setZenIndex(0);
     },
     [view, stopSpeechForViewChange],
   );

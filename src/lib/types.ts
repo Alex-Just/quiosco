@@ -5,6 +5,8 @@ export interface ScrollPosition {
   id: string;
   y: number;
   view: ArticleView;
+  /** Zen-mode paragraph index (0-based); local only. */
+  zenIndex?: number;
   updatedAt: number;
 }
 
