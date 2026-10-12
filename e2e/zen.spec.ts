@@ -69,7 +69,11 @@ test("zen listen button speaks original text from the current page", async ({
   await page.goto("/article/zen-listen");
 
   const listen = page.getByRole("button", { name: "Listen to original" });
+  const auto = page.getByRole("checkbox", {
+    name: "Auto-listen on each page",
+  });
   await expect(listen).toBeVisible();
+  await expect(auto).not.toBeChecked();
 
   const box = await listen.boundingBox();
   const viewport = page.viewportSize();
@@ -93,6 +97,45 @@ test("zen listen button speaks original text from the current page", async ({
   });
 
   await listen.click();
+  await expect(
+    page.getByRole("button", { name: "Stop listening" }),
+  ).toBeVisible();
+});
+
+test("zen auto-listen starts TTS when moving to the next page", async ({
+  page,
+}) => {
+  await seedDoneArticle(page, "zen-auto-listen");
+  await page.goto("/article/zen-auto-listen");
+
+  await page.evaluate(() => {
+    Object.defineProperty(window, "speechSynthesis", {
+      configurable: true,
+      value: {
+        speaking: false,
+        pending: false,
+        paused: false,
+        cancel: () => undefined,
+        speak: () => undefined,
+        getVoices: () => [],
+      },
+    });
+  });
+
+  const auto = page.getByRole("checkbox", {
+    name: "Auto-listen on each page",
+  });
+  await expect(auto).not.toBeChecked();
+  await auto.check();
+  await expect(auto).toBeChecked();
+
+  // Still on page 1 — Auto only fires on a page change.
+  await expect(
+    page.getByRole("button", { name: "Listen to original" }),
+  ).toBeVisible();
+
+  await page.keyboard.press("ArrowDown");
+  await expect(page.getByText("2/3")).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Stop listening" }),
   ).toBeVisible();

@@ -28,6 +28,7 @@ import { useArticleScroll } from "../lib/useArticleScroll";
 import { useSentenceSpeech } from "../lib/useSentenceSpeech";
 import { useZenPosition } from "../lib/useZenPosition";
 import { useZenSwipe } from "../lib/useZenSwipe";
+import { loadZenAutoListen, saveZenAutoListen } from "../lib/zenAutoListen";
 import { isZenEndPage, zenEndActions } from "../lib/zenEndActions";
 import { originalParagraphForZen } from "../lib/zenListenOriginal";
 import { clampZenIndex } from "../lib/zenMode";
@@ -55,6 +56,7 @@ export default function ArticleReader({
   const [zenMode, setZenMode] = useState(false);
   /** null until the saved Zen index has been read (avoids saving 0 too early). */
   const [zenIndex, setZenIndex] = useState<number | null>(null);
+  const [autoListen, setAutoListen] = useState(() => loadZenAutoListen());
 
   const actions = useArticleActions(store, article, setArticle, navigate);
   const {
@@ -103,7 +105,23 @@ export default function ArticleReader({
     if (prevZenIndex.current === zenIndex) return;
     prevZenIndex.current = zenIndex;
     stopSpeechForViewChange();
-  }, [zenIndex, stopSpeechForViewChange]);
+    if (!autoListen || !zenMode || zenIndex == null) return;
+    const text = originalParagraphForZen({
+      originalBody: originalText(article),
+      index: zenIndex,
+      screenParagraph: paragraphs[zenIndex],
+    });
+    if (!text) return;
+    onListenZenOriginal(zenIndex, text);
+  }, [
+    zenIndex,
+    autoListen,
+    zenMode,
+    article,
+    paragraphs,
+    stopSpeechForViewChange,
+    onListenZenOriginal,
+  ]);
 
   useEffect(() => {
     if (paragraphs.length <= 0) return;
@@ -223,8 +241,13 @@ export default function ArticleReader({
               )}
               <ArticleZenListenButton
                 listening={isZenOriginalSpeaking(zenIndex)}
+                autoListen={autoListen}
                 disabled={zenListenText.length === 0}
                 onClick={() => onListenZenOriginal(zenIndex, zenListenText)}
+                onAutoListenChange={(enabled) => {
+                  setAutoListen(enabled);
+                  saveZenAutoListen(enabled);
+                }}
               />
             </>
           )
