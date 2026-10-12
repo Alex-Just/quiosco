@@ -51,6 +51,24 @@ describe("splitSentences", () => {
   it("returns an empty list for blank input", () => {
     expect(splitSentences("   ")).toEqual([]);
   });
+
+  it("splits bilingual stanzas at each language flag", () => {
+    expect(
+      splitSentences(
+        "🇪🇸 La conexión con Barcelona está peor: la combinación más rápida supera las 7 horas debido a un Corredor aún inacabado\n🇷🇺 С сообщением в Барселону дела обстоят хуже: самый быстрый вариант занимает более 7 часов.",
+      ),
+    ).toEqual([
+      "🇪🇸 La conexión con Barcelona está peor: la combinación más rápida supera las 7 horas debido a un Corredor aún inacabado",
+      "🇷🇺 С сообщением в Барселону дела обстоят хуже: самый быстрый вариант занимает более 7 часов.",
+    ]);
+  });
+
+  it("keeps a leading number with the first flag stanza", () => {
+    expect(splitSentences("20\n🇪🇸 Hola mundo\n🇷🇺 Привет мир")).toEqual([
+      "20\n🇪🇸 Hola mundo",
+      "🇷🇺 Привет мир",
+    ]);
+  });
 });
 
 describe("stripSentenceMarkers", () => {

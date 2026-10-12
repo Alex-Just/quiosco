@@ -42,12 +42,34 @@ function endsWithAbbreviation(sentence: string): boolean {
   return normalized.length === 1 || ABBREVIATIONS.has(normalized);
 }
 
-export function splitSentences(paragraph: string): string[] {
-  const trimmed = paragraph.trim();
-  if (!trimmed) return [];
+// Bilingual articles put a second language flag mid-paragraph. Split there so
+// each language stanza is its own tappable fragment (even with no period).
+const FLAG_STANZA_BREAK = /(?=[\u{1F1E6}-\u{1F1FF}]{2})/u;
+const FLAG_AT_START = /^[\u{1F1E6}-\u{1F1FF}]{2}/u;
+
+function splitFlagStanzas(text: string): string[] {
+  const parts = text
+    .split(FLAG_STANZA_BREAK)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length < 2) return parts;
+  const [prefix, first, ...rest] = parts;
+  // Keep a leading index ("20") with the first flag stanza.
+  if (
+    prefix != null &&
+    first != null &&
+    !FLAG_AT_START.test(prefix) &&
+    FLAG_AT_START.test(first)
+  ) {
+    return [`${prefix}\n${first}`, ...rest];
+  }
+  return parts;
+}
+
+function splitPunctuationSentences(stanza: string): string[] {
   const sentences: string[] = [];
   let current = "";
-  for (const part of trimmed.split(SENTENCE_BREAK)) {
+  for (const part of stanza.split(SENTENCE_BREAK)) {
     current = current ? `${current} ${part}` : part;
     if (endsWithAbbreviation(current)) continue;
     sentences.push(current);
@@ -55,6 +77,12 @@ export function splitSentences(paragraph: string): string[] {
   }
   if (current) sentences.push(current);
   return sentences;
+}
+
+export function splitSentences(paragraph: string): string[] {
+  const trimmed = paragraph.trim();
+  if (!trimmed) return [];
+  return splitFlagStanzas(trimmed).flatMap(splitPunctuationSentences);
 }
 
 // Paragraph numbers ("11", "1.") and flag emojis ("🇪🇸") glued to the front of
