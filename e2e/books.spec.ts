@@ -680,6 +680,30 @@ test("translates the Zen sentence from the cache and pauses on failure", async (
   );
 });
 
+test("Zen text can be selected word by word", async ({ page }) => {
+  await importBook(page);
+  await page.goto("/");
+  await page.getByRole("link", { name: /Libro de prueba/ }).click();
+
+  const sentence = await page
+    .locator(".zen-pane .sentence")
+    .first()
+    .boundingBox();
+  if (!sentence) throw new Error("zen sentence has no box");
+  const y = sentence.y + sentence.height / 2;
+  // A selection gesture over the sentence text (mouse drag stands in for the
+  // long-press-and-extend gesture on a phone).
+  await page.mouse.move(sentence.x + 2, y);
+  await page.mouse.down();
+  await page.mouse.move(sentence.x + sentence.width - 1, y, { steps: 8 });
+  await page.mouse.up();
+
+  const selected = await page.evaluate(
+    () => window.getSelection()?.toString() ?? "",
+  );
+  expect(selected.length).toBeGreaterThan(0);
+});
+
 test("chapter sheet scrolls so early chapters stay reachable", async ({
   page,
 }) => {

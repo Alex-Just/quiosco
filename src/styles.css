@@ -120,7 +120,6 @@ body.zen-active .app {
 .article-zen {
   min-height: 100%;
   touch-action: none;
-  user-select: none;
 }
 
 h1 {
@@ -564,9 +563,9 @@ button.danger {
 
 .zen-pane {
   min-height: 50vh;
-  /* Own the gesture so the browser does not steal it for page scroll. */
+  /* Own the gesture so the browser does not steal it for page scroll. The
+     text stays selectable; the swipe guard ignores selection gestures. */
   touch-action: none;
-  user-select: none;
   white-space: pre-wrap;
 }
 
@@ -603,6 +602,10 @@ button.danger {
   white-space: inherit;
   text-align: inherit;
   cursor: pointer;
+  /* Buttons are non-selectable by default; the words inside a sentence
+     must stay selectable by long-press. */
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .zen-pane .sentence {

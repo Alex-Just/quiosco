@@ -4,6 +4,7 @@ import {
   stepZenIndex,
   ZEN_SWIPE_MIN_DISTANCE_PX,
   zenIndexAfterSwipe,
+  zenSwipeBlockedBySelection,
 } from "./zenMode";
 
 describe("clampZenIndex", () => {
@@ -56,5 +57,48 @@ describe("zenIndexAfterSwipe", () => {
         endY: 200 - ZEN_SWIPE_MIN_DISTANCE_PX - 1,
       }),
     ).toBe(1);
+  });
+});
+
+describe("zenSwipeBlockedBySelection", () => {
+  it("blocks a held touch gesture that ends with a live selection", () => {
+    // Long-press selects a word, then the finger drags to extend it.
+    expect(
+      zenSwipeBlockedBySelection({
+        pointerType: "touch",
+        selectionActive: true,
+        durationMs: 900,
+      }),
+    ).toBe(true);
+  });
+
+  it("keeps a quick touch swipe even if a stale selection exists", () => {
+    expect(
+      zenSwipeBlockedBySelection({
+        pointerType: "touch",
+        selectionActive: true,
+        durationMs: 120,
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps mouse drags swiping even when they select text", () => {
+    expect(
+      zenSwipeBlockedBySelection({
+        pointerType: "mouse",
+        selectionActive: true,
+        durationMs: 900,
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps a held touch gesture without a selection", () => {
+    expect(
+      zenSwipeBlockedBySelection({
+        pointerType: "touch",
+        selectionActive: false,
+        durationMs: 900,
+      }),
+    ).toBe(false);
   });
 });

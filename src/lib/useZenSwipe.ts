@@ -1,5 +1,11 @@
 import { useEffect, useRef } from "react";
-import { zenIndexAfterSwipe } from "./zenMode";
+import { zenIndexAfterSwipe, zenSwipeBlockedBySelection } from "./zenMode";
+
+/** True while the reader has a live text selection on the page. */
+function hasLiveSelection(): boolean {
+  const selection = window.getSelection();
+  return selection !== null && !selection.isCollapsed;
+}
 
 type UseZenSwipeArgs = {
   enabled: boolean;
@@ -12,7 +18,8 @@ type UseZenSwipeArgs = {
  * Vertical swipe anywhere on the page steps the Zen paragraph index.
  * Listens on `document` so empty chrome and margins count, not only the
  * text pane. Does not use pointer capture, so taps on buttons still work.
- * Short moves stay as taps.
+ * Short moves stay as taps, and a long-press that is selecting text is not
+ * a swipe.
  */
 export function useZenSwipe(args: UseZenSwipeArgs): void {
   const argsRef = useRef(args);
@@ -27,11 +34,15 @@ export function useZenSwipe(args: UseZenSwipeArgs): void {
     let lastY = 0;
     let tracking = false;
     let suppressClick = false;
+    let downAt = 0;
+    let pointerType = "";
 
     const onPointerDown = (event: PointerEvent) => {
       if (event.pointerType === "mouse" && event.button !== 0) return;
       tracking = true;
       suppressClick = false;
+      downAt = Date.now();
+      pointerType = event.pointerType;
       startX = lastX = event.clientX;
       startY = lastY = event.clientY;
     };
@@ -45,6 +56,15 @@ export function useZenSwipe(args: UseZenSwipeArgs): void {
     const finish = (endX: number, endY: number) => {
       if (!tracking) return;
       tracking = false;
+      if (
+        zenSwipeBlockedBySelection({
+          pointerType,
+          selectionActive: hasLiveSelection(),
+          durationMs: Date.now() - downAt,
+        })
+      ) {
+        return;
+      }
       const { index, total, onIndexChange } = argsRef.current;
       const next = zenIndexAfterSwipe({
         startX,
