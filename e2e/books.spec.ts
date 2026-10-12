@@ -107,7 +107,7 @@ function buildEpub(): Uint8Array {
       "OEBPS/Text/cap001.xhtml": strToU8(
         chapterXml(
           null,
-          "Primer capítulo con texto suficiente para la prueba de importación.",
+          "Primer capítulo con texto suficiente para la prueba de importación. Segunda frase del mismo párrafo para probar el avance por frase.",
           ...FILLER,
         ),
       ),
@@ -223,7 +223,7 @@ function requestedSentences(body: unknown): string[] {
   });
 }
 
-/** Move the Zen pane to the last paragraph via the chapter sheet. */
+/** Move the Zen pane to the last screen via the chapter sheet. */
 async function jumpToLastParagraph(page: Page) {
   await page.getByRole("button", { name: "More book actions" }).click();
   await page.getByRole("button", { name: "Chapters" }).click();
@@ -329,7 +329,7 @@ async function savedZenIndex(page: Page): Promise<number | undefined> {
   });
 }
 
-test("reads a book in Zen and resumes at the saved paragraph", async ({
+test("reads a book in Zen, one sentence per screen, and resumes", async ({
   page,
 }) => {
   await setAppToken(page);
@@ -432,7 +432,7 @@ test("reads a book in Zen and resumes at the saved paragraph", async ({
   await page.mouse.move(dragX, dragY - 120, { steps: 6 });
   await page.mouse.up();
   await expect(page.locator(".zen-pane .para")).toContainText(
-    "Párrafo de relleno 1",
+    "Segunda frase del mismo párrafo",
   );
   await expect(page.locator(".zen-progress-label")).toHaveText(/^3\//);
   await expect(sentenceSheet).toHaveCount(0);
@@ -456,7 +456,49 @@ test("reads a book in Zen and resumes at the saved paragraph", async ({
   await expect(sentenceSheet).toHaveCount(0);
 });
 
-test("translates the Zen paragraph from the cache and pauses on failure", async ({
+test("book Zen has the article Listen control with Auto", async ({ page }) => {
+  await importBook(page);
+  await page.goto("/");
+  await page.getByRole("link", { name: /Libro de prueba/ }).click();
+
+  const listen = page.getByRole("button", { name: "Listen to original" });
+  await expect(listen).toBeVisible();
+  await expect(
+    page.getByRole("checkbox", { name: "Auto-listen on each page" }),
+  ).toBeVisible();
+
+  // The system voice is stubbed; speaking starts and stays until stopped.
+  await page.evaluate(() => {
+    Object.defineProperty(window, "speechSynthesis", {
+      configurable: true,
+      value: {
+        speaking: false,
+        pending: false,
+        paused: false,
+        cancel: () => undefined,
+        speak: () => undefined,
+        getVoices: () => [],
+      },
+    });
+  });
+  await listen.click();
+  await expect(
+    page.getByRole("button", { name: "Stop listening" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Stop listening" }).click();
+  await expect(listen).toBeVisible();
+
+  // With Auto on, turning the page starts the next sentence automatically.
+  await page
+    .getByRole("checkbox", { name: "Auto-listen on each page" })
+    .check();
+  await page.keyboard.press("ArrowDown");
+  await expect(
+    page.getByRole("button", { name: "Stop listening" }),
+  ).toBeVisible();
+});
+
+test("translates the Zen sentence from the cache and pauses on failure", async ({
   page,
 }) => {
   await importBook(page);

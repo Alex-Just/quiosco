@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { NavigateFunction } from "react-router-dom";
 import { ArticleActionsSheet } from "../components/ArticleActionsSheet";
 import { ArticleReadingToolbar } from "../components/ArticleReadingToolbar";
+import { ArticleZenListenButton } from "../components/ArticleZenListenButton";
 import { ArticleZenPane } from "../components/ArticleZenPane";
 import { ArticleZenProgress } from "../components/ArticleZenProgress";
 import { BookChapterSheet } from "../components/BookChapterSheet";
@@ -13,7 +14,6 @@ import {
   makeToggleRead,
 } from "../lib/articleActionHandlers";
 import {
-  assembleTranslatedParagraph,
   bookChapterStarts,
   bookFlatParagraphs,
   bookSentenceUnits,
@@ -29,6 +29,7 @@ import { useBookTranslation } from "../lib/useBookTranslation";
 import { useSentenceSpeech } from "../lib/useSentenceSpeech";
 import { useZenPosition } from "../lib/useZenPosition";
 import { useZenSwipe } from "../lib/useZenSwipe";
+import { loadZenAutoListen, saveZenAutoListen } from "../lib/zenAutoListen";
 
 const COPY_RESET_MS = 1500;
 
@@ -100,12 +101,14 @@ export default function BookReader({
   setArticle,
   navigate,
 }: BookReaderProps) {
-  // Books always open in Zen; a stored paragraph is restored inside it.
+  // Books always open in Zen, one sentence per screen like the article flow,
+  // and a stored screen is restored inside it.
   const [zenMode, setZenMode] = useState(true);
-  /** null until the saved Zen index has been read (avoids saving 0 too early). */
-  const [zenIndex, setZenIndex] = useState<number | null>(null);
+  /** Zen screen = sentence unit index; null until the saved one is read. */
+  const [zenUnit, setZenUnit] = useState<number | null>(null);
   /** Zen-only, off on every open: the user turns translation on explicitly. */
   const [translationMode, setTranslationMode] = useState(false);
+  const [autoListen, setAutoListen] = useState(() => loadZenAutoListen());
   const [moreOpen, setMoreOpen] = useState(false);
   const [chaptersOpen, setChaptersOpen] = useState(false);
   const [copied, setCopied] = useState<"none" | "original">("none");
@@ -128,12 +131,23 @@ export default function BookReader({
     };
   }, [article.chapters, article.text]);
 
+  /** Zen screens: one source sentence each. */
+  const paneParagraphs = useMemo(() => units.map((unit) => unit.text), [units]);
+  /** Zen screen index of each chapter's title paragraph. */
+  const chapterUnitStarts = useMemo(
+    () =>
+      chapterStarts.map((paragraph) => paragraphUnits.get(paragraph)?.[0] ?? 0),
+    [chapterStarts, paragraphUnits],
+  );
+
   const {
     menu,
     setMenu,
     hint,
     isSpeaking,
+    isZenOriginalSpeaking,
     onListen,
+    onListenZenOriginal,
     onCopySentence,
     stopSpeechForViewChange,
   } = useSentenceSpeech(translationMode ? "translation" : "original");
@@ -142,43 +156,40 @@ export default function BookReader({
     store,
     article,
     settings,
-    zenIndex,
+    anchorUnit: zenUnit,
     enabled: translationMode,
     units,
     paragraphUnits,
   });
 
   const canTranslate = Boolean(settings.appToken);
-  const currentUnits =
-    zenIndex == null ? [] : (paragraphUnits.get(zenIndex) ?? []);
-  const translatedParagraph =
-    translationMode && zenIndex != null
-      ? assembleTranslatedParagraph(
-          units,
-          currentUnits,
-          translation.translations,
-        )
+  const currentUnit = zenUnit == null ? null : (units[zenUnit] ?? null);
+  const displayedText =
+    translationMode && zenUnit != null
+      ? (translation.translations.get(zenUnit) ?? currentUnit?.text)
       : undefined;
   const statusText = translationMode
     ? translationStatusText(
         translation.status,
-        paragraphComplete(units, currentUnits, translation.translations),
+        zenUnit == null ||
+          paragraphComplete(units, [zenUnit], translation.translations),
       )
     : null;
+  const zenListenText = currentUnit?.text ?? "";
 
-  // Full-screen document-level swipe steps Zen paragraphs (the pane itself no
+  // Full-screen document-level swipe steps Zen screens (the pane itself no
   // longer owns the gesture); pause it while an overlay is open.
   useZenSwipe({
     enabled:
       zenMode &&
-      zenIndex != null &&
-      paragraphs.length > 1 &&
+      zenUnit != null &&
+      paneParagraphs.length > 1 &&
       !moreOpen &&
       !chaptersOpen &&
       !menu,
-    index: zenIndex ?? 0,
-    total: paragraphs.length,
-    onIndexChange: setZenIndex,
+    index: zenUnit ?? 0,
+    total: paneParagraphs.length,
+    onIndexChange: setZenUnit,
   });
 
   const onToggleTranslationMode = () => {
@@ -205,29 +216,49 @@ export default function BookReader({
 
   useEffect(() => {
     // Reset until the restore for a newly opened book finishes.
-    if (article.id) setZenIndex(null);
+    if (article.id) setZenUnit(null);
   }, [article.id]);
 
   const onZenRestored = useCallback((index: number) => {
-    setZenIndex(index);
+    setZenUnit(index);
   }, []);
 
-  // The position keeps the article view name; its Zen index is what resumes a
-  // book, and the scroll offset only matters once regular mode renders.
+  // Speech follows the screen: turning the page stops whatever is speaking,
+  // and with Auto on it starts the new sentence (same flow as articles).
+  const prevZenUnit = useRef(zenUnit);
+  useEffect(() => {
+    if (prevZenUnit.current === zenUnit) return;
+    prevZenUnit.current = zenUnit;
+    stopSpeechForViewChange();
+    if (!autoListen || !zenMode || zenUnit == null) return;
+    const text = units[zenUnit]?.text ?? "";
+    if (!text) return;
+    onListenZenOriginal(zenUnit, text);
+  }, [
+    zenUnit,
+    autoListen,
+    zenMode,
+    units,
+    stopSpeechForViewChange,
+    onListenZenOriginal,
+  ]);
+
+  // The position keeps the article view name; its Zen screen index is what
+  // resumes a book, and the scroll offset only matters once regular mode
+  // renders.
   useArticleScroll(store, article.id, !zenMode, "original", noop);
   useZenPosition({
     store,
     articleId: article.id,
-    totalParagraphs: paragraphs.length,
+    totalParagraphs: paneParagraphs.length,
     view: "original",
-    zenIndex,
+    zenIndex: zenUnit,
     onRestored: onZenRestored,
   });
 
   const onSelectChapter = (index: number) => {
     if (zenMode) {
-      const start = chapterStarts[index];
-      if (start != null) setZenIndex(start);
+      setZenUnit(chapterUnitStarts[index] ?? 0);
     } else {
       revealChapter(`book-chapter-${index}`);
     }
@@ -240,10 +271,10 @@ export default function BookReader({
       data-translation-status={translationMode ? translation.status : undefined}
     >
       {zenMode ? (
-        zenIndex != null && (
+        zenUnit != null && (
           <ArticleZenProgress
-            index={zenIndex}
-            total={paragraphs.length}
+            index={zenUnit}
+            total={paneParagraphs.length}
             onOpenMore={() => setMoreOpen(true)}
             progressLabel="Book progress"
             moreLabel="More book actions"
@@ -259,19 +290,29 @@ export default function BookReader({
         />
       )}
       {zenMode ? (
-        zenIndex == null ? (
+        zenUnit == null ? (
           <p className="muted">Loading…</p>
         ) : (
           <>
             <ArticleZenPane
-              paragraphs={paragraphs}
-              index={zenIndex}
-              onIndexChange={setZenIndex}
+              paragraphs={paneParagraphs}
+              index={zenUnit}
+              onIndexChange={setZenUnit}
               isSpeaking={isSpeaking}
               onOpenMenu={setMenu}
-              displayText={translatedParagraph}
+              displayText={displayedText}
             />
             {statusText && <p className="muted zen-status">{statusText}</p>}
+            <ArticleZenListenButton
+              listening={isZenOriginalSpeaking(zenUnit)}
+              autoListen={autoListen}
+              disabled={zenListenText.length === 0}
+              onClick={() => onListenZenOriginal(zenUnit, zenListenText)}
+              onAutoListenChange={(enabled) => {
+                setAutoListen(enabled);
+                saveZenAutoListen(enabled);
+              }}
+            />
           </>
         )
       ) : (

@@ -32,10 +32,10 @@ export interface BookTranslationHook {
 
 /**
  * Translation mode for one open book: a prefetch session anchored at the Zen
- * paragraph being read, and the verified translations cached for that
- * paragraph's units (units without a cache entry fall back to their source
- * text upstream, so reading never waits for a request). The session lives only
- * while the mode is on and an app token is configured.
+ * sentence being read, and the verified translation cached for that sentence
+ * (a sentence without a cache entry falls back to its source text upstream,
+ * so reading never waits for a request). The session lives only while the mode
+ * is on and an app token is configured.
  */
 export function useBookTranslation(args: {
   store: ArticleStore;
@@ -46,15 +46,23 @@ export function useBookTranslation(args: {
     rules: string;
     model: string;
   };
-  zenIndex: number | null;
+  /** Zen screen = sentence unit index; null until the position is restored. */
+  anchorUnit: number | null;
   enabled: boolean;
   /** Flat-paragraph sentence units, computed once by the caller. */
   units: readonly BookSentenceUnit[];
   /** Unit indices per flat paragraph, from the same computation. */
   paragraphUnits: ReadonlyMap<number, readonly number[]>;
 }): BookTranslationHook {
-  const { store, article, settings, zenIndex, enabled, units, paragraphUnits } =
-    args;
+  const {
+    store,
+    article,
+    settings,
+    anchorUnit,
+    enabled,
+    units,
+    paragraphUnits,
+  } = args;
   const { appToken, targetLanguage, rules, model } = settings;
   const [translations, setTranslations] =
     useState<ReadonlyMap<number, string>>(EMPTY_TRANSLATIONS);
@@ -146,17 +154,21 @@ export function useBookTranslation(args: {
     rules,
   ]);
 
-  // Re-anchor on a paragraph change (and once more when a session has just
-  // been created, driven by the version bump).
+  // Re-anchor on a screen change (and once more when a session has just been
+  // created, driven by the version bump). The session scans forward from the
+  // screen's paragraph, so a screen inside a partially translated paragraph
+  // still resumes coverage correctly.
   // biome-ignore lint/correctness/useExhaustiveDependencies: sessionVersion is the manual invalidation trigger for session creation
   useEffect(() => {
-    if (zenIndex == null) return;
-    current.current?.session.setAnchor(zenIndex);
-  }, [zenIndex, sessionVersion]);
+    if (anchorUnit == null) return;
+    const paragraph = units[anchorUnit]?.paragraphIndex;
+    if (paragraph == null) return;
+    current.current?.session.setAnchor(paragraph);
+  }, [anchorUnit, sessionVersion, units]);
 
-  // Verified cache reads for the current paragraph's units. A newer read (or
-  // session) invalidates an in-flight one, so translations can never land for
-  // a paragraph that is no longer displayed, and a slower older read cannot
+  // Verified cache read for the sentence on screen. A newer read (or session)
+  // invalidates an in-flight one, so a translation can never land for a
+  // sentence that is no longer displayed, and a slower older read cannot
   // overwrite a newer one's map.
   // biome-ignore lint/correctness/useExhaustiveDependencies: sessionVersion is the manual invalidation trigger for session updates
   useEffect(() => {
@@ -175,8 +187,7 @@ export function useBookTranslation(args: {
         const found = await readCachedTranslations({
           store,
           units,
-          unitIndices:
-            zenIndex == null ? [] : (paragraphUnits.get(zenIndex) ?? []),
+          unitIndices: anchorUnit == null ? [] : [anchorUnit],
           keyFor: session.keyFor,
           targetLanguage,
           rulesHashValue,
@@ -190,7 +201,7 @@ export function useBookTranslation(args: {
         setTranslations(found);
       })
       .catch(() => {
-        // A failed cache read (e.g. IndexedDB) leaves the paragraph on its
+        // A failed cache read (e.g. IndexedDB) leaves the sentence on its
         // source text; there is nothing newer to publish.
       });
   }, [
@@ -198,7 +209,7 @@ export function useBookTranslation(args: {
     store,
     units,
     paragraphUnits,
-    zenIndex,
+    anchorUnit,
     targetLanguage,
     sessionVersion,
   ]);
