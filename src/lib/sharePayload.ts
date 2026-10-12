@@ -86,7 +86,10 @@ export async function readPendingBook(
   const blob = await response.blob();
   // A zero-byte body means the browser shared "nothing" (or a truncated
   // share); treat it as nothing received rather than an unreadable file.
-  if (blob.size === 0) return null;
+  if (blob.size === 0) {
+    await cache.delete(PENDING_BOOK_KEY);
+    return null;
+  }
   const encodedName = response.headers.get(BOOK_NAME_HEADER);
   let name = DEFAULT_BOOK_NAME;
   if (encodedName) {

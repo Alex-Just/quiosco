@@ -64,7 +64,7 @@ export default function SharePage() {
 
   return (
     <section className="flow">
-      <h1>Adding article…</h1>
+      <h1>Adding…</h1>
       <p className="muted">Loading…</p>
     </section>
   );

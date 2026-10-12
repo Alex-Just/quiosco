@@ -14,6 +14,8 @@ type AddBookFormProps = {
   store: ArticleStore;
   /** EPUB received through the Android share sheet; parsed like a picked file. */
   sharedFile?: File | null;
+  /** Called once the shared file has been handed to the parse path. */
+  onSharedConsumed?: () => void;
   onSaved: (id: string) => void;
 };
 
@@ -25,7 +27,12 @@ function fileNameTitle(fileName: string): string {
 const countChars = (chapters: ParsedBook["chapters"]) =>
   chapters.reduce((total, chapter) => total + chapter.text.length, 0);
 
-export function AddBookForm({ store, sharedFile, onSaved }: AddBookFormProps) {
+export function AddBookForm({
+  store,
+  sharedFile,
+  onSharedConsumed,
+  onSaved,
+}: AddBookFormProps) {
   const [fileName, setFileName] = useState("");
   const [progress, setProgress] = useState<{
     done: number;
@@ -42,10 +49,11 @@ export function AddBookForm({ store, sharedFile, onSaved }: AddBookFormProps) {
   // The shared file is parsed once, exactly like a picked one.
   const consumedSharedRef = useRef<File | null>(null);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: onFile is a fresh closure; the shared file identity is the trigger
+  // biome-ignore lint/correctness/useExhaustiveDependencies: onFile/onSharedConsumed are fresh closures; the shared file identity is the trigger
   useEffect(() => {
     if (!sharedFile || consumedSharedRef.current === sharedFile) return;
     consumedSharedRef.current = sharedFile;
+    onSharedConsumed?.();
     void onFile(sharedFile);
   }, [sharedFile]);
 

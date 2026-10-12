@@ -193,6 +193,7 @@ export default function AddPage() {
         <AddBookForm
           store={store}
           sharedFile={sharedBook}
+          onSharedConsumed={() => setSharedBook(null)}
           onSaved={(id) => navigate(`/article/${id}`, { replace: true })}
         />
       )}

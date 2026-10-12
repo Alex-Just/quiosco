@@ -254,7 +254,6 @@ test("imports an EPUB book from the Add page and lists it", async ({
   await expect(page.getByText(/Autora Prueba ·/)).toBeVisible();
 });
 
-/** Zen index of the first saved local position (undefined when none). */
 /** The service worker must control the page so POST /share reaches its route. */
 async function waitForServiceWorker(page: Page) {
   await page.goto("/");
@@ -291,6 +290,23 @@ test("a shared EPUB file opens the Add page in Book mode and imports", async ({
   await expect(page.locator(".zen-pane .para")).toContainText("Capítulo uno");
 });
 
+test("an empty shared file shows Nothing received", async ({ page }) => {
+  await waitForServiceWorker(page);
+  await page.evaluate(async () => {
+    const formData = new FormData();
+    formData.set(
+      "epub",
+      new File([], "vacio.epub", { type: "application/epub+zip" }),
+    );
+    await fetch("/share", { method: "POST", body: formData });
+  });
+  await page.goto("/share");
+  await expect(
+    page.getByRole("heading", { name: "Nothing received" }),
+  ).toBeVisible();
+});
+
+/** Zen index of the first saved local position (undefined when none). */
 async function savedZenIndex(page: Page): Promise<number | undefined> {
   return page.evaluate(async () => {
     const db = await new Promise<IDBDatabase>((resolve, reject) => {

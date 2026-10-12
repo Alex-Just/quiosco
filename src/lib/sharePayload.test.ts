@@ -75,10 +75,31 @@ describe("sharePayload", () => {
     await expect(readPendingBook(storage)).resolves.toBeNull();
   });
 
+  it("round-trips a percent-encoded file name and defaults a missing one", async () => {
+    const storage = fakeCacheStorage();
+    await storePendingBook(
+      new File([new Uint8Array([1])], "mi libro ñoño.epub", {
+        type: "application/epub+zip",
+      }),
+      storage,
+    );
+    await expect(readPendingBook(storage)).resolves.toMatchObject({
+      name: "mi libro ñoño.epub",
+    });
+
+    const cache = await storage.open("quiosco-share");
+    await cache.put("/__pending-book", new Response(new Uint8Array([1])));
+    await expect(readPendingBook(storage)).resolves.toMatchObject({
+      name: "book.epub",
+    });
+  });
+
   it("treats a zero-byte pending book as nothing received", async () => {
     const storage = fakeCacheStorage();
     const cache = await storage.open("quiosco-share");
     await cache.put("/__pending-book", new Response(new Blob([])));
     await expect(readPendingBook(storage)).resolves.toBeNull();
+    // The inert entry is cleaned up rather than left behind.
+    await expect(cache.match("/__pending-book")).resolves.toBeUndefined();
   });
 });
