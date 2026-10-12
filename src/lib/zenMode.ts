@@ -4,7 +4,9 @@ export const ZEN_SWIPE_MIN_DISTANCE_PX = 36;
 export const ZEN_SWIPE_MAX_HORIZONTAL_RATIO = 1;
 
 export function clampZenIndex(index: number, total: number): number {
-  if (total <= 0) return 0;
+  // Keep the index when the paragraph list is briefly empty (load/nav),
+  // so a restore is not wiped to 0 before content arrives.
+  if (total <= 0) return index;
   if (index < 0) return 0;
   if (index > total - 1) return total - 1;
   return index;

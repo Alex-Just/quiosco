@@ -31,7 +31,8 @@ export default function ArticlePage() {
   const [view, setView] = useState<ArticleView>("translation");
   const [moreOpen, setMoreOpen] = useState(false);
   const [zenMode, setZenMode] = useState(false);
-  const [zenIndex, setZenIndex] = useState(0);
+  /** null until the saved Zen index has been read (avoids saving 0 too early). */
+  const [zenIndex, setZenIndex] = useState<number | null>(null);
 
   const { article, setArticle, now, running } = useArticleDocument(
     store,
@@ -63,7 +64,15 @@ export default function ArticlePage() {
   const zenAvailable = compactChrome && paragraphs.length > 0;
 
   useEffect(() => {
-    setZenIndex((index) => clampZenIndex(index, paragraphs.length));
+    // Reset until restore finishes for the newly opened article.
+    if (id !== undefined) setZenIndex(null);
+  }, [id]);
+
+  useEffect(() => {
+    if (paragraphs.length <= 0) return;
+    setZenIndex((index) =>
+      index == null ? index : clampZenIndex(index, paragraphs.length),
+    );
   }, [paragraphs.length]);
 
   // Finished articles open in Zen; leave Zen off when it is not available.
@@ -82,21 +91,21 @@ export default function ArticlePage() {
     };
   }, [zenMode]);
 
-  const onRestoreZenIndex = useCallback((index: number) => {
+  const onZenRestored = useCallback((index: number) => {
     setZenIndex(index);
   }, []);
 
   // Restore and persist the reading position; skip scroll while Zen owns nav.
   useArticleScroll(store, id, body.length > 0 && !zenMode, view, setView);
-  useZenPosition(
+  useZenPosition({
     store,
-    id,
-    paragraphs.length > 0,
+    articleId: id,
+    // Wait until the loaded article matches the route id.
+    totalParagraphs: article?.id === id ? paragraphs.length : 0,
     view,
     zenIndex,
-    paragraphs.length,
-    onRestoreZenIndex,
-  );
+    onRestored: onZenRestored,
+  });
 
   const switchView = useCallback(
     (next: ArticleView) => {
@@ -144,13 +153,17 @@ export default function ArticlePage() {
       )}
       {body ? (
         zenMode ? (
-          <ArticleZenPane
-            paragraphs={paragraphs}
-            index={zenIndex}
-            onIndexChange={setZenIndex}
-            isSpeaking={isSpeaking}
-            onOpenMenu={setMenu}
-          />
+          zenIndex == null ? (
+            <p className="muted">Loading…</p>
+          ) : (
+            <ArticleZenPane
+              paragraphs={paragraphs}
+              index={zenIndex}
+              onIndexChange={setZenIndex}
+              isSpeaking={isSpeaking}
+              onOpenMenu={setMenu}
+            />
+          )
         ) : (
           <ArticleText
             paragraphs={paragraphs}

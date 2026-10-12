@@ -11,7 +11,10 @@ describe("clampZenIndex", () => {
     expect(clampZenIndex(-1, 5)).toBe(0);
     expect(clampZenIndex(2, 5)).toBe(2);
     expect(clampZenIndex(9, 5)).toBe(4);
-    expect(clampZenIndex(0, 0)).toBe(0);
+  });
+
+  it("does not wipe a restored index when total is briefly 0", () => {
+    expect(clampZenIndex(11, 0)).toBe(11);
   });
 });
 
