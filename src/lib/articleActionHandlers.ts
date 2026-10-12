@@ -1,5 +1,6 @@
 import type { NavigateFunction } from "react-router-dom";
 import {
+  archiveArticleAndLeave,
   cancelArticleTranslation,
   copyArticleText,
   deleteArticle,
@@ -41,6 +42,19 @@ export function makeOnDelete(
 ): () => void {
   return () => {
     if (store && article) void deleteArticle(store, article, navigate);
+  };
+}
+
+export function makeArchiveAndLeave(
+  store: ArticleStore | null,
+  article: Article | null,
+  setArticle: (article: Article) => void,
+  navigate: NavigateFunction,
+): () => void {
+  return () => {
+    if (store && article) {
+      void archiveArticleAndLeave(store, article, setArticle, navigate);
+    }
   };
 }
 

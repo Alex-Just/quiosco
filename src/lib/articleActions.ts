@@ -34,6 +34,17 @@ export async function toggleArticleArchive(
   );
 }
 
+/** Archive from the Zen reading screen, then return to the list like Delete. */
+export async function archiveArticleAndLeave(
+  store: ArticleStore,
+  article: Article,
+  setArticle: (article: Article) => void,
+  navigate: NavigateFunction,
+): Promise<void> {
+  await toggleArticleArchive(store, article, setArticle);
+  navigate("/");
+}
+
 export async function deleteArticle(
   store: ArticleStore,
   article: Article,

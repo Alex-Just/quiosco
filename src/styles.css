@@ -430,6 +430,16 @@ button.danger {
   font-size: 0.85rem;
 }
 
+.zen-end {
+  display: flex;
+  gap: 8px;
+  margin: 24px 0 0;
+}
+
+.zen-end button {
+  flex: 1;
+}
+
 .sentence {
   display: inline;
   min-height: 0;

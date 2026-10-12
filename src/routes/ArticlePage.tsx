@@ -7,6 +7,7 @@ import { ArticleReadingToolbar } from "../components/ArticleReadingToolbar";
 import { ArticleText } from "../components/ArticleText";
 import { ArticleTranslationStatus } from "../components/ArticleTranslationStatus";
 import { ArticleViewControls } from "../components/ArticleViewControls";
+import { ArticleZenEndActions } from "../components/ArticleZenEndActions";
 import { ArticleZenPane } from "../components/ArticleZenPane";
 import { SentenceSheet } from "../components/SentenceSheet";
 import { articleChromeCompact } from "../lib/articleChrome";
@@ -22,6 +23,7 @@ import { useArticleScroll } from "../lib/useArticleScroll";
 import { useSentenceSpeech } from "../lib/useSentenceSpeech";
 import { useStore } from "../lib/useStore";
 import { useZenPosition } from "../lib/useZenPosition";
+import { zenEndActions } from "../lib/zenEndActions";
 import { clampZenIndex } from "../lib/zenMode";
 
 export default function ArticlePage() {
@@ -156,13 +158,20 @@ export default function ArticlePage() {
           zenIndex == null ? (
             <p className="muted">Loading…</p>
           ) : (
-            <ArticleZenPane
-              paragraphs={paragraphs}
-              index={zenIndex}
-              onIndexChange={setZenIndex}
-              isSpeaking={isSpeaking}
-              onOpenMenu={setMenu}
-            />
+            <>
+              <ArticleZenPane
+                paragraphs={paragraphs}
+                index={zenIndex}
+                onIndexChange={setZenIndex}
+                isSpeaking={isSpeaking}
+                onOpenMenu={setMenu}
+              />
+              <ArticleZenEndActions
+                actions={zenEndActions(article)}
+                onArchive={actions.onArchiveAndLeave}
+                onDelete={actions.onDelete}
+              />
+            </>
           )
         ) : (
           <ArticleText

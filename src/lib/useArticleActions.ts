@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { NavigateFunction } from "react-router-dom";
 import {
+  makeArchiveAndLeave,
   makeCopy,
   makeOnCancel,
   makeOnDelete,
@@ -21,6 +22,7 @@ export function useArticleActions(
   copied: "none" | "translation" | "original";
   toggleRead: () => void;
   toggleArchive: () => void;
+  onArchiveAndLeave: () => void;
   onDelete: () => void;
   onCancel: () => void;
   onRetranslate: () => void;
@@ -36,6 +38,12 @@ export function useArticleActions(
     copied,
     toggleRead: makeToggleRead(store, article, setArticle),
     toggleArchive: makeToggleArchive(store, article, setArticle),
+    onArchiveAndLeave: makeArchiveAndLeave(
+      store,
+      article,
+      setArticle,
+      navigate,
+    ),
     onDelete: makeOnDelete(store, article, navigate),
     onCancel: makeOnCancel(store, article, setArticle),
     onRetranslate: makeOnRetranslate({
