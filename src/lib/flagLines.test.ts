@@ -35,8 +35,8 @@ describe("gapBeforeSentence", () => {
     // Regression: ¿…? used to break layout when this gap lived inside the
     // previous inline sentence button; the gap string itself must stay blank.
     expect(gapBeforeSentence("🇷🇺 Где Хагрид?")).toBe("\n\n");
-    expect(
-      spaceFlagLines("🇪🇸 ¿Dónde está Hagrid?\n🇷🇺 Где Хагрид?"),
-    ).toBe("🇪🇸 ¿Dónde está Hagrid?\n\n🇷🇺 Где Хагрид?");
+    expect(spaceFlagLines("🇪🇸 ¿Dónde está Hagrid?\n🇷🇺 Где Хагрид?")).toBe(
+      "🇪🇸 ¿Dónde está Hagrid?\n\n🇷🇺 Где Хагрид?",
+    );
   });
 });
