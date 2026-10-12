@@ -23,7 +23,7 @@ import { useArticleScroll } from "../lib/useArticleScroll";
 import { useSentenceSpeech } from "../lib/useSentenceSpeech";
 import { useStore } from "../lib/useStore";
 import { useZenPosition } from "../lib/useZenPosition";
-import { zenEndActions } from "../lib/zenEndActions";
+import { isZenEndPage, zenEndActions } from "../lib/zenEndActions";
 import { clampZenIndex } from "../lib/zenMode";
 
 export default function ArticlePage() {
@@ -166,11 +166,13 @@ export default function ArticlePage() {
                 isSpeaking={isSpeaking}
                 onOpenMenu={setMenu}
               />
-              <ArticleZenEndActions
-                actions={zenEndActions(article)}
-                onArchive={actions.onArchiveAndLeave}
-                onDelete={actions.onDelete}
-              />
+              {isZenEndPage(zenIndex, paragraphs.length) && (
+                <ArticleZenEndActions
+                  actions={zenEndActions(article)}
+                  onArchive={actions.onArchiveAndLeave}
+                  onDelete={actions.onDelete}
+                />
+              )}
             </>
           )
         ) : (

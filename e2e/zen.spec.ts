@@ -81,6 +81,29 @@ test("zen end block archives below the article text and returns to the list", as
   await page.waitForURL((url) => url.pathname === "/");
 });
 
+test("zen end block hides between the first and last page", async ({
+  page,
+}) => {
+  await seedDoneArticle(page, "zen-pages");
+  await page.goto("/article/zen-pages");
+
+  const archive = page.getByRole("button", { name: "Archive", exact: true });
+
+  // First page.
+  await expect(page.getByText("1/3")).toBeVisible();
+  await expect(archive).toBeVisible();
+
+  // Middle page: no actions.
+  await page.keyboard.press("ArrowDown");
+  await expect(page.getByText("2/3")).toBeVisible();
+  await expect(archive).toHaveCount(0);
+
+  // Last page.
+  await page.keyboard.press("ArrowDown");
+  await expect(page.getByText("3/3")).toBeVisible();
+  await expect(archive).toBeVisible();
+});
+
 test("zen end block hides Archive once the article is archived", async ({
   page,
 }) => {
