@@ -96,11 +96,17 @@ test("zen progress line tracks the current paragraph", async ({ page }) => {
 
   // ⋯ sits on the progress row, to the right of the meter.
   await expect(more).toBeVisible();
+  const progressBox = await page.locator(".zen-progress").boundingBox();
   const meterBox = await page.locator(".zen-progress-meter").boundingBox();
   const moreBox = await more.boundingBox();
-  if (!meterBox || !moreBox) throw new Error("missing bounding boxes");
+  const paraBox = await page.locator(".zen-pane .para").boundingBox();
+  if (!progressBox || !meterBox || !moreBox || !paraBox) {
+    throw new Error("missing bounding boxes");
+  }
   expect(moreBox.x).toBeGreaterThanOrEqual(meterBox.x + meterBox.width);
   expect(Math.abs(moreBox.y - meterBox.y)).toBeLessThan(24);
+  // Fixed chrome must not cover the article text.
+  expect(paraBox.y).toBeGreaterThanOrEqual(progressBox.y + progressBox.height);
 
   // Count lives in the top chrome, not inside the paragraph.
   await expect(page.locator(".zen-pane .para-index")).toHaveCount(0);

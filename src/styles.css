@@ -10,6 +10,9 @@
   --danger: #d92d20;
   --radius: 14px;
   --tap: 44px;
+  --zen-progress-pad-top: 8px;
+  --zen-progress-pad-bottom: 16px;
+  --zen-progress-control-size: 40px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -104,7 +107,13 @@ body.zen-active {
 
 body.zen-active .app {
   min-height: 100dvh;
-  padding-top: calc(18px + env(safe-area-inset-top));
+  /* Clear the fixed Zen progress row (safe area + pads + more-button height). */
+  padding-top: calc(
+    env(safe-area-inset-top) +
+    var(--zen-progress-pad-top) +
+    var(--zen-progress-control-size) +
+    var(--zen-progress-pad-bottom)
+  );
   touch-action: none;
 }
 
@@ -425,15 +434,19 @@ button.danger {
   right: 0;
   z-index: 30;
   display: flex;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 10px;
-  padding: calc(8px + env(safe-area-inset-top)) 16px 16px;
+  padding: calc(var(--zen-progress-pad-top) + env(safe-area-inset-top)) 16px
+    var(--zen-progress-pad-bottom);
+  background: var(--bg);
   pointer-events: none;
 }
 
 .zen-progress-meter {
   display: flex;
   flex: 1;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 10px;
   min-width: 0;
@@ -464,6 +477,9 @@ button.danger {
 }
 
 .zen-progress-more {
+  flex: 0 0 auto;
+  min-width: var(--zen-progress-control-size);
+  min-height: var(--zen-progress-control-size);
   pointer-events: auto;
 }
 
