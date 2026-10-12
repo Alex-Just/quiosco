@@ -169,9 +169,7 @@ describe("splitLeadingNumber", () => {
 
   it("drops a bare number before a same-line flag", () => {
     expect(
-      splitLeadingNumber(
-        "3 🇪🇸 Esto explica en gran parte la escasa demanda.",
-      ),
+      splitLeadingNumber("3 🇪🇸 Esto explica en gran parte la escasa demanda."),
     ).toEqual({
       number: "3",
       text: "🇪🇸 Esto explica en gran parte la escasa demanda.",
