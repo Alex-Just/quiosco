@@ -15,6 +15,25 @@ export type TranslationStatus = "pending" | "running" | "done" | "error";
 export type Rung = "direct" | "googlebot" | "jina" | "wayback" | "archive_ph";
 export type Via = Rung | "manual";
 
+/** Absent on legacy rows, which are regular articles. */
+export type ArticleKind = "article" | "book";
+
+export interface BookChapter {
+  title: string;
+  text: string;
+}
+
+/** Cached sentence translation; keyed by a hash of source and translation context. */
+export interface SentenceCacheEntry {
+  key: string;
+  source: string;
+  translation: string;
+  targetLanguage: string;
+  rulesHash: string;
+  model: string;
+  createdAt: number;
+}
+
 export interface Article {
   id: string;
   url: string | null;
@@ -22,6 +41,11 @@ export interface Article {
   site: string | null;
   text: string;
   via: Via;
+  /** Absent means a regular article. */
+  kind?: ArticleKind;
+  author?: string | null;
+  bookLanguage?: string | null;
+  chapters?: BookChapter[];
   translation: string | null;
   /** Streamed tail of the chunk in flight; only set while translating. */
   partial?: string | null;

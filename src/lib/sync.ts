@@ -31,8 +31,11 @@ export async function syncNow(
   const all = await store.listAll();
   // Rows written before the dirty flag existed have no flag at all: treat
   // them as dirty so an already-deployed library backfills on first sync.
-  // The accepted echo writes `dirty: false`, so this converges.
-  const dirty = all.filter((article) => article.dirty !== false);
+  // The accepted echo writes `dirty: false`, so this converges. Books are
+  // device-local, so they and their tombstones never leave the device.
+  const dirty = all.filter(
+    (article) => article.dirty !== false && article.kind !== "book",
+  );
   const batches = batchRows(dirty);
   const pushedIds = new Set<string>();
   let settingsRow =

@@ -9,7 +9,7 @@ const PARAGRAPHS = [
 /**
  * Seeding a finished article directly is the only hermetic way to reach Zen:
  * the translation phase needs the Zen API, which e2e stubs out. The app opens
- * the same IndexedDB ("quiosco", v2), so the stores already exist and this
+ * the same IndexedDB ("quiosco", v3), so the stores already exist and this
  * upgrade handler is a no-op.
  */
 async function seedDoneArticle(page: Page, id: string, status = "unread") {
@@ -33,7 +33,7 @@ async function seedDoneArticle(page: Page, id: string, status = "unread") {
         updatedAt: Date.now(),
       };
       await new Promise<void>((resolve, reject) => {
-        const req = indexedDB.open("quiosco", 2);
+        const req = indexedDB.open("quiosco", 3);
         req.onupgradeneeded = () => {
           const db = req.result;
           if (!db.objectStoreNames.contains("articles")) {
@@ -43,6 +43,9 @@ async function seedDoneArticle(page: Page, id: string, status = "unread") {
           }
           if (!db.objectStoreNames.contains("positions")) {
             db.createObjectStore("positions", { keyPath: "id" });
+          }
+          if (!db.objectStoreNames.contains("sentences")) {
+            db.createObjectStore("sentences", { keyPath: "key" });
           }
         };
         req.onsuccess = () => {

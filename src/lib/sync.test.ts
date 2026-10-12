@@ -101,6 +101,37 @@ describe("syncNow", () => {
     store.close();
   });
 
+  it("never pushes books, which are deleted without tombstones", async () => {
+    const store = await createStore(`test-${randomUUID()}`);
+    const article = makeArticle();
+    const book = makeArticle({
+      kind: "book",
+      chapters: [{ title: "C1", text: "Hola." }],
+    });
+    const removedBook = makeArticle({ kind: "book" });
+    await store.put(article);
+    await store.put(book);
+    await store.put(removedBook);
+    await store.remove(removedBook.id);
+    expect((await store.listAll()).map((row) => row.id)).not.toContain(
+      removedBook.id,
+    );
+
+    const seen: SyncRequest[] = [];
+    const api = fakeApi((request) => {
+      seen.push(request);
+      return {
+        cursor: 5,
+        articles: request.articles.map((row) => ({ ...row })),
+        settings: null,
+      };
+    });
+    const summary = await syncNow(store, settings, api, fakeStorage());
+    expect(seen[0]?.articles.map((row) => row.id)).toEqual([article.id]);
+    expect(summary.pushed).toBe(1);
+    store.close();
+  });
+
   it("applies remote rows, keeps newer local edits and dispatches an event", async () => {
     const store = await createStore(`test-${randomUUID()}`);
     const local = makeArticle({ updatedAt: 100 });

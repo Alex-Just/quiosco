@@ -17,6 +17,23 @@ read/unread/archived list with copy-to-clipboard.
 - **Storage** — IndexedDB on each device (offline-first), synced across your
   devices through Cloudflare D1 (`/api/sync`). See "Sync (D1)" below.
 
+## Books
+
+Import an `.epub` from the Add page (**Type: Book**). Quiosco parses it on the
+device and keeps its chapters as text; the `.epub` file itself is not stored.
+
+Books share the library, actions, and read/unread/archived states with
+articles, but they are **local-only**: they never enter `/api/sync`, and
+reading position stays local, exactly as it does for articles.
+
+A book opens in Zen. Translation mode is a Zen-only toggle, off at every open:
+when on, it translates the current paragraph sentence by sentence, prefetches
+the pages ahead, and spends from the same Zen daily budget as articles.
+
+Every translated sentence is cached permanently, keyed by content — the cache
+is shared across books, so a sentence is never translated twice. The importer
+adds a single runtime dependency: `fflate` (EPUB unzip).
+
 ## Development
 
 ```bash

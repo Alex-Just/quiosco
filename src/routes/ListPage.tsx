@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { listSource } from "../lib/articleDisplayHelpers";
 import { formatDate } from "../lib/format";
 import { repairGarbageTitle } from "../lib/repairGarbageTitle";
 import type { Article } from "../lib/types";
@@ -71,7 +72,7 @@ export default function ListPage() {
               <Link className="article-row" to={`/article/${article.id}`}>
                 <span className="article-title">{article.title}</span>
                 <span className="article-meta">
-                  {article.site ?? "manual"} · {formatDate(article.createdAt)}
+                  {listSource(article)} · {formatDate(article.createdAt)}
                   {article.translationStatus === "error"
                     ? " · translation failed"
                     : ""}

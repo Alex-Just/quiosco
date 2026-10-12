@@ -4,6 +4,10 @@ type ArticleZenProgressProps = {
   index: number;
   total: number;
   onOpenMore: () => void;
+  /** Accessible name of the progress bar. */
+  progressLabel?: string;
+  /** Accessible name of the ⋯ control. */
+  moreLabel?: string;
 };
 
 /** Top-of-screen page count, solid progress line, and ⋯ menu for Zen. */
@@ -11,6 +15,8 @@ export function ArticleZenProgress({
   index,
   total,
   onOpenMore,
+  progressLabel = "Article progress",
+  moreLabel = "More article actions",
 }: ArticleZenProgressProps) {
   if (total <= 0) return null;
   const label = zenProgressLabel(index, total);
@@ -19,7 +25,7 @@ export function ArticleZenProgress({
       <div
         className="zen-progress-meter"
         role="progressbar"
-        aria-label="Article progress"
+        aria-label={progressLabel}
         aria-valuemin={1}
         aria-valuemax={total}
         aria-valuenow={index + 1}
@@ -36,7 +42,7 @@ export function ArticleZenProgress({
       <button
         type="button"
         className="more-button zen-progress-more"
-        aria-label="More article actions"
+        aria-label={moreLabel}
         onClick={onOpenMore}
       >
         ⋯

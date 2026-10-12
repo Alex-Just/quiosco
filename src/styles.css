@@ -390,6 +390,11 @@ button.danger {
   text-align: center;
 }
 
+.sheet-hint {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
 .article-meta {
   color: var(--muted);
   font-size: 0.8125rem;
@@ -417,6 +422,12 @@ button.danger {
 
 .article-text .para:last-child {
   margin-bottom: 0;
+}
+
+/* Skip layout for off-screen chapters; 800px approximates a chapter. */
+.book-chapter {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 800px;
 }
 
 .article-end {
@@ -526,6 +537,12 @@ button.danger {
   flex: 1;
 }
 
+.zen-status {
+  margin: 20px 0 0;
+  text-align: center;
+  font-size: 0.85rem;
+}
+
 .sentence {
   display: inline;
   min-height: 0;
@@ -567,8 +584,13 @@ button.danger {
   background: rgba(0, 0, 0, 0.55);
 }
 
+/* Bottom sheet: scrolls internally when taller than the viewport (long
+   chapter lists, short landscape screens); short sheets render as before. */
 .sheet {
   width: 100%;
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--line);
   border-radius: 16px 16px 0 0;
@@ -652,6 +674,25 @@ button.danger {
 .add input:focus,
 .add textarea:focus {
   border-color: var(--accent);
+}
+
+.book-form {
+  display: flex;
+  flex-direction: column;
+}
+
+.book-preview {
+  margin: 14px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+}
+
+.book-preview p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
 }
 
 .settings .checkbox,

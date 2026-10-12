@@ -1,10 +1,5 @@
-import { gapBeforeSentence, spaceFlagLines } from "../lib/flagLines";
-import {
-  splitLeadingNumber,
-  splitSentences,
-  stripSentenceMarkers,
-} from "../lib/sentences";
 import type { SentenceMenu } from "../lib/useSentenceSpeech";
+import { SentenceParagraph } from "./SentenceParagraph";
 
 type ArticleTextProps = {
   paragraphs: string[];
@@ -19,46 +14,17 @@ export function ArticleText({
 }: ArticleTextProps) {
   return (
     <div className="article-text">
-      {paragraphs.map((paragraph, paragraphIndex) => {
-        const sentences = splitSentences(paragraph);
-        const first = sentences[0] ? splitLeadingNumber(sentences[0]) : null;
-        return (
-          // biome-ignore lint/suspicious/noArrayIndexKey: sentences have no stable id
-          <p className="para" key={paragraphIndex}>
-            {first?.number && (
-              <span className="para-index">
-                {first.number}/{paragraphs.length}
-              </span>
-            )}
-            {sentences.map((sentence, sentenceIndex) => {
-              const raw = sentenceIndex === 0 && first ? first.text : sentence;
-              const next = sentences[sentenceIndex + 1];
-              return (
-                <button
-                  // biome-ignore lint/suspicious/noArrayIndexKey: sentences have no stable id
-                  key={sentenceIndex}
-                  type="button"
-                  className={
-                    isSpeaking(paragraphIndex, sentenceIndex)
-                      ? "sentence speaking"
-                      : "sentence"
-                  }
-                  onClick={() =>
-                    onOpenMenu({
-                      paragraph: paragraphIndex,
-                      sentenceIndex,
-                      sentence: stripSentenceMarkers(sentence),
-                    })
-                  }
-                >
-                  {spaceFlagLines(raw)}
-                  {next ? gapBeforeSentence(next) : ""}
-                </button>
-              );
-            })}
-          </p>
-        );
-      })}
+      {paragraphs.map((paragraph, paragraphIndex) => (
+        <SentenceParagraph
+          // biome-ignore lint/suspicious/noArrayIndexKey: paragraphs have no stable id
+          key={paragraphIndex}
+          paragraph={paragraph}
+          paragraphIndex={paragraphIndex}
+          totalParagraphs={paragraphs.length}
+          isSpeaking={isSpeaking}
+          onOpenMenu={onOpenMenu}
+        />
+      ))}
     </div>
   );
 }

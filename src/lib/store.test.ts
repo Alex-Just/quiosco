@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import "fake-indexeddb/auto";
 import { randomUUID } from "node:crypto";
+import { openDB } from "idb";
 import { describe, expect, it, vi } from "vitest";
 import { createStore } from "./store";
 import { STORE_CHANGE_EVENT } from "./storeEvents";
@@ -155,6 +156,77 @@ describe("store", () => {
       view: "original",
       zenIndex: 3,
     });
+    store.close();
+  });
+
+  it("round-trips sentence cache entries in batches", async () => {
+    const store = await createStore(`test-${randomUUID()}`);
+    const entry = {
+      key: "k1",
+      source: "El Sr. García llegó.",
+      translation: "Mr. García arrived.",
+      targetLanguage: "English",
+      rulesHash: "r1",
+      model: "m",
+      createdAt: 1,
+    };
+    await store.putSentences([entry, { ...entry, key: "k2" }]);
+    const found = await store.getSentences(["k1", "missing", "k2"]);
+    expect(found.map((e) => e.key).sort()).toEqual(["k1", "k2"]);
+    expect(found[0]?.translation).toBe("Mr. García arrived.");
+    store.close();
+  });
+
+  it("upgrades a v2 database without losing articles or positions", async () => {
+    const name = `test-${randomUUID()}`;
+    const legacy = await openDB(name, 2, {
+      upgrade(db) {
+        const articles = db.createObjectStore("articles", { keyPath: "id" });
+        articles.createIndex("createdAt", "createdAt");
+        articles.createIndex("url", "url");
+        db.createObjectStore("positions", { keyPath: "id" });
+      },
+    });
+    await legacy.put("articles", makeArticle());
+    const id = await legacy.getAllKeys("articles");
+    await legacy.put("positions", {
+      id: id[0],
+      y: 5,
+      view: "original",
+      updatedAt: 1,
+    });
+    legacy.close();
+
+    const store = await createStore(name);
+    expect(await store.list()).toHaveLength(1);
+    expect(await store.getScrollPosition(String(id[0]))).toMatchObject({
+      y: 5,
+    });
+    await store.putSentences([]);
+    store.close();
+  });
+
+  it("deleting a book hard-deletes it but leaves its sentence cache intact", async () => {
+    const store = await createStore(`test-${randomUUID()}`);
+    const book = makeArticle({ kind: "book" });
+    await store.put(book);
+    await store.putSentences([
+      {
+        key: "k1",
+        source: "Hola.",
+        translation: "Hi.",
+        targetLanguage: "English",
+        rulesHash: "r1",
+        model: "m",
+        createdAt: 1,
+      },
+    ]);
+    await store.remove(book.id);
+    expect(await store.get(book.id)).toBeUndefined();
+    expect((await store.listAll()).some((row) => row.id === book.id)).toBe(
+      false,
+    );
+    expect(await store.getSentences(["k1"])).toHaveLength(1);
     store.close();
   });
 });

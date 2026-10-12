@@ -1,6 +1,11 @@
 import { type DBSchema, type IDBPDatabase, openDB } from "idb";
 import { notifyStoreChange } from "./storeEvents";
-import type { Article, ArticleView, ScrollPosition } from "./types";
+import type {
+  Article,
+  ArticleView,
+  ScrollPosition,
+  SentenceCacheEntry,
+} from "./types";
 
 interface QuioscoDB extends DBSchema {
   articles: {
@@ -11,6 +16,10 @@ interface QuioscoDB extends DBSchema {
   positions: {
     key: string;
     value: ScrollPosition;
+  };
+  sentences: {
+    key: string;
+    value: SentenceCacheEntry;
   };
 }
 
@@ -30,6 +39,8 @@ export interface ArticleStore {
     view: ArticleView,
     zenIndex?: number,
   ): Promise<void>;
+  getSentences(keys: readonly string[]): Promise<SentenceCacheEntry[]>;
+  putSentences(entries: readonly SentenceCacheEntry[]): Promise<void>;
   close(): void;
 }
 
@@ -37,7 +48,7 @@ export async function createStore(
   dbName = "quiosco",
   onChange?: () => void,
 ): Promise<ArticleStore> {
-  const db = await openDB<QuioscoDB>(dbName, 2, {
+  const db = await openDB<QuioscoDB>(dbName, 3, {
     upgrade(database: IDBPDatabase<QuioscoDB>, oldVersion: number) {
       if (oldVersion < 1) {
         const store = database.createObjectStore("articles", {
@@ -48,6 +59,9 @@ export async function createStore(
       }
       if (oldVersion < 2) {
         database.createObjectStore("positions", { keyPath: "id" });
+      }
+      if (oldVersion < 3) {
+        database.createObjectStore("sentences", { keyPath: "key" });
       }
     },
   });
@@ -86,12 +100,18 @@ export async function createStore(
     async remove(id) {
       const existing = await db.get("articles", id);
       if (!existing || existing.deleted) return;
-      await db.put("articles", {
-        ...existing,
-        deleted: true,
-        dirty: true,
-        updatedAt: Date.now(),
-      });
+      if (existing.kind === "book") {
+        // Books never sync, so a tombstone would keep their chapters around
+        // forever; delete the row outright. The sentence cache is untouched.
+        await db.delete("articles", id);
+      } else {
+        await db.put("articles", {
+          ...existing,
+          deleted: true,
+          dirty: true,
+          updatedAt: Date.now(),
+        });
+      }
       await db.delete("positions", id);
       notifyStoreChange(id);
       onChange?.();
@@ -119,6 +139,19 @@ export async function createStore(
         zenIndex: zenIndex !== undefined ? zenIndex : existing?.zenIndex,
         updatedAt: Date.now(),
       });
+    },
+    async getSentences(keys) {
+      const found = await Promise.all(
+        keys.map((key) => db.get("sentences", key)),
+      );
+      return found.filter(
+        (entry): entry is SentenceCacheEntry => entry !== undefined,
+      );
+    },
+    async putSentences(entries) {
+      const tx = db.transaction("sentences", "readwrite");
+      for (const entry of entries) await tx.store.put(entry);
+      await tx.done;
     },
     close() {
       db.close();

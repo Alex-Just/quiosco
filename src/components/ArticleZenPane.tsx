@@ -14,6 +14,8 @@ type ArticleZenPaneProps = {
   onIndexChange: (index: number) => void;
   isSpeaking: (paragraph: number, sentenceIndex: number) => boolean;
   onOpenMenu: (menu: SentenceMenu) => void;
+  /** Rendered (and split into sentences) instead of `paragraphs[index]`. */
+  displayText?: string;
 };
 
 export function ArticleZenPane({
@@ -22,9 +24,10 @@ export function ArticleZenPane({
   onIndexChange,
   isSpeaking,
   onOpenMenu,
+  displayText,
 }: ArticleZenPaneProps) {
   const total = paragraphs.length;
-  const paragraph = paragraphs[index] ?? "";
+  const paragraph = displayText ?? paragraphs[index] ?? "";
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {

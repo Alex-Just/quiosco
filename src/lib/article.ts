@@ -1,4 +1,4 @@
-import type { Article, Via } from "./types";
+import type { Article, BookChapter, Via } from "./types";
 
 export const MAX_ARTICLE_CHARS = 150_000;
 /** Minimum pasted/fetched body length before Save accepts the article. */
@@ -44,6 +44,43 @@ export function newArticle(input: {
     translateDurationMs: null,
     model: null,
     cleanup: input.cleanup ?? true,
+    status: "unread",
+    error: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+export function newBook(input: {
+  title: string;
+  author: string | null;
+  language: string | null;
+  chapters: BookChapter[];
+}): Article {
+  const now = Date.now();
+  return {
+    id: crypto.randomUUID(),
+    url: null,
+    title: input.title.trim() || "Untitled",
+    site: null,
+    text: "",
+    via: "manual",
+    kind: "book",
+    author: input.author,
+    bookLanguage: input.language,
+    chapters: input.chapters,
+    translation: null,
+    partial: null,
+    translationStatus: "pending",
+    translatedChunks: 0,
+    totalChunks: 0,
+    cleanText: null,
+    translationPhase: null,
+    phaseStartedAt: null,
+    cleanDurationMs: null,
+    translateDurationMs: null,
+    model: null,
+    cleanup: false,
     status: "unread",
     error: null,
     createdAt: now,

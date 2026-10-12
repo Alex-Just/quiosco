@@ -50,7 +50,9 @@ export async function deleteArticle(
   article: Article,
   navigate: NavigateFunction,
 ): Promise<void> {
-  if (!window.confirm("Delete this article?")) return;
+  const confirmMessage =
+    article.kind === "book" ? "Delete this book?" : "Delete this article?";
+  if (!window.confirm(confirmMessage)) return;
   await store.remove(article.id);
   navigate("/");
 }

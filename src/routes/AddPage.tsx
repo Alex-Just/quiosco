@@ -5,6 +5,7 @@ import {
   useNavigate,
   useSearchParams,
 } from "react-router-dom";
+import { AddBookForm } from "../components/AddBookForm";
 import { saveErrorMessage, TOKEN_REQUIRED_FOR_URL } from "../lib/addPageErrors";
 import { addPageSaveLabel, showAddPageTryAgain } from "../lib/addPageUi";
 import { runAddPagePreprocess } from "../lib/runAddPagePreprocess";
@@ -24,6 +25,7 @@ export default function AddPage() {
   const [title, setTitle] = useState("");
   const [url, setUrl] = useState("");
   const [text, setText] = useState("");
+  const [mode, setMode] = useState<"article" | "book">("article");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cleanup, setCleanup] = useState(true);
@@ -130,77 +132,117 @@ export default function AddPage() {
     editId,
     url,
   });
+  // Editing an existing row is always article mode; books are not editable here.
+  const activeMode = editId ? "article" : mode;
+  const pageTitle = editId
+    ? "Edit article"
+    : activeMode === "book"
+      ? "Add book"
+      : "Add article";
 
   return (
     <section className="add">
-      <h1>{editId ? "Edit article" : "Add article"}</h1>
-      <label>
-        Title (optional — guessed from the text if left empty)
-        <input
-          value={title}
-          onChange={(event) => {
-            edited.current = true;
-            setTitle(event.target.value);
-          }}
-        />
-      </label>
-      <label>
-        Source URL (optional — fetched when no text is pasted)
-        <input
-          value={url}
-          onChange={(event) => {
-            edited.current = true;
-            setUrl(event.target.value);
-          }}
-          inputMode="url"
-        />
-      </label>
-      <label>
-        Article text
-        <textarea
-          rows={7}
-          value={text}
-          onChange={(event) => {
-            edited.current = true;
-            setText(event.target.value);
-          }}
-        />
-      </label>
-      <label className="checkbox">
-        <input
-          type="checkbox"
-          checked={cleanup}
-          onChange={(event) => setCleanup(event.target.checked)}
-          disabled={preprocessing}
-        />
-        Clean up the text before translating
-      </label>
-      <p className="muted">
-        When enabled, menus, cookie banners, footers and link lists are removed
-        from the text before it is translated.
-      </p>
-      {(preprocessing || fetchDetail) && (
-        <p className="muted">{fetchDetail ?? "Preparing…"}</p>
-      )}
-      {error && <p className="error">{error}</p>}
-      <div className="row form-actions">
-        <button
-          type="button"
-          className="primary"
-          onClick={onSave}
-          disabled={saveDisabled}
-        >
-          {saveLabel}
-        </button>
-        {tryAgainVisible && (
-          <button type="button" onClick={() => void onTryAgain()}>
-            Try again
+      <h1>{pageTitle}</h1>
+      {!editId && (
+        <div className="tabs" role="tablist" aria-label="Type">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeMode === "article"}
+            className={activeMode === "article" ? "tab active" : "tab"}
+            onClick={() => setMode("article")}
+          >
+            Article
           </button>
-        )}
-        <Link className="button" to="/">
-          Cancel
-        </Link>
-      </div>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeMode === "book"}
+            className={activeMode === "book" ? "tab active" : "tab"}
+            onClick={() => setMode("book")}
+          >
+            Book
+          </button>
+        </div>
+      )}
+      {activeMode === "book" && store && (
+        <AddBookForm
+          store={store}
+          onSaved={(id) => navigate(`/article/${id}`, { replace: true })}
+        />
+      )}
+      {activeMode === "book" && !store && <p className="muted">Loading…</p>}
+      {activeMode === "article" && (
+        <>
+          <label>
+            Title (optional — guessed from the text if left empty)
+            <input
+              value={title}
+              onChange={(event) => {
+                edited.current = true;
+                setTitle(event.target.value);
+              }}
+            />
+          </label>
+          <label>
+            Source URL (optional — fetched when no text is pasted)
+            <input
+              value={url}
+              onChange={(event) => {
+                edited.current = true;
+                setUrl(event.target.value);
+              }}
+              inputMode="url"
+            />
+          </label>
+          <label>
+            Article text
+            <textarea
+              rows={7}
+              value={text}
+              onChange={(event) => {
+                edited.current = true;
+                setText(event.target.value);
+              }}
+            />
+          </label>
+          <label className="checkbox">
+            <input
+              type="checkbox"
+              checked={cleanup}
+              onChange={(event) => setCleanup(event.target.checked)}
+              disabled={preprocessing}
+            />
+            Clean up the text before translating
+          </label>
+          <p className="muted">
+            When enabled, menus, cookie banners, footers and link lists are
+            removed from the text before it is translated.
+          </p>
+          {(preprocessing || fetchDetail) && (
+            <p className="muted">{fetchDetail ?? "Preparing…"}</p>
+          )}
+          {error && <p className="error">{error}</p>}
+          <div className="row form-actions">
+            <button
+              type="button"
+              className="primary"
+              onClick={onSave}
+              disabled={saveDisabled}
+            >
+              {saveLabel}
+            </button>
+            {tryAgainVisible && (
+              <button type="button" onClick={() => void onTryAgain()}>
+                Try again
+              </button>
+            )}
+            <Link className="button" to="/">
+              Cancel
+            </Link>
+          </div>
+        </>
+      )}
     </section>
   );
 }

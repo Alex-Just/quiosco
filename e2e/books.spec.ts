@@ -1,0 +1,572 @@
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { expect, type Page, test } from "@playwright/test";
+import { strToU8, zipSync } from "fflate";
+
+// fflate only encodes DOS timestamps; pin a fixed date so the fixture bytes
+// are deterministic.
+const MTIME = Date.UTC(2000, 0, 1);
+
+// Filler so the first chapter is taller than the viewport: the chapter jump
+// only scrolls (and content-visibility only skips) when the page overflows.
+const FILLER = Array.from(
+  { length: 24 },
+  (_, index) =>
+    `Párrafo de relleno ${index + 1} con el texto suficiente para alargar el primer capítulo y que la página del lector se pueda desplazar hasta el segundo capítulo.`,
+);
+
+// Middle-chapter filler: when rendered, this chapter is much taller than the
+// 800 px content-visibility estimates for skipped sections, so a jump to the
+// chapter after it lands on a target whose position keeps moving while the
+// skipped sections between render.
+const MIDDLE_FILLER = Array.from(
+  { length: 48 },
+  (_, index) =>
+    `Párrafo intermedio de relleno ${index + 1} con el texto suficiente para que el capítulo del medio sea mucho más alto que la estimación del navegador y desplace al capítulo siguiente.`,
+);
+
+// Short warm-up chapters: keep the tall middle chapter (and the target after
+// it) outside the content-visibility activation margin of the top of the page,
+// so they are still skipped when the chapter jump starts.
+const SHORT_FILLER = Array.from(
+  { length: 6 },
+  (_, index) =>
+    `Párrafo corto de relleno ${index + 1} para separar el inicio del capítulo intermedio.`,
+);
+
+// Filler past the prefetch scan budget in the last chapter: the trailing
+// paragraph after these is never cached by the time the test reaches it.
+const TAIL_FILLER = Array.from(
+  { length: 120 },
+  (_, index) =>
+    `Párrafo final de relleno ${index + 1} que queda fuera del alcance de la precarga inicial para poder probar el fallo del servicio de traducción.`,
+);
+
+const chapterXml = (heading: string | null, ...paragraphs: string[]) =>
+  `<html xmlns="http://www.w3.org/1999/xhtml">
+  <head><title>capítulo</title></head>
+  <body>
+    ${heading === null ? "" : `<h1>${heading}</h1>`}
+    ${paragraphs.map((paragraph) => `<p>${paragraph}</p>`).join("\n")}
+  </body>
+</html>`;
+
+const CONTAINER_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>`;
+
+/** Minimal Epub3 book: mimetype, container, package, nav, five chapters. */
+function buildEpub(): Uint8Array {
+  const opfXml = `<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="bookid" version="3.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>Libro de prueba</dc:title>
+    <dc:creator>Autora Prueba</dc:creator>
+    <dc:language>es</dc:language>
+  </metadata>
+  <manifest>
+    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+    <item id="c1" href="Text/cap001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="c2" href="Text/cap002.xhtml" media-type="application/xhtml+xml"/>
+    <item id="c3" href="Text/cap003.xhtml" media-type="application/xhtml+xml"/>
+    <item id="cmid" href="Text/capmid.xhtml" media-type="application/xhtml+xml"/>
+    <item id="c5" href="Text/cap005.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine>
+    <itemref idref="c1"/>
+    <itemref idref="c2"/>
+    <itemref idref="c3"/>
+    <itemref idref="cmid"/>
+    <itemref idref="c5"/>
+  </spine>
+</package>`;
+  const navXml = `<?xml version="1.0" encoding="utf-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+  <body>
+    <nav epub:type="toc">
+      <ol>
+        <li><a href="Text/cap001.xhtml">Capítulo uno</a></li>
+        <li><a href="Text/cap002.xhtml">Capítulo segundo</a></li>
+        <li><a href="Text/cap003.xhtml">Capítulo tercero</a></li>
+        <li><a href="Text/capmid.xhtml">Capítulo intermedio</a></li>
+        <li><a href="Text/cap005.xhtml">Capítulo final</a></li>
+      </ol>
+    </nav>
+  </body>
+</html>`;
+  return zipSync(
+    {
+      mimetype: strToU8("application/epub+zip"),
+      "META-INF/container.xml": strToU8(CONTAINER_XML),
+      "OEBPS/content.opf": strToU8(opfXml),
+      "OEBPS/nav.xhtml": strToU8(navXml),
+      "OEBPS/Text/cap001.xhtml": strToU8(
+        chapterXml(
+          null,
+          "Primer capítulo con texto suficiente para la prueba de importación.",
+          ...FILLER,
+        ),
+      ),
+      "OEBPS/Text/cap002.xhtml": strToU8(
+        chapterXml(
+          null,
+          "Segundo capítulo que también aporta texto reconocible al importar.",
+          ...SHORT_FILLER,
+        ),
+      ),
+      "OEBPS/Text/cap003.xhtml": strToU8(
+        chapterXml(null, "Tercer capítulo de tránsito.", ...SHORT_FILLER),
+      ),
+      "OEBPS/Text/capmid.xhtml": strToU8(chapterXml(null, ...MIDDLE_FILLER)),
+      "OEBPS/Text/cap005.xhtml": strToU8(
+        chapterXml(
+          null,
+          "Último capítulo que también aporta texto reconocible al importar.",
+          ...TAIL_FILLER,
+          "Párrafo final fuera del alcance de la precarga inicial de la prueba.",
+        ),
+      ),
+    },
+    { mtime: MTIME },
+  );
+}
+
+/** Minimal Epub3 with `count` one-paragraph chapters, for sheet-length tests. */
+function buildManyChaptersEpub(count: number): Uint8Array {
+  const chapterFile = (index: number) =>
+    `Text/cap${String(index + 1).padStart(3, "0")}.xhtml`;
+  const opfXml = `<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="bookid" version="3.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>Muchos capítulos</dc:title>
+    <dc:language>es</dc:language>
+  </metadata>
+  <manifest>
+    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+    ${Array.from({ length: count }, (_, index) => `<item id="c${index + 1}" href="${chapterFile(index)}" media-type="application/xhtml+xml"/>`).join("\n    ")}
+  </manifest>
+  <spine>
+    ${Array.from({ length: count }, (_, index) => `<itemref idref="c${index + 1}"/>`).join("\n    ")}
+  </spine>
+</package>`;
+  const navXml = `<?xml version="1.0" encoding="utf-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+  <body>
+    <nav epub:type="toc">
+      <ol>
+        ${Array.from({ length: count }, (_, index) => `<li><a href="${chapterFile(index)}">Capítulo ${index + 1}</a></li>`).join("\n        ")}
+      </ol>
+    </nav>
+  </body>
+</html>`;
+  const files: Record<string, Uint8Array> = {
+    mimetype: strToU8("application/epub+zip"),
+    "META-INF/container.xml": strToU8(CONTAINER_XML),
+    "OEBPS/content.opf": strToU8(opfXml),
+    "OEBPS/nav.xhtml": strToU8(navXml),
+  };
+  for (let index = 0; index < count; index++) {
+    files[`OEBPS/${chapterFile(index)}`] = strToU8(
+      chapterXml(null, `Texto del capítulo número ${index + 1}.`),
+    );
+  }
+  return zipSync(files, { mtime: MTIME });
+}
+
+let epubPath = "";
+
+test.beforeAll(async () => {
+  const dir = await mkdtemp(join(tmpdir(), "quiosco-epub-"));
+  epubPath = join(dir, "libro-de-prueba.epub");
+  await writeFile(epubPath, buildEpub());
+});
+
+test.afterAll(async () => {
+  // Remove the whole fixture directory, not just the epub inside it.
+  if (epubPath) await rm(dirname(epubPath), { recursive: true, force: true });
+});
+
+/** Configure the app token the importer and the translation session need. */
+async function setAppToken(page: Page) {
+  await page.goto("/settings");
+  await page.getByLabel("App token").fill("e2e-token");
+  await page.getByLabel("Translate automatically after saving").uncheck();
+  await page.getByRole("button", { name: "Save" }).click();
+}
+
+/** Import the shared fixture book and land on its reader page. */
+async function importBook(page: Page) {
+  await page.goto("/add");
+  await page.getByRole("tab", { name: "Book" }).click();
+  await expect(page.getByRole("heading", { name: "Add book" })).toBeVisible();
+  await page.getByLabel("EPUB file").setInputFiles(epubPath);
+  await expect(page.getByText("5 chapters ·")).toBeVisible();
+  // The progress line is cleared once the parse settles.
+  await expect(page.getByText(/Reading book/)).toHaveCount(0);
+  await page.getByRole("button", { name: "Save" }).click();
+  await page.waitForURL("**/article/**");
+}
+
+/** The sentences of one translate request, in listed order. */
+function requestedSentences(body: unknown): string[] {
+  const parsed = body as { text?: unknown };
+  const text = typeof parsed?.text === "string" ? parsed.text : "";
+  const block = /<translate>\n?([\s\S]*?)\n?<\/translate>/.exec(text);
+  if (!block?.[1]) return [];
+  return block[1].split("\n").flatMap((line) => {
+    const match = /^(\d+)\.\s+(.+)$/.exec(line);
+    return match?.[2] ? [match[2]] : [];
+  });
+}
+
+/** Move the Zen pane to the last paragraph via the chapter sheet. */
+async function jumpToLastParagraph(page: Page) {
+  await page.getByRole("button", { name: "More book actions" }).click();
+  await page.getByRole("button", { name: "Chapters" }).click();
+  await page
+    .getByRole("dialog", { name: "Chapters" })
+    .getByRole("button", { name: "Capítulo final" })
+    .click();
+  // The pane's counter gives the total; ArrowDown walks there one paragraph
+  // at a time, which is cheap enough at this size.
+  const totalText = await page.locator(".zen-progress-label").textContent();
+  const total = Number(/\/\s*(\d+)/.exec(totalText ?? "")?.[1] ?? 1);
+  const current = Number(/^\s*(\d+)/.exec(totalText ?? "")?.[1] ?? 1);
+  for (let index = current; index < total; index += 1) {
+    await page.keyboard.press("ArrowDown");
+  }
+}
+
+test("imports an EPUB book from the Add page and lists it", async ({
+  page,
+}) => {
+  await setAppToken(page);
+  await importBook(page);
+
+  await page.goto("/");
+  await expect(
+    page.getByRole("link", { name: /Libro de prueba/ }),
+  ).toBeVisible();
+  await expect(page.getByText(/Autora Prueba ·/)).toBeVisible();
+});
+
+/** Zen index of the first saved local position (undefined when none). */
+async function savedZenIndex(page: Page): Promise<number | undefined> {
+  return page.evaluate(async () => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open("quiosco");
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const record = await new Promise<{ zenIndex?: number } | undefined>(
+      (resolve, reject) => {
+        const request = db
+          .transaction("positions")
+          .objectStore("positions")
+          .getAll();
+        request.onsuccess = () => resolve(request.result[0]);
+        request.onerror = () => reject(request.error);
+      },
+    );
+    db.close();
+    return record?.zenIndex;
+  });
+}
+
+test("reads a book in Zen and resumes at the saved paragraph", async ({
+  page,
+}) => {
+  await setAppToken(page);
+  await importBook(page);
+
+  // Reopening from the list starts the book in Zen at its first paragraph.
+  await page.goto("/");
+  await page.getByRole("link", { name: /Libro de prueba/ }).click();
+  await expect(page.locator(".zen-pane .para")).toContainText("Capítulo uno");
+  await expect(page.locator(".zen-progress-label")).toHaveText(/^1\//);
+
+  // A sentence tap opens the speech sheet in Zen: the pane must not capture
+  // the pointer until the gesture is a swipe, or the click is retargeted.
+  await page.locator(".zen-pane .sentence").first().click();
+  const sentenceSheet = page.getByRole("dialog", { name: "Sentence actions" });
+  await expect(sentenceSheet).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(sentenceSheet).toHaveCount(0);
+
+  // A short, in-place drag is still a tap: below the swipe threshold nothing
+  // is captured, so the button keeps its click.
+  const sentenceBox = await page
+    .locator(".zen-pane .sentence")
+    .first()
+    .boundingBox();
+  if (!sentenceBox) throw new Error("zen sentence has no box");
+  const tapX = sentenceBox.x + sentenceBox.width / 2;
+  const tapY = sentenceBox.y + sentenceBox.height / 2;
+  await page.mouse.move(tapX, tapY);
+  await page.mouse.down();
+  await page.mouse.move(tapX, tapY - 12);
+  await page.mouse.up();
+  await expect(sentenceSheet).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(sentenceSheet).toHaveCount(0);
+
+  // The pane's key handler advances the paragraph.
+  await page.keyboard.press("ArrowDown");
+  await expect(page.locator(".zen-pane .para")).toContainText(
+    "Primer capítulo",
+  );
+  await expect(page.locator(".zen-progress-label")).toHaveText(/^2\//);
+
+  // Leaving Zen from the ⋯ sheet renders the chapter headings.
+  await page.getByRole("button", { name: "More book actions" }).click();
+  await page.getByRole("button", { name: "Exit Zen mode" }).click();
+  await expect(page.locator("#book-chapter-0 h2")).toBeVisible();
+  await expect(page.locator("#book-chapter-0 h2")).toHaveText("Capítulo uno");
+  await expect(page.locator("#book-chapter-3 h2")).toHaveText(
+    "Capítulo intermedio",
+  );
+  await expect(page.locator("#book-chapter-4 h2")).toHaveText("Capítulo final");
+
+  // Tapping a sentence opens the speech sheet in regular mode.
+  await page.locator("#book-chapter-0 .sentence").first().click();
+  await expect(sentenceSheet).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(sentenceSheet).toHaveCount(0);
+
+  // The chapter sheet jumps to the last chapter. The tall middle chapter
+  // renders after the jump, moving the target: the reader must re-scroll
+  // until the heading actually lands in the viewport. The browser's scroll
+  // anchoring would normally paper over the drift, so disable it here to
+  // assert the reader's own re-scroll.
+  await page.addStyleTag({ content: "html { overflow-anchor: none; }" });
+  await page.getByRole("button", { name: "More book actions" }).click();
+  await page.getByRole("button", { name: "Chapters" }).click();
+  await expect(page.locator("#book-chapter-4 h2")).not.toBeInViewport();
+  await page
+    .getByRole("dialog", { name: "Chapters" })
+    .getByRole("button", { name: "Capítulo final" })
+    .click();
+  // The middle chapter is still skipped (800 px from `contain-intrinsic-size`)
+  // when the jump lands; wait for it to render so the layout between it and
+  // the target has settled before the heading is checked.
+  await expect
+    .poll(
+      async () =>
+        (await page.locator("#book-chapter-3").boundingBox())?.height ?? 0,
+    )
+    .toBeGreaterThan(800);
+  await expect(page.locator("#book-chapter-4 h2")).toBeInViewport();
+
+  // After the 200 ms debounce the Zen paragraph is stored; a reload resumes it.
+  await expect.poll(() => savedZenIndex(page), { timeout: 10_000 }).toBe(1);
+  await page.reload();
+  await expect(page.locator(".zen-pane .para")).toContainText(
+    "Primer capítulo",
+  );
+  await expect(page.locator(".zen-progress-label")).toHaveText(/^2\//);
+
+  // A mouse drag up on the pane still swipes once capture engages; the step
+  // suppresses the trailing click.
+  const pane = await page.locator(".zen-pane").boundingBox();
+  if (!pane) throw new Error("zen pane has no box");
+  const dragX = pane.x + pane.width / 2;
+  const dragY = pane.y + pane.height * 0.6;
+  await page.mouse.move(dragX, dragY);
+  await page.mouse.down();
+  await page.mouse.move(dragX, dragY - 120, { steps: 6 });
+  await page.mouse.up();
+  await expect(page.locator(".zen-pane .para")).toContainText(
+    "Párrafo de relleno 1",
+  );
+  await expect(page.locator(".zen-progress-label")).toHaveText(/^3\//);
+  await expect(sentenceSheet).toHaveCount(0);
+
+  // A drag that starts on a sentence button is still a swipe (down: previous).
+  const sentence = await page
+    .locator(".zen-pane .sentence")
+    .first()
+    .boundingBox();
+  if (!sentence) throw new Error("zen sentence has no box");
+  const sentenceX = sentence.x + sentence.width / 2;
+  const sentenceY = sentence.y + sentence.height / 2;
+  await page.mouse.move(sentenceX, sentenceY);
+  await page.mouse.down();
+  await page.mouse.move(sentenceX, sentenceY + 90, { steps: 6 });
+  await page.mouse.up();
+  await expect(page.locator(".zen-pane .para")).toContainText(
+    "Primer capítulo",
+  );
+  await expect(page.locator(".zen-progress-label")).toHaveText(/^2\//);
+  await expect(sentenceSheet).toHaveCount(0);
+});
+
+test("translates the Zen paragraph from the cache and pauses on failure", async ({
+  page,
+}) => {
+  await importBook(page);
+
+  // Without an app token the toggle is visible but disabled, with its hint.
+  await page.goto("/");
+  await page.getByRole("link", { name: /Libro de prueba/ }).click();
+  await expect(page.locator(".zen-pane .para")).toContainText("Capítulo uno");
+  await page.getByRole("button", { name: "More book actions" }).click();
+  const sheet = page.getByRole("dialog", { name: "Book actions" });
+  const toggle = sheet.getByRole("button", { name: "Translation mode" });
+  await expect(toggle).toBeDisabled();
+  await expect(
+    sheet.getByText("Set the app token in Settings to translate."),
+  ).toBeVisible();
+  await page.locator(".sheet-backdrop").click({ position: { x: 4, y: 4 } });
+  await expect(sheet).toHaveCount(0);
+  const articleUrl = page.url();
+
+  await setAppToken(page);
+  await page.goto(articleUrl);
+  await expect(page.locator(".zen-pane .para")).toContainText("Capítulo uno");
+
+  // The mocked translation route fails for requests that touch the trailing
+  // paragraph. That unit sits outside every prefetch scan budget, so only an
+  // explicit jump to it asks for it — and gets the rejection.
+  const requests: string[] = [];
+  const TAIL_PARAGRAPH =
+    "Párrafo final fuera del alcance de la precarga inicial de la prueba.";
+  await page.route("**/api/translate**", async (route) => {
+    const body = route.request().postDataJSON() as { text?: string };
+    const sentences = requestedSentences(body);
+    requests.push(...sentences);
+    if (sentences.includes(TAIL_PARAGRAPH)) {
+      await route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "upstream error" }),
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        text: sentences
+          .map((sentence, index) => `${index + 1}. ES-trad: ${sentence}`)
+          .join("\n"),
+      }),
+    });
+  });
+
+  // Translation mode is off on open and waits in the ⋯ sheet of Zen.
+  await page.getByRole("button", { name: "More book actions" }).click();
+  await sheet.getByRole("button", { name: "Translation mode" }).click();
+  await expect(sheet).toHaveCount(0);
+
+  // The paragraph mixes cached translations with the source text that is not
+  // translated yet.
+  await expect(page.locator(".zen-pane .para")).toContainText("ES-trad:");
+  expect(requests.length).toBeGreaterThan(0);
+
+  // The prefetch settles for now: the status returns to idle and no request is
+  // pending or planned. Further reads below must not push the count past this.
+  await expect(page.locator("article")).toHaveAttribute(
+    "data-translation-status",
+    "idle",
+  );
+  const settled = requests.length;
+  await expect.poll(() => requests.length).toBe(settled);
+
+  // Swiping forward within the translated runway asks for nothing new.
+  const pane = await page.locator(".zen-pane").boundingBox();
+  if (!pane) throw new Error("zen pane has no box");
+  const swipeX = pane.x + pane.width / 2;
+  const swipeY = pane.y + pane.height * 0.6;
+  await page.mouse.move(swipeX, swipeY);
+  await page.mouse.down();
+  await page.mouse.move(swipeX, swipeY - 120, { steps: 6 });
+  await page.mouse.up();
+  await expect(page.locator(".zen-pane .para")).toContainText(
+    "Primer capítulo",
+  );
+  await expect(page.locator(".zen-pane .para")).toContainText("ES-trad:");
+  await expect.poll(() => requests.length).toBe(settled);
+
+  // A reload re-enters translation mode on the same paragraph: the verified
+  // cache answers, so no sentence is requested again.
+  await expect.poll(() => savedZenIndex(page), { timeout: 10_000 }).toBe(1);
+  await page.reload();
+  await page.getByRole("button", { name: "More book actions" }).click();
+  await page.getByRole("button", { name: "Translation mode" }).click();
+  await expect(page.locator(".zen-pane .para")).toContainText("ES-trad:");
+  await expect.poll(() => requests.length).toBe(settled);
+
+  // Switching the mode off restores the original text; on again is cached.
+  await page.getByRole("button", { name: "More book actions" }).click();
+  await page.getByRole("button", { name: "Translation mode" }).click();
+  await expect(page.locator(".zen-pane .para")).not.toContainText("ES-trad:");
+  await expect(page.locator(".zen-pane .para")).toContainText(
+    "Primer capítulo",
+  );
+  await page.getByRole("button", { name: "More book actions" }).click();
+  await page.getByRole("button", { name: "Translation mode" }).click();
+  await expect(page.locator(".zen-pane .para")).toContainText("ES-trad:");
+  await expect.poll(() => requests.length).toBe(settled);
+
+  // The upstream fails; jumping beyond the prefetch's reach keeps the source
+  // text readable and surfaces the paused status. The trailing paragraph was
+  // the only unit the mocked upstream ever rejected.
+  await jumpToLastParagraph(page);
+  await expect(page.locator(".zen-pane .para")).toContainText("Párrafo final");
+  await expect(page.locator(".zen-pane .para")).not.toContainText("ES-trad:");
+  await expect(page.getByText("Translation paused")).toBeVisible();
+  expect(requests.length).toBeGreaterThan(settled);
+
+  // Leaving Zen ends translation mode: the status attribute goes with it, so
+  // no session keeps spending budget behind the regular reading view.
+  await page.getByRole("button", { name: "More book actions" }).click();
+  await page.getByRole("button", { name: "Exit Zen mode" }).click();
+  await expect(page.locator("article")).not.toHaveAttribute(
+    "data-translation-status",
+    /.+/,
+  );
+});
+
+test("chapter sheet scrolls so early chapters stay reachable", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 560 });
+  const dir = await mkdtemp(join(tmpdir(), "quiosco-epub-many-"));
+  const path = join(dir, "muchos-capitulos.epub");
+  await writeFile(path, buildManyChaptersEpub(30));
+  try {
+    await page.goto("/add");
+    await page.getByRole("tab", { name: "Book" }).click();
+    await page.getByLabel("EPUB file").setInputFiles(path);
+    await expect(page.getByText("30 chapters ·")).toBeVisible();
+    await page.getByRole("button", { name: "Save" }).click();
+    await page.waitForURL("**/article/**");
+
+    // Leave the first chapter so jumping back to it is observable. The bottom
+    // of the list is on screen even when the sheet overflows the viewport.
+    await page.getByRole("button", { name: "More book actions" }).click();
+    await page.getByRole("button", { name: "Chapters" }).click();
+    await page
+      .getByRole("dialog", { name: "Chapters" })
+      .getByRole("button", { name: "Capítulo 30", exact: true })
+      .click();
+    await expect(page.locator(".zen-pane .para")).toContainText("Capítulo 30");
+
+    // The first entry sits above the fold when the sheet is taller than the
+    // viewport: the sheet must scroll for this tap to reach chapter 1.
+    await page.getByRole("button", { name: "More book actions" }).click();
+    await page.getByRole("button", { name: "Chapters" }).click();
+    await page
+      .getByRole("dialog", { name: "Chapters" })
+      .getByRole("button", { name: "Capítulo 1", exact: true })
+      .click();
+    await expect(page.locator(".zen-progress-label")).toHaveText(/^1\//);
+    await expect(page.locator(".zen-pane .para")).toContainText("Capítulo 1");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

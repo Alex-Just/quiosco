@@ -8,6 +8,12 @@ export function joinTranslationBody(article: Article): string {
     .join("\n\n");
 }
 
+/** Row attribution in lists: a book's author, or where an article came from. */
+export function listSource(article: Article): string {
+  if (article.kind === "book") return article.author ?? "book";
+  return article.site ?? "manual";
+}
+
 export function articleBody(article: Article, view: ArticleView): string {
   const translationBody = joinTranslationBody(article);
   return view === "translation" ? translationBody : originalText(article);
