@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { formatDate } from "../lib/format";
+import { repairGarbageTitle } from "../lib/repairGarbageTitle";
 import type { Article } from "../lib/types";
 import { useStore } from "../lib/useStore";
 
@@ -16,8 +17,15 @@ export default function ListPage() {
     if (!store) return;
     let cancelled = false;
     const reload = () => {
-      void store.list().then((all) => {
-        if (!cancelled) setArticles(all);
+      void store.list().then(async (all) => {
+        const repaired = await Promise.all(
+          all.map(async (article) => {
+            const nextTitle = repairGarbageTitle(article);
+            if (!nextTitle) return article;
+            return store.update(article.id, { title: nextTitle });
+          }),
+        );
+        if (!cancelled) setArticles(repaired);
       });
     };
     reload();

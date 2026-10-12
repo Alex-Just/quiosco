@@ -7,6 +7,7 @@ import {
 import { shareBody } from "./share";
 import { readPendingShare } from "./sharePayload";
 import type { ArticleStore } from "./store";
+import { isGarbageTitle } from "./titleQuality";
 import type { Via } from "./types";
 import { normalizeUrl } from "./url";
 
@@ -116,7 +117,9 @@ export function applySharePrefillFields(
   handlers: PrefillHandlers,
 ): void {
   if (edited.current) return;
-  handlers.setTitle(share.nextTitle);
+  // Chrome reader-mode shares put chrome-distiller:// in the title field.
+  // Leave the field empty so save can derive a title from the cleaned body.
+  handlers.setTitle(isGarbageTitle(share.nextTitle) ? "" : share.nextTitle);
   handlers.setUrl(share.nextUrl);
   handlers.setText(share.nextBody);
   if (share.fromUrlShare) handlers.setCleanup(false);

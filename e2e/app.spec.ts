@@ -51,6 +51,50 @@ test("share target POST handoff lands on the review screen with the shared text"
   await expect(page.locator("textarea")).toHaveValue(/Párrafo 19/);
 });
 
+test("Chrome reader share replaces the garbage title from the body", async ({
+  page,
+}) => {
+  // Force the LLM title guess to fail so save falls back to the body headline.
+  await page.route("**/api/translate**", async (route) => {
+    await route.fulfill({ status: 500, body: "unavailable" });
+  });
+  await waitForServiceWorker(page);
+  await page.goto("/settings");
+  await page.getByLabel("App token").fill("e2e-token");
+  await page.getByLabel("Translate automatically after saving").uncheck();
+  await page.getByRole("button", { name: "Save" }).click();
+
+  const headline =
+    "La estación de metro con más viajeros en Valencia: más de 500.000 pasajeros en un mes";
+  const body = [
+    headline,
+    ...Array.from(
+      { length: 8 },
+      (_, index) =>
+        `Párrafo ${index + 1} del artículo compartido manualmente con suficiente longitud para el modo texto.`,
+    ),
+  ].join("\n\n");
+
+  await page.evaluate(async (text) => {
+    const formData = new FormData();
+    formData.set(
+      "title",
+      "Including link: chrome-distiller://1712e844-db8f-4213-8dcb-ffe7c19a89ee_abc/",
+    );
+    formData.set("text", text);
+    formData.set("url", "");
+    await fetch("/share", { method: "POST", body: formData });
+  }, body);
+
+  await page.goto("/share");
+  await page.waitForURL("**/add");
+  // Prefill must not keep the chrome-distiller artifact in the title field.
+  await expect(page.getByLabel("Title")).toHaveValue("");
+  await page.getByRole("button", { name: "Save & translate" }).click();
+  await page.waitForURL("**/article/**");
+  await expect(page.getByRole("heading", { name: headline })).toBeVisible();
+});
+
 test("URL-only share fetches the article instead of saving the shared URL", async ({
   page,
 }) => {

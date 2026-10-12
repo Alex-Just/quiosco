@@ -1,5 +1,6 @@
 import { type Dispatch, type SetStateAction, useEffect, useState } from "react";
 import type { NavigateFunction } from "react-router-dom";
+import { repairGarbageTitle } from "./repairGarbageTitle";
 import type { ArticleStore } from "./store";
 import { isStoreChangeForArticle, STORE_CHANGE_EVENT } from "./storeEvents";
 import type { Article } from "./types";
@@ -19,7 +20,9 @@ async function loadArticleOrRedirect(
     navigate("/", { replace: true });
     return null;
   }
-  return loaded;
+  const repaired = repairGarbageTitle(loaded);
+  if (!repaired) return loaded;
+  return store.update(id, { title: repaired });
 }
 
 async function refreshRunningArticle(

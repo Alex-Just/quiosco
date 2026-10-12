@@ -6,6 +6,7 @@ import {
 } from "./article";
 import { cleanArticleText } from "./clean";
 import { preprocessUrlArticle } from "./preprocessUrl";
+import { resolveArticleTitle } from "./resolveArticleTitle";
 import { loadSettings } from "./settings";
 import { clearPendingShare } from "./sharePayload";
 import type { ArticleStore } from "./store";
@@ -114,18 +115,24 @@ async function guessTitle(
   clipped: string,
   title: string,
   extractedTitle: string | null,
+  url: string | null,
   settings: Settings,
 ): Promise<string> {
-  let finalTitle = title.trim() || extractedTitle?.trim() || "";
-  if (finalTitle || !settings.appToken) return finalTitle;
-  const api = createApi({ token: settings.appToken });
-  const guessed = await extractTitleWithLlm(
-    clipped,
-    settings.model,
-    (request) => api.translate(request),
-  );
-  if (guessed) finalTitle = guessed;
-  return finalTitle;
+  const guessWithLlm = settings.appToken
+    ? async (body: string) => {
+        const api = createApi({ token: settings.appToken });
+        return extractTitleWithLlm(body, settings.model, (request) =>
+          api.translate(request),
+        );
+      }
+    : undefined;
+  return resolveArticleTitle({
+    title,
+    extractedTitle,
+    body: clipped,
+    url,
+    guessWithLlm,
+  });
 }
 
 async function saveExistingArticle(patch: {
@@ -208,6 +215,7 @@ export async function saveAddPageArticle(
     clipped,
     input.title,
     extractedTitle,
+    canonical,
     settings,
   );
   if (input.editId) {
