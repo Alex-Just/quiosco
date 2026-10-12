@@ -61,8 +61,9 @@ export interface Article {
   /** How long translation took (summed across resumes), once finished. */
   translateDurationMs?: number | null;
   /**
-   * Books only, local-only: at least one translation exists for this book, so
-   * every open starts in translated Zen without touching the toggle.
+   * Books only, local-only: set the first time a verified translation for
+   * this book is on screen, so every later open starts in translated Zen
+   * without touching the toggle (and only with an app token configured).
    */
   bookTranslationOn?: boolean;
   model?: string | null;

@@ -667,6 +667,17 @@ test("translates the Zen sentence from the cache and pauses on failure", async (
     "data-translation-status",
     /.+/,
   );
+
+  // Without an app token the same book opens in the original text again.
+  await page.goto("/settings");
+  await page.getByLabel("App token").fill("");
+  await page.getByRole("button", { name: "Save" }).click();
+  await page.goto("/");
+  await page.getByRole("link", { name: /Libro de prueba/ }).click();
+  await expect(page.locator("article")).not.toHaveAttribute(
+    "data-translation-status",
+    /.+/,
+  );
 });
 
 test("chapter sheet scrolls so early chapters stay reachable", async ({
