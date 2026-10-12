@@ -524,6 +524,11 @@ test("translates the Zen sentence from the cache and pauses on failure", async (
   await page.goto("/");
   await page.getByRole("link", { name: /Libro de prueba/ }).click();
   await expect(page.locator(".zen-pane .para")).toContainText("Capítulo uno");
+  // A book with no translations saved opens in the original text.
+  await expect(page.locator("article")).not.toHaveAttribute(
+    "data-translation-status",
+    /.+/,
+  );
   await page.getByRole("button", { name: "More book actions" }).click();
   const sheet = page.getByRole("dialog", { name: "Book actions" });
   const toggle = sheet.getByRole("button", { name: "Translation mode" });
@@ -610,12 +615,14 @@ test("translates the Zen sentence from the cache and pauses on failure", async (
   );
   await expect.poll(() => requests.length).toBe(settled);
 
-  // A reload re-enters translation mode on the same paragraph: the verified
-  // cache answers, so no sentence is requested again.
+  // A reload resumes translated Zen by itself: the book has translations
+  // saved now, so the mode starts on and the verified cache answers.
   await expect.poll(() => savedZenIndex(page), { timeout: 10_000 }).toBe(1);
   await page.reload();
-  await page.getByRole("button", { name: "More book actions" }).click();
-  await page.getByRole("button", { name: "Translation mode" }).click();
+  await expect(page.locator("article")).toHaveAttribute(
+    "data-translation-status",
+    /.+/,
+  );
   await expect(page.locator(".zen-pane .para")).toContainText("ES-trad:");
   await expect(page.locator(".zen-pane .para")).toContainText(
     "🇪🇸 Primer capítulo",
@@ -648,6 +655,15 @@ test("translates the Zen sentence from the cache and pauses on failure", async (
   await page.getByRole("button", { name: "More book actions" }).click();
   await page.getByRole("button", { name: "Exit Zen mode" }).click();
   await expect(page.locator("article")).not.toHaveAttribute(
+    "data-translation-status",
+    /.+/,
+  );
+
+  // Every later open of a translated book starts in translated Zen without
+  // touching the toggle.
+  await page.goto("/");
+  await page.getByRole("link", { name: /Libro de prueba/ }).click();
+  await expect(page.locator("article")).toHaveAttribute(
     "data-translation-status",
     /.+/,
   );

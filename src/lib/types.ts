@@ -60,6 +60,11 @@ export interface Article {
   cleanDurationMs?: number | null;
   /** How long translation took (summed across resumes), once finished. */
   translateDurationMs?: number | null;
+  /**
+   * Books only, local-only: at least one translation exists for this book, so
+   * every open starts in translated Zen without touching the toggle.
+   */
+  bookTranslationOn?: boolean;
   model?: string | null;
   cleanup?: boolean;
   status: ArticleStatus;

@@ -107,13 +107,18 @@ export default function BookReader({
   const [zenMode, setZenMode] = useState(true);
   /** Zen screen = sentence unit index; null until the saved one is read. */
   const [zenUnit, setZenUnit] = useState<number | null>(null);
-  /** Zen-only, off on every open: the user turns translation on explicitly. */
-  const [translationMode, setTranslationMode] = useState(false);
+  const [settings] = useState(() => loadSettings());
+  /**
+   * Zen-only; off on a book's first open, on for every later open once the
+   * book has translations saved. Needs a token to do anything.
+   */
+  const [translationMode, setTranslationMode] = useState(
+    () => article.bookTranslationOn === true && Boolean(settings.appToken),
+  );
   const [autoListen, setAutoListen] = useState(() => loadZenAutoListen());
   const [moreOpen, setMoreOpen] = useState(false);
   const [chaptersOpen, setChaptersOpen] = useState(false);
   const [copied, setCopied] = useState<"none" | "original">("none");
-  const [settings] = useState(() => loadSettings());
 
   const chapters = article.chapters ?? [];
   // One flatten and sentence split per book, shared with the translation hook
@@ -225,6 +230,20 @@ export default function BookReader({
     // spending budget and the speech view falls back to the source text.
     if (!zenMode) setTranslationMode(false);
   }, [zenMode]);
+
+  useEffect(() => {
+    // Latch: once a translation for this book is on screen, every later open
+    // starts in translated Zen. Local-only, like the rest of the book row.
+    if (!translationMode || article.bookTranslationOn === true) return;
+    if (translation.translations.size === 0) return;
+    void store.update(article.id, { bookTranslationOn: true });
+  }, [
+    translationMode,
+    article.id,
+    article.bookTranslationOn,
+    translation.translations,
+    store,
+  ]);
 
   useEffect(() => {
     // Reset until the restore for a newly opened book finishes.
