@@ -1,10 +1,42 @@
 import { useEffect, useRef } from "react";
 import { zenIndexAfterSwipe, zenSwipeBlockedBySelection } from "./zenMode";
 
-/** True while the reader has a live text selection on the page. */
-function hasLiveSelection(): boolean {
+/** Identity of the live text selection, or null when there is none. */
+interface SelectionSignature {
+  anchor: Node;
+  anchorOffset: number;
+  focus: Node;
+  focusOffset: number;
+}
+
+function liveSelectionSignature(): SelectionSignature | null {
   const selection = window.getSelection();
-  return selection !== null && !selection.isCollapsed;
+  if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+    return null;
+  }
+  const anchor = selection.anchorNode;
+  const focus = selection.focusNode;
+  if (anchor == null || focus == null) return null;
+  return {
+    anchor,
+    anchorOffset: selection.anchorOffset,
+    focus,
+    focusOffset: selection.focusOffset,
+  };
+}
+
+function sameSelection(
+  a: SelectionSignature | null,
+  b: SelectionSignature | null,
+): boolean {
+  return (
+    a !== null &&
+    b !== null &&
+    a.anchor === b.anchor &&
+    a.anchorOffset === b.anchorOffset &&
+    a.focus === b.focus &&
+    a.focusOffset === b.focusOffset
+  );
 }
 
 type UseZenSwipeArgs = {
@@ -34,15 +66,15 @@ export function useZenSwipe(args: UseZenSwipeArgs): void {
     let lastY = 0;
     let tracking = false;
     let suppressClick = false;
-    let downAt = 0;
     let pointerType = "";
+    let downSelection: SelectionSignature | null = null;
 
     const onPointerDown = (event: PointerEvent) => {
       if (event.pointerType === "mouse" && event.button !== 0) return;
       tracking = true;
       suppressClick = false;
-      downAt = Date.now();
       pointerType = event.pointerType;
+      downSelection = liveSelectionSignature();
       startX = lastX = event.clientX;
       startY = lastY = event.clientY;
     };
@@ -56,11 +88,12 @@ export function useZenSwipe(args: UseZenSwipeArgs): void {
     const finish = (endX: number, endY: number) => {
       if (!tracking) return;
       tracking = false;
+      const endSelection = liveSelectionSignature();
       if (
         zenSwipeBlockedBySelection({
           pointerType,
-          selectionActive: hasLiveSelection(),
-          durationMs: Date.now() - downAt,
+          selectionActive: endSelection !== null,
+          selectionChanged: !sameSelection(downSelection, endSelection),
         })
       ) {
         return;

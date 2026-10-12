@@ -2,11 +2,6 @@
 export const ZEN_SWIPE_MIN_DISTANCE_PX = 36;
 /** Ignore swipes that are mostly horizontal. */
 export const ZEN_SWIPE_MAX_HORIZONTAL_RATIO = 1;
-/**
- * Hold time after which a touch gesture that ends with a live text selection
- * is treated as the reader selecting words, not as a swipe.
- */
-export const ZEN_LONG_PRESS_MS = 450;
 
 export function clampZenIndex(index: number, total: number): number {
   // Keep the index when the paragraph list is briefly empty (load/nav),
@@ -26,21 +21,20 @@ export function stepZenIndex(
 }
 
 /**
- * A touch gesture that ends with a live text selection was a long-press (the
- * reader is selecting words and maybe extending the selection), so it must
- * not also turn the page. Mouse drags keep swiping even when they leave a
- * selection behind; a fast swipe is never treated as selection even if a
- * stale selection happens to be present.
+ * A touch gesture that changed the text selection is the reader selecting
+ * words (long-press to start, drag to extend), so it must not also turn the
+ * page. A selection that was already there and did not change leaves swiping
+ * alone, and mouse drags keep swiping even while they select text.
  */
 export function zenSwipeBlockedBySelection(args: {
   pointerType: string;
   selectionActive: boolean;
-  durationMs: number;
+  selectionChanged: boolean;
 }): boolean {
   return (
     args.pointerType !== "mouse" &&
     args.selectionActive &&
-    args.durationMs >= ZEN_LONG_PRESS_MS
+    args.selectionChanged
   );
 }
 

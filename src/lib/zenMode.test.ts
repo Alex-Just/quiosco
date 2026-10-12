@@ -61,23 +61,23 @@ describe("zenIndexAfterSwipe", () => {
 });
 
 describe("zenSwipeBlockedBySelection", () => {
-  it("blocks a held touch gesture that ends with a live selection", () => {
-    // Long-press selects a word, then the finger drags to extend it.
+  it("blocks a touch gesture that changed the selection", () => {
+    // Long-press starts a selection, or the finger extends the live one.
     expect(
       zenSwipeBlockedBySelection({
         pointerType: "touch",
         selectionActive: true,
-        durationMs: 900,
+        selectionChanged: true,
       }),
     ).toBe(true);
   });
 
-  it("keeps a quick touch swipe even if a stale selection exists", () => {
+  it("keeps a touch swipe under an unchanged, stale selection", () => {
     expect(
       zenSwipeBlockedBySelection({
         pointerType: "touch",
         selectionActive: true,
-        durationMs: 120,
+        selectionChanged: false,
       }),
     ).toBe(false);
   });
@@ -87,17 +87,17 @@ describe("zenSwipeBlockedBySelection", () => {
       zenSwipeBlockedBySelection({
         pointerType: "mouse",
         selectionActive: true,
-        durationMs: 900,
+        selectionChanged: true,
       }),
     ).toBe(false);
   });
 
-  it("keeps a held touch gesture without a selection", () => {
+  it("keeps a touch gesture without a selection", () => {
     expect(
       zenSwipeBlockedBySelection({
         pointerType: "touch",
         selectionActive: false,
-        durationMs: 900,
+        selectionChanged: false,
       }),
     ).toBe(false);
   });

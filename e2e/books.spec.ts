@@ -701,7 +701,81 @@ test("Zen text can be selected word by word", async ({ page }) => {
   const selected = await page.evaluate(
     () => window.getSelection()?.toString() ?? "",
   );
-  expect(selected.length).toBeGreaterThan(0);
+  expect(selected.trim().length).toBeGreaterThan(0);
+});
+
+test.describe("touch selection guard", () => {
+  test.use({ hasTouch: true });
+
+  /** Select the current Zen sentence so a live selection exists. */
+  async function selectZenSentence(page: Page) {
+    await page.evaluate(() => {
+      const node = document.querySelector(".zen-pane .sentence");
+      if (!node) throw new Error("no zen sentence");
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    });
+  }
+
+  /** A held touch drag of 130 px up over the Zen pane, via real touch events. */
+  async function touchDragUp(
+    page: Page,
+    holdMs: number,
+    beforeEnd?: () => Promise<void>,
+  ) {
+    const client = await page.context().newCDPSession(page);
+    const pane = await page.locator(".zen-pane").boundingBox();
+    if (!pane) throw new Error("zen pane has no box");
+    const x = Math.round(pane.x + pane.width / 2);
+    const y = Math.round(pane.y + pane.height * 0.6);
+    await client.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [{ x, y }],
+    });
+    if (holdMs > 0) await page.waitForTimeout(holdMs);
+    if (beforeEnd) await beforeEnd();
+    await client.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [{ x, y: y - 130 }],
+    });
+    await client.send("Input.dispatchTouchEvent", {
+      type: "touchEnd",
+      touchPoints: [],
+    });
+  }
+
+  test("a swipe under a stale selection still turns the page", async ({
+    page,
+  }) => {
+    await importBook(page);
+    await page.goto("/");
+    await page.getByRole("link", { name: /Libro de prueba/ }).click();
+    await expect(page.locator(".zen-progress-label")).toHaveText(/^1\//);
+    await selectZenSentence(page);
+
+    // A slow swipe (held like a selection gesture) over a selection that does
+    // not change must still turn the page.
+    await touchDragUp(page, 600);
+
+    await expect(page.locator(".zen-progress-label")).toHaveText(/^2\//);
+  });
+
+  test("a gesture that changes the selection does not turn the page", async ({
+    page,
+  }) => {
+    await importBook(page);
+    await page.goto("/");
+    await page.getByRole("link", { name: /Libro de prueba/ }).click();
+    await expect(page.locator(".zen-progress-label")).toHaveText(/^1\//);
+
+    // The browser starts (or extends) a selection while the finger is down.
+    await touchDragUp(page, 400, () => selectZenSentence(page));
+
+    await expect(page.locator(".zen-progress-label")).toHaveText(/^1\//);
+  });
 });
 
 test("chapter sheet scrolls so early chapters stay reachable", async ({
