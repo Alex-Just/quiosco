@@ -134,7 +134,7 @@ export default function SettingsPage() {
         </span>
       </div>
       {syncState && <p className="muted">{syncState}</p>}
-      <p className="muted">Build {__BUILD_ID__}</p>
+      <p className="muted settings-build">Build {__BUILD_ID__}</p>
     </section>
   );
 }

@@ -580,6 +580,10 @@ button.danger {
   font-size: 0.95rem;
 }
 
+.settings-build {
+  margin-top: 2rem;
+}
+
 .settings input:not([type="checkbox"]),
 .settings textarea,
 .add input:not([type="checkbox"]),
