@@ -30,4 +30,13 @@ describe("gapBeforeSentence", () => {
     expect(gapBeforeSentence("🇷🇺 Текст.")).toBe("\n\n");
     expect(gapBeforeSentence("Sigue el párrafo.")).toBe(" ");
   });
+
+  it("keeps a blank line before a flag after a Spanish question", () => {
+    // Regression: ¿…? used to break layout when this gap lived inside the
+    // previous inline sentence button; the gap string itself must stay blank.
+    expect(gapBeforeSentence("🇷🇺 Где Хагрид?")).toBe("\n\n");
+    expect(
+      spaceFlagLines("🇪🇸 ¿Dónde está Hagrid?\n🇷🇺 Где Хагрид?"),
+    ).toBe("🇪🇸 ¿Dónde está Hagrid?\n\n🇷🇺 Где Хагрид?");
+  });
 });

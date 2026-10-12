@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { Fragment, useEffect } from "react";
 import { gapBeforeSentence, spaceFlagLines } from "../lib/flagLines";
 import {
   splitLeadingNumber,
@@ -50,27 +50,33 @@ export function ArticleZenPane({
         {sentences.map((sentence, sentenceIndex) => {
           const raw = sentenceIndex === 0 && first ? first.text : sentence;
           const next = sentences[sentenceIndex + 1];
+          // Keep the gap as a sibling text node. Trailing blank lines inside
+          // an inline <button> mis-wrap the next sibling (short lines and
+          // ¿…? alike), so the next flag stanza starts mid-line.
           return (
-            <button
+            <Fragment
               // biome-ignore lint/suspicious/noArrayIndexKey: sentences have no stable id
               key={sentenceIndex}
-              type="button"
-              className={
-                isSpeaking(index, sentenceIndex)
-                  ? "sentence speaking"
-                  : "sentence"
-              }
-              onClick={() =>
-                onOpenMenu({
-                  paragraph: index,
-                  sentenceIndex,
-                  sentence: stripSentenceMarkers(sentence),
-                })
-              }
             >
-              {spaceFlagLines(raw)}
-              {next ? gapBeforeSentence(next) : ""}
-            </button>
+              <button
+                type="button"
+                className={
+                  isSpeaking(index, sentenceIndex)
+                    ? "sentence speaking"
+                    : "sentence"
+                }
+                onClick={() =>
+                  onOpenMenu({
+                    paragraph: index,
+                    sentenceIndex,
+                    sentence: stripSentenceMarkers(sentence),
+                  })
+                }
+              >
+                {spaceFlagLines(raw)}
+              </button>
+              {next ? gapBeforeSentence(next) : null}
+            </Fragment>
           );
         })}
       </p>

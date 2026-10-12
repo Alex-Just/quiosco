@@ -25,7 +25,13 @@ export function spaceFlagLines(text: string): string {
   return withBreaks.replace(/\n{3,}/g, "\n\n");
 }
 
-/** Gap between tappable sentences: blank line before a flag-led sentence. */
+/**
+ * Gap between tappable sentences: blank line before a flag-led sentence.
+ * Render this as a sibling text node after the sentence button — not as
+ * trailing text inside the button. Trailing newlines inside an inline
+ * button wrap the next stanza mid-line in Blink/WebKit (short lines and
+ * Spanish ¿…? both hit it).
+ */
 export function gapBeforeSentence(next: string): string {
   return startsWithFlag(next) ? "\n\n" : " ";
 }
