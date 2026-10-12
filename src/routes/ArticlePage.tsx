@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArticleActionsSheet } from "../components/ArticleActionsSheet";
 import { ArticlePageActions } from "../components/ArticlePageActions";
@@ -8,9 +8,11 @@ import { ArticleText } from "../components/ArticleText";
 import { ArticleTranslationStatus } from "../components/ArticleTranslationStatus";
 import { ArticleViewControls } from "../components/ArticleViewControls";
 import { ArticleZenEndActions } from "../components/ArticleZenEndActions";
+import { ArticleZenListenButton } from "../components/ArticleZenListenButton";
 import { ArticleZenPane } from "../components/ArticleZenPane";
 import { ArticleZenProgress } from "../components/ArticleZenProgress";
 import { SentenceSheet } from "../components/SentenceSheet";
+import { originalText } from "../lib/article";
 import { articleChromeCompact } from "../lib/articleChrome";
 import {
   articleBody,
@@ -26,6 +28,7 @@ import { useStore } from "../lib/useStore";
 import { useZenPosition } from "../lib/useZenPosition";
 import { useZenSwipe } from "../lib/useZenSwipe";
 import { isZenEndPage, zenEndActions } from "../lib/zenEndActions";
+import { originalParagraphForZen } from "../lib/zenListenOriginal";
 import { clampZenIndex } from "../lib/zenMode";
 
 export default function ArticlePage() {
@@ -50,7 +53,9 @@ export default function ArticlePage() {
     setMenu,
     hint,
     isSpeaking,
+    isZenOriginalSpeaking,
     onListen,
+    onListenZenOriginal,
     onCopySentence,
     stopSpeechForViewChange,
   } = useSentenceSpeech(view);
@@ -83,6 +88,13 @@ export default function ArticlePage() {
     // Reset until restore finishes for the newly opened article.
     if (id !== undefined) setZenIndex(null);
   }, [id]);
+
+  const prevZenIndex = useRef(zenIndex);
+  useEffect(() => {
+    if (prevZenIndex.current === zenIndex) return;
+    prevZenIndex.current = zenIndex;
+    stopSpeechForViewChange();
+  }, [zenIndex, stopSpeechForViewChange]);
 
   useEffect(() => {
     if (paragraphs.length <= 0) return;
@@ -135,6 +147,14 @@ export default function ArticlePage() {
   if (!article) return <p className="muted">Loading…</p>;
 
   const showMoreSheet = moreOpen && (compactChrome || zenMode);
+  const zenListenText =
+    zenMode && zenIndex != null
+      ? originalParagraphForZen({
+          originalBody: originalText(article),
+          index: zenIndex,
+          screenParagraph: paragraphs[zenIndex],
+        })
+      : "";
 
   return (
     <article className={zenMode ? "article article-zen" : "article"}>
@@ -194,6 +214,11 @@ export default function ArticlePage() {
                   onDelete={actions.onDelete}
                 />
               )}
+              <ArticleZenListenButton
+                listening={isZenOriginalSpeaking(zenIndex)}
+                disabled={zenListenText.length === 0}
+                onClick={() => onListenZenOriginal(zenIndex, zenListenText)}
+              />
             </>
           )
         ) : (

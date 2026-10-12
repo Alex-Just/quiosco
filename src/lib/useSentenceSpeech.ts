@@ -11,6 +11,10 @@ import {
   useSentenceSpeechLifecycle,
   useSpeechHintTimeout,
 } from "./useSentenceSpeechEffects";
+import {
+  isZenOriginalListening,
+  toggleZenOriginalListen,
+} from "./zenListenActions";
 
 export type SentenceMenu = {
   paragraph: number;
@@ -23,7 +27,9 @@ export function useSentenceSpeech(view: ArticleView): {
   setMenu: (menu: SentenceMenu | null) => void;
   hint: string | null;
   isSpeaking: (paragraph: number, sentenceIndex: number) => boolean;
+  isZenOriginalSpeaking: (paragraph: number) => boolean;
   onListen: () => void;
+  onListenZenOriginal: (paragraph: number, text: string) => void;
   onCopySentence: () => void;
   stopSpeechForViewChange: () => void;
 } {
@@ -44,6 +50,9 @@ export function useSentenceSpeech(view: ArticleView): {
   const isSpeaking = (paragraph: number, sentenceIndex: number) =>
     sentenceIsSpeaking(speaking, paragraph, sentenceIndex);
 
+  const isZenOriginalSpeaking = (paragraph: number) =>
+    isZenOriginalListening(speaking, paragraph);
+
   const onListen = () => {
     if (menu) {
       listenToSentence({
@@ -56,6 +65,17 @@ export function useSentenceSpeech(view: ArticleView): {
         setHint,
       });
     }
+  };
+
+  const onListenZenOriginal = (paragraph: number, text: string) => {
+    toggleZenOriginalListen({
+      paragraph,
+      text,
+      speaking,
+      speechRun,
+      setSpeaking,
+      setHint,
+    });
   };
 
   const onCopySentence = () => {
@@ -75,7 +95,9 @@ export function useSentenceSpeech(view: ArticleView): {
     setMenu,
     hint,
     isSpeaking,
+    isZenOriginalSpeaking,
     onListen,
+    onListenZenOriginal,
     onCopySentence,
     stopSpeechForViewChange,
   };

@@ -47,7 +47,7 @@ function endsWithAbbreviation(sentence: string): boolean {
 const FLAG_STANZA_BREAK = /(?=[\u{1F1E6}-\u{1F1FF}]{2})/u;
 const FLAG_AT_START = /^[\u{1F1E6}-\u{1F1FF}]{2}/u;
 
-function splitFlagStanzas(text: string): string[] {
+export function splitFlagStanzas(text: string): string[] {
   const parts = text
     .split(FLAG_STANZA_BREAK)
     .map((part) => part.trim())
@@ -64,6 +64,13 @@ function splitFlagStanzas(text: string): string[] {
     return [`${prefix}\n${first}`, ...rest];
   }
   return parts;
+}
+
+/** First language block on a bilingual screen (the original stanza). */
+export function firstFlagStanza(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) return "";
+  return splitFlagStanzas(trimmed)[0] ?? trimmed;
 }
 
 function splitPunctuationSentences(stanza: string): string[] {

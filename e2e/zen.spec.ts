@@ -59,6 +59,42 @@ async function seedDoneArticle(page: Page, id: string, status = "unread") {
   );
 }
 
+test("zen listen button speaks original text from the current page", async ({
+  page,
+}) => {
+  await seedDoneArticle(page, "zen-listen");
+  await page.goto("/article/zen-listen");
+
+  const listen = page.getByRole("button", { name: "Listen to original" });
+  await expect(listen).toBeVisible();
+
+  const box = await listen.boundingBox();
+  const viewport = page.viewportSize();
+  if (!box || !viewport) throw new Error("missing boxes");
+  expect(box.x + box.width).toBeGreaterThan(viewport.width * 0.5);
+  expect(box.y).toBeGreaterThan(viewport.height * 0.5);
+
+  await page.evaluate(() => {
+    const speak = () => undefined;
+    Object.defineProperty(window, "speechSynthesis", {
+      configurable: true,
+      value: {
+        speaking: false,
+        pending: false,
+        paused: false,
+        cancel: () => undefined,
+        speak,
+        getVoices: () => [],
+      },
+    });
+  });
+
+  await listen.click();
+  await expect(
+    page.getByRole("button", { name: "Stop listening" }),
+  ).toBeVisible();
+});
+
 test("zen swipe works outside the paragraph text", async ({ page }) => {
   await seedDoneArticle(page, "zen-swipe-screen");
   await page.goto("/article/zen-swipe-screen");

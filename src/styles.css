@@ -483,6 +483,27 @@ button.danger {
   pointer-events: auto;
 }
 
+.zen-listen {
+  position: fixed;
+  right: 16px;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  z-index: 25;
+  min-width: var(--tap);
+  min-height: var(--tap);
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 500;
+  box-shadow: 0 1px 2px rgb(16 24 40 / 6%);
+}
+
+.zen-listen:disabled {
+  opacity: 0.45;
+}
+
 .zen-pane {
   min-height: 50vh;
   /* Own the gesture so the browser does not steal it for page scroll. */
