@@ -20,10 +20,53 @@ describe("parseNumberedTranslations", () => {
     );
   });
 
-  it("appends continuation lines to the current block", () => {
+  it("keeps continuation lines on separate lines", () => {
     const parsed = parseNumberedTranslations("1. Uno\ncontinuación\n2. Dos", 2);
-    expect(parsed.get(1)).toBe("Uno continuación");
+    expect(parsed.get(1)).toBe("Uno\ncontinuación");
     expect(parsed.get(2)).toBe("Dos");
+  });
+
+  it("parses the rules' sentence table: bare numbers with flag lines", () => {
+    const raw = [
+      "1  ",
+      "🇪🇸 Su historia ha generado una ola de indignación.",
+      "🇷🇺 Её история вызвала волну негодования.\t",
+      "   ",
+      "2",
+      "🇪🇸 Otra frase del libro.",
+      "🇷🇺 Другая фраза из книги.",
+    ].join("\r\n");
+    expect(parseNumberedTranslations(raw, 2)).toEqual(
+      new Map([
+        [
+          1,
+          "🇪🇸 Su historia ha generado una ola de indignación.\n🇷🇺 Её история вызвала волну негодования.",
+        ],
+        [2, "🇪🇸 Otra frase del libro.\n🇷🇺 Другая фраза из книги."],
+      ]),
+    );
+  });
+
+  it("stops the table prefix at a gap", () => {
+    const raw = [
+      "1",
+      "🇪🇸 Uno.",
+      "🇷🇺 Один.",
+      "",
+      "3",
+      "🇪🇸 Tres.",
+      "🇷🇺 Три.",
+    ].join("\n");
+    expect(parseNumberedTranslations(raw, 3)).toEqual(
+      new Map([[1, "🇪🇸 Uno.\n🇷🇺 Один."]]),
+    );
+  });
+
+  it("keeps a trailing marker without text out of the table", () => {
+    const raw = ["1", "🇪🇸 Uno.", "🇷🇺 Один.", "", "2", ""].join("\n");
+    expect(parseNumberedTranslations(raw, 2)).toEqual(
+      new Map([[1, "🇪🇸 Uno.\n🇷🇺 Один."]]),
+    );
   });
 
   it("stops at a gap", () => {

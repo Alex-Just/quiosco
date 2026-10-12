@@ -29,7 +29,7 @@ export function sentenceCacheKey(
   material: BookTranslationMaterial,
 ): Promise<string> {
   return sha256Hex(
-    `quiosco:book:v1\n${material.targetLanguage}\n${material.rules}\n${normalizeSentence(source)}`,
+    `quiosco:book:v2\n${material.targetLanguage}\n${material.rules}\n${normalizeSentence(source)}`,
   );
 }
 

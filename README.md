@@ -28,7 +28,10 @@ reading position stays local, exactly as it does for articles.
 
 A book opens in Zen. Translation mode is a Zen-only toggle, off at every open:
 when on, it translates the current paragraph sentence by sentence, prefetches
-the pages ahead, and spends from the same Zen daily budget as articles.
+the pages ahead, and spends from the same Zen daily budget as articles. Each
+sentence follows your translation rules — with the usual numbered table, the
+reader sees both languages with their language flags on the same screen, as in
+articles.
 
 Every translated sentence is cached permanently, keyed by content — the cache
 is shared across books, so a sentence is never translated twice. The importer

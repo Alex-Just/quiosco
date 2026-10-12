@@ -15,10 +15,16 @@ export function buildBookSystemPrompt(input: {
   rules: string;
 }): string {
   const language = input.targetLanguage.trim() || "English";
-  const rules = input.rules.trim() || "None.";
+  const rules = input.rules.trim();
   const author = input.author ?? "";
   const sourceLanguage = input.sourceLanguage ?? "";
-  return `You translate the book "${input.title}"${author ? ` by ${author}` : ""}${sourceLanguage ? ` (original language: ${sourceLanguage})` : ""} into ${language}. Rules: ${rules} The user message contains three tagged blocks: <before> (already read, context only), <translate> (the sentences to translate, numbered), <after> (upcoming, context only). Keep names, tone, and terminology consistent with the context. Reply with exactly one numbered block per sentence in <translate>, in the same order: "1. <translation>", "2. <translation>", and nothing else.`;
+  // With rules, the reply keeps the reader's own per-entry format (their
+  // article prompt already specifies the numbered table with both languages);
+  // without rules, plain translations are the only sane default.
+  const entryContract = rules
+    ? `Reply with exactly one numbered entry per sentence in <translate>, in the same order; each entry must follow the rules' output format exactly (for the usual table: the number, then the original sentence with its language flag on one line, then its translation with its language flag on the next), and output nothing else.`
+    : `Reply with exactly one numbered block per sentence in <translate>, in the same order: "1. <translation>", "2. <translation>", and nothing else.`;
+  return `You translate the book "${input.title}"${author ? ` by ${author}` : ""}${sourceLanguage ? ` (original language: ${sourceLanguage})` : ""} into ${language}. Rules: ${rules || "None."} The user message contains three tagged blocks: <before> (already read, context only), <translate> (the sentences to translate, numbered), <after> (upcoming, context only). Keep names, tone, and terminology consistent with the context. ${entryContract}`;
 }
 
 export function buildBookUserMessage(input: {

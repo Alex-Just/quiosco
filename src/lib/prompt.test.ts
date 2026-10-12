@@ -40,6 +40,18 @@ describe("buildBookSystemPrompt", () => {
       "The user message contains three tagged blocks: <before> (already read, context only), <translate> (the sentences to translate, numbered), <after> (upcoming, context only).",
     );
     expect(prompt).toContain(
+      "Reply with exactly one numbered entry per sentence in <translate>, in the same order; each entry must follow the rules' output format exactly (for the usual table: the number, then the original sentence with its language flag on one line, then its translation with its language flag on the next), and output nothing else.",
+    );
+  });
+
+  it("falls back to plain numbered translations without rules", () => {
+    const prompt = buildBookSystemPrompt({
+      title: "Solaris",
+      targetLanguage: "Ukrainian",
+      rules: "",
+    });
+    expect(prompt).toContain("Rules: None.");
+    expect(prompt).toContain(
       'Reply with exactly one numbered block per sentence in <translate>, in the same order: "1. <translation>", "2. <translation>", and nothing else.',
     );
   });

@@ -503,8 +503,11 @@ test("translates the Zen paragraph from the cache and pauses on failure", async 
       contentType: "application/json",
       body: JSON.stringify({
         text: sentences
-          .map((sentence, index) => `${index + 1}. ES-trad: ${sentence}`)
-          .join("\n"),
+          .map(
+            (sentence, index) =>
+              `${index + 1}\n🇪🇸 ${sentence}\n🇷🇺 ES-trad: ${sentence}`,
+          )
+          .join("\n\n"),
       }),
     });
   });
@@ -515,8 +518,11 @@ test("translates the Zen paragraph from the cache and pauses on failure", async 
   await expect(sheet).toHaveCount(0);
 
   // The paragraph mixes cached translations with the source text that is not
-  // translated yet.
+  // translated yet, and each translated sentence keeps both languages.
   await expect(page.locator(".zen-pane .para")).toContainText("ES-trad:");
+  await expect(page.locator(".zen-pane .para")).toContainText(
+    "🇪🇸 Capítulo uno",
+  );
   expect(requests.length).toBeGreaterThan(0);
 
   // The prefetch settles for now: the status returns to idle and no request is
@@ -541,6 +547,9 @@ test("translates the Zen paragraph from the cache and pauses on failure", async 
     "Primer capítulo",
   );
   await expect(page.locator(".zen-pane .para")).toContainText("ES-trad:");
+  await expect(page.locator(".zen-pane .para")).toContainText(
+    "🇪🇸 Primer capítulo",
+  );
   await expect.poll(() => requests.length).toBe(settled);
 
   // A reload re-enters translation mode on the same paragraph: the verified
