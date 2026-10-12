@@ -139,37 +139,41 @@ export default function ArticlePage() {
   return (
     <article className={zenMode ? "article article-zen" : "article"}>
       {zenMode && zenIndex != null && (
-        <ArticleZenProgress index={zenIndex} total={paragraphs.length} />
+        <ArticleZenProgress
+          index={zenIndex}
+          total={paragraphs.length}
+          onOpenMore={() => setMoreOpen(true)}
+        />
       )}
       {!zenMode && <ArticlePageHeader article={article} />}
-      {zenMode || compactChrome ? (
-        <ArticleReadingToolbar
-          view={view}
-          onSwitchView={switchView}
-          onOpenMore={() => setMoreOpen(true)}
-          showViewToggle={!zenMode}
-        />
-      ) : (
-        <>
-          <ArticlePageActions
-            article={article}
-            working={working}
-            onToggleRead={actions.toggleRead}
-            onToggleArchive={actions.toggleArchive}
-            onCancel={actions.onCancel}
-            onRetranslate={actions.onRetranslate}
-            onDelete={actions.onDelete}
-          />
-          <ArticleTranslationStatus article={article} now={now} />
-          <ArticleViewControls
+      {!zenMode &&
+        (compactChrome ? (
+          <ArticleReadingToolbar
             view={view}
             onSwitchView={switchView}
-            copied={actions.copied}
-            translationBody={translationBody}
-            onCopy={actions.copy}
+            onOpenMore={() => setMoreOpen(true)}
           />
-        </>
-      )}
+        ) : (
+          <>
+            <ArticlePageActions
+              article={article}
+              working={working}
+              onToggleRead={actions.toggleRead}
+              onToggleArchive={actions.toggleArchive}
+              onCancel={actions.onCancel}
+              onRetranslate={actions.onRetranslate}
+              onDelete={actions.onDelete}
+            />
+            <ArticleTranslationStatus article={article} now={now} />
+            <ArticleViewControls
+              view={view}
+              onSwitchView={switchView}
+              copied={actions.copied}
+              translationBody={translationBody}
+              onCopy={actions.copy}
+            />
+          </>
+        ))}
       {body ? (
         zenMode ? (
           zenIndex == null ? (

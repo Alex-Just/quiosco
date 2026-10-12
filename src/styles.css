@@ -343,10 +343,6 @@ button.danger {
   margin: 4px 0 12px;
 }
 
-.article-toolbar-zen {
-  justify-content: flex-end;
-}
-
 .article-toolbar .toggle {
   margin: 0;
 }
@@ -422,10 +418,6 @@ button.danger {
   width: 100%;
 }
 
-.article-zen .article-toolbar {
-  margin-bottom: 16px;
-}
-
 .zen-progress {
   position: fixed;
   top: 0;
@@ -437,6 +429,14 @@ button.danger {
   gap: 10px;
   padding: calc(8px + env(safe-area-inset-top)) 16px 16px;
   pointer-events: none;
+}
+
+.zen-progress-meter {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
 }
 
 .zen-progress-label {
@@ -461,6 +461,10 @@ button.danger {
   border-radius: 999px;
   background: var(--muted);
   transition: width 120ms ease-out;
+}
+
+.zen-progress-more {
+  pointer-events: auto;
 }
 
 .zen-pane {
