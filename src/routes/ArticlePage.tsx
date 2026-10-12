@@ -9,6 +9,7 @@ import { ArticleTranslationStatus } from "../components/ArticleTranslationStatus
 import { ArticleViewControls } from "../components/ArticleViewControls";
 import { ArticleZenEndActions } from "../components/ArticleZenEndActions";
 import { ArticleZenPane } from "../components/ArticleZenPane";
+import { ArticleZenProgress } from "../components/ArticleZenProgress";
 import { SentenceSheet } from "../components/SentenceSheet";
 import { articleChromeCompact } from "../lib/articleChrome";
 import {
@@ -124,6 +125,9 @@ export default function ArticlePage() {
 
   return (
     <article className={zenMode ? "article article-zen" : "article"}>
+      {zenMode && zenIndex != null && (
+        <ArticleZenProgress index={zenIndex} total={paragraphs.length} />
+      )}
       {!zenMode && <ArticlePageHeader article={article} />}
       {zenMode || compactChrome ? (
         <ArticleReadingToolbar

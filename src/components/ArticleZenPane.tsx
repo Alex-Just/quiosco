@@ -53,9 +53,6 @@ export function ArticleZenPane({
   return (
     <div className="article-text zen-pane" ref={setSurface}>
       <p className="para">
-        <span className="para-index">
-          {index + 1}/{total}
-        </span>
         {sentences.map((sentence, sentenceIndex) => {
           const raw = sentenceIndex === 0 && first ? first.text : sentence;
           const next = sentences[sentenceIndex + 1];
