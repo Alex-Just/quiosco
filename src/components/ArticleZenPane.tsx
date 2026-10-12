@@ -51,7 +51,7 @@ export function ArticleZenPane({
   const first = sentences[0] ? splitLeadingNumber(sentences[0]) : null;
 
   return (
-    <div className="zen-pane" ref={setSurface}>
+    <div className="article-text zen-pane" ref={setSurface}>
       <p className="para">
         <span className="para-index">
           {index + 1}/{total}
