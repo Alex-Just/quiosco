@@ -16,19 +16,18 @@ export function speakableOriginalParagraph(text: string): string {
 }
 
 /**
- * Original-language text for the current Zen page. Prefer the original body
- * paragraph; if that index is missing (translation split differs), fall back
- * to the first stanza of what is on screen.
+ * Original-language text for the current Zen page. Prefer the first stanza
+ * of what is on screen — translation pages do not line up 1:1 with the
+ * original body. Fall back to the original body only when the screen is empty.
  */
 export function originalParagraphForZen(input: {
   originalBody: string;
   index: number;
   screenParagraph?: string;
 }): string {
+  const fromScreen = speakableOriginalParagraph(input.screenParagraph ?? "");
+  if (fromScreen) return fromScreen;
+
   const originals = bodyParagraphs(input.originalBody);
-  const fromOriginal = originals[input.index];
-  if (fromOriginal != null && fromOriginal.trim().length > 0) {
-    return speakableOriginalParagraph(fromOriginal);
-  }
-  return speakableOriginalParagraph(input.screenParagraph ?? "");
+  return speakableOriginalParagraph(originals[input.index] ?? "");
 }

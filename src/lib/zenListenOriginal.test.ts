@@ -25,23 +25,28 @@ describe("speakableOriginalParagraph", () => {
 });
 
 describe("originalParagraphForZen", () => {
-  it("reads the matching original paragraph", () => {
+  it("speaks the on-screen original stanza, not a mismatched original index", () => {
+    // Translation Zen pages do not line up 1:1 with original paragraphs.
     expect(
       originalParagraphForZen({
-        originalBody: "Primero.\n\nSegundo párrafo aquí.",
-        index: 1,
+        originalBody:
+          "Unos trabajos muy necesarios que devolverán el esplendor.\n\nOtro párrafo del original distinto.",
+        index: 0,
+        screenParagraph:
+          "🇪🇸 La licitación contempla un presupuesto de 817.953,48 euros, IVA incluido.\n\n🇷🇺 В тендере предусмотрен бюджет.",
       }),
-    ).toBe("Segundo párrafo aquí.");
+    ).toBe(
+      "La licitación contempla un presupuesto de 817.953,48 euros, IVA incluido.",
+    );
   });
 
-  it("falls back to the on-screen paragraph when original is short", () => {
+  it("falls back to the original body when the screen has no text", () => {
     expect(
       originalParagraphForZen({
-        originalBody: "Solo uno.",
+        originalBody: "Primero.\n\nSegundo párrafo aquí con texto.",
         index: 1,
-        screenParagraph:
-          "🇪🇸 Entre las infracciones más habituales.\n\n🇷🇺 Среди нарушений.",
+        screenParagraph: "",
       }),
-    ).toBe("Entre las infracciones más habituales.");
+    ).toBe("Segundo párrafo aquí con texto.");
   });
 });
