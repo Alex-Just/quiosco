@@ -147,7 +147,12 @@ After D1 is created and the schema is applied (see checklist above):
 3. Share an article from Chrome → pick Quiosco. Share selected text the same
    way (it becomes the article text, with the URL kept as the source link when
    provided).
-4. After a manifest change, reinstall from Chrome (WebAPK update lag).
+4. Share an `.epub` file from any app (Files, Downloads) → pick Quiosco; the
+   Add page opens in Book mode with the book ready to save. The share sheet
+   entry comes from the manifest's `share_target` files entry, so the app must
+   be reinstalled/updated after that entry changes. If a shared file arrives
+   empty (a Chrome 153 bug), use Add → Book → pick the file instead.
+5. After a manifest change, reinstall from Chrome (WebAPK update lag).
 
 ## Smoke test
 

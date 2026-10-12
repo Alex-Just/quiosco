@@ -2,7 +2,7 @@
 import { clientsClaim } from "workbox-core";
 import { createHandlerBoundToURL, precacheAndRoute } from "workbox-precaching";
 import { NavigationRoute, Route, registerRoute } from "workbox-routing";
-import { storePendingShare } from "./lib/sharePayload";
+import { storePendingBook, storePendingShare } from "./lib/sharePayload";
 
 declare let self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<{ url: string; revision: string | null }>;
@@ -16,12 +16,19 @@ const shareRoute = new Route(
   ({ request, url }) => request.method === "POST" && url.pathname === "/share",
   async ({ request }) => {
     const formData = await request.formData();
-    await storePendingShare({
-      title: String(formData.get("title") ?? ""),
-      text: String(formData.get("text") ?? ""),
-      url: String(formData.get("url") ?? ""),
-      receivedAt: Date.now(),
-    });
+    // Android file shares deliver the EPUB in its own field and carry no
+    // title/text/url; text shares carry no file. Keep both paths, and never
+    // overwrite a pending payload with an empty one.
+    const shared = formData.get("epub");
+    if (shared instanceof File && shared.size > 0) {
+      await storePendingBook(shared);
+    }
+    const title = String(formData.get("title") ?? "");
+    const text = String(formData.get("text") ?? "");
+    const url = String(formData.get("url") ?? "");
+    if (title || text || url) {
+      await storePendingShare({ title, text, url, receivedAt: Date.now() });
+    }
     return Response.redirect(
       new URL("/share", self.location.origin).toString(),
       303,

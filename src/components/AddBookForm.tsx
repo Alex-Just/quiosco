@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { bookSaveErrorMessage, epubErrorMessage } from "../lib/addPageErrors";
 import { newBook } from "../lib/article";
@@ -12,6 +12,8 @@ import type { ArticleStore } from "../lib/store";
 
 type AddBookFormProps = {
   store: ArticleStore;
+  /** EPUB received through the Android share sheet; parsed like a picked file. */
+  sharedFile?: File | null;
   onSaved: (id: string) => void;
 };
 
@@ -23,7 +25,7 @@ function fileNameTitle(fileName: string): string {
 const countChars = (chapters: ParsedBook["chapters"]) =>
   chapters.reduce((total, chapter) => total + chapter.text.length, 0);
 
-export function AddBookForm({ store, onSaved }: AddBookFormProps) {
+export function AddBookForm({ store, sharedFile, onSaved }: AddBookFormProps) {
   const [fileName, setFileName] = useState("");
   const [progress, setProgress] = useState<{
     done: number;
@@ -37,6 +39,15 @@ export function AddBookForm({ store, onSaved }: AddBookFormProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   // Bumped on every pick so a slow parse cannot overwrite a newer one.
   const pickRef = useRef(0);
+  // The shared file is parsed once, exactly like a picked one.
+  const consumedSharedRef = useRef<File | null>(null);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: onFile is a fresh closure; the shared file identity is the trigger
+  useEffect(() => {
+    if (!sharedFile || consumedSharedRef.current === sharedFile) return;
+    consumedSharedRef.current = sharedFile;
+    void onFile(sharedFile);
+  }, [sharedFile]);
 
   async function onFile(file: File | undefined) {
     if (!file) return;

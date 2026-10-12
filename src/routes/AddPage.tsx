@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Link,
   useLocation,
@@ -10,6 +10,7 @@ import { saveErrorMessage, TOKEN_REQUIRED_FOR_URL } from "../lib/addPageErrors";
 import { addPageSaveLabel, showAddPageTryAgain } from "../lib/addPageUi";
 import { runAddPagePreprocess } from "../lib/runAddPagePreprocess";
 import { saveAddPageArticle } from "../lib/saveAddPageArticle";
+import { clearPendingBook, readPendingBook } from "../lib/sharePayload";
 import { translateArticle } from "../lib/translateArticle";
 import type { Via } from "../lib/types";
 import { useAddPagePrefill } from "../lib/useAddPagePrefill";
@@ -25,7 +26,15 @@ export default function AddPage() {
   const [title, setTitle] = useState("");
   const [url, setUrl] = useState("");
   const [text, setText] = useState("");
-  const [mode, setMode] = useState<"article" | "book">("article");
+  // A shared EPUB arrives through /share with this state flag: open Book mode
+  // and hand the file to the form, which parses it exactly like a picked one.
+  const fromBookShare =
+    (location.state as { fromBookShare?: boolean } | null)?.fromBookShare ===
+    true;
+  const [sharedBook, setSharedBook] = useState<File | null>(null);
+  const [mode, setMode] = useState<"article" | "book">(
+    fromBookShare ? "book" : "article",
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cleanup, setCleanup] = useState(true);
@@ -49,6 +58,21 @@ export default function AddPage() {
     setFetchDetail,
     setFetchedVia,
   });
+
+  useEffect(() => {
+    if (!fromBookShare) return;
+    let cancelled = false;
+    void (async () => {
+      const file = await readPendingBook();
+      if (cancelled || !file) return;
+      setSharedBook(file);
+      // Consumed into the form; an abandoned preview can be re-shared.
+      await clearPendingBook();
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [fromBookShare]);
 
   const preprocessApply = {
     setText,
@@ -168,6 +192,7 @@ export default function AddPage() {
       {activeMode === "book" && store && (
         <AddBookForm
           store={store}
+          sharedFile={sharedBook}
           onSaved={(id) => navigate(`/article/${id}`, { replace: true })}
         />
       )}

@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
@@ -255,6 +255,42 @@ test("imports an EPUB book from the Add page and lists it", async ({
 });
 
 /** Zen index of the first saved local position (undefined when none). */
+/** The service worker must control the page so POST /share reaches its route. */
+async function waitForServiceWorker(page: Page) {
+  await page.goto("/");
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+    return true;
+  });
+  await page.reload();
+  await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+}
+
+test("a shared EPUB file opens the Add page in Book mode and imports", async ({
+  page,
+}) => {
+  await waitForServiceWorker(page);
+  const bytes = [...(await readFile(epubPath))];
+  await page.evaluate(async (data) => {
+    const formData = new FormData();
+    formData.set(
+      "epub",
+      new File([new Uint8Array(data)], "libro-compartido.epub", {
+        type: "application/epub+zip",
+      }),
+    );
+    await fetch("/share", { method: "POST", body: formData });
+  }, bytes);
+
+  await page.goto("/share");
+  await page.waitForURL("**/add");
+  await expect(page.getByRole("heading", { name: "Add book" })).toBeVisible();
+  await expect(page.getByText("5 chapters ·")).toBeVisible();
+  await page.getByRole("button", { name: "Save" }).click();
+  await page.waitForURL("**/article/**");
+  await expect(page.locator(".zen-pane .para")).toContainText("Capítulo uno");
+});
+
 async function savedZenIndex(page: Page): Promise<number | undefined> {
   return page.evaluate(async () => {
     const db = await new Promise<IDBDatabase>((resolve, reject) => {

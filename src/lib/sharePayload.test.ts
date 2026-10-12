@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   type CacheStorageLike,
+  clearPendingBook,
   clearPendingShare,
+  readPendingBook,
   readPendingShare,
+  storePendingBook,
   storePendingShare,
 } from "./sharePayload";
 
@@ -54,5 +57,28 @@ describe("sharePayload", () => {
     const cache = await storage.open("quiosco-share");
     await cache.put("/__pending-share", new Response("not json"));
     await expect(readPendingShare(storage)).resolves.toBeNull();
+  });
+
+  it("stores, reads, and clears a pending book file", async () => {
+    const storage = fakeCacheStorage();
+    const file = new File([new Uint8Array([1, 2, 3])], "libro.epub", {
+      type: "application/epub+zip",
+    });
+    await storePendingBook(file, storage);
+    const read = await readPendingBook(storage);
+    expect(read?.name).toBe("libro.epub");
+    expect(read?.type).toBe("application/epub+zip");
+    expect(new Uint8Array(await (read as File).arrayBuffer())).toEqual(
+      new Uint8Array([1, 2, 3]),
+    );
+    await clearPendingBook(storage);
+    await expect(readPendingBook(storage)).resolves.toBeNull();
+  });
+
+  it("treats a zero-byte pending book as nothing received", async () => {
+    const storage = fakeCacheStorage();
+    const cache = await storage.open("quiosco-share");
+    await cache.put("/__pending-book", new Response(new Blob([])));
+    await expect(readPendingBook(storage)).resolves.toBeNull();
   });
 });

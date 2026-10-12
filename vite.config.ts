@@ -38,7 +38,17 @@ export default defineConfig({
           action: "/share",
           method: "POST",
           enctype: "multipart/form-data",
-          params: { title: "title", text: "text", url: "url" },
+          params: {
+            title: "title",
+            text: "text",
+            url: "url",
+            files: [
+              {
+                name: "epub",
+                accept: ["application/epub+zip", ".epub"],
+              },
+            ],
+          },
         },
       },
       injectManifest: {

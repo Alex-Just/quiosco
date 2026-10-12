@@ -2,6 +2,10 @@ import type { SharePayload } from "./types";
 
 export const SHARE_CACHE = "quiosco-share";
 export const PENDING_SHARE_KEY = "/__pending-share";
+/** Pending EPUB received through the Android share sheet. */
+export const PENDING_BOOK_KEY = "/__pending-book";
+const BOOK_NAME_HEADER = "x-quiosco-file-name";
+const DEFAULT_BOOK_NAME = "book.epub";
 
 interface CacheLike {
   match(key: string): Promise<Response | undefined>;
@@ -54,4 +58,52 @@ export async function clearPendingShare(
 ): Promise<void> {
   const cache = await cacheStorage.open(SHARE_CACHE);
   await cache.delete(PENDING_SHARE_KEY);
+}
+
+/** Keep a shared EPUB in the cache until the Add page picks it up. */
+export async function storePendingBook(
+  file: File,
+  cacheStorage: CacheStorageLike = defaultCacheStorage(),
+): Promise<void> {
+  const cache = await cacheStorage.open(SHARE_CACHE);
+  await cache.put(
+    PENDING_BOOK_KEY,
+    new Response(file, {
+      headers: {
+        "content-type": file.type || "application/epub+zip",
+        [BOOK_NAME_HEADER]: encodeURIComponent(file.name || DEFAULT_BOOK_NAME),
+      },
+    }),
+  );
+}
+
+export async function readPendingBook(
+  cacheStorage: CacheStorageLike = defaultCacheStorage(),
+): Promise<File | null> {
+  const cache = await cacheStorage.open(SHARE_CACHE);
+  const response = await cache.match(PENDING_BOOK_KEY);
+  if (!response) return null;
+  const blob = await response.blob();
+  // A zero-byte body means the browser shared "nothing" (or a truncated
+  // share); treat it as nothing received rather than an unreadable file.
+  if (blob.size === 0) return null;
+  const encodedName = response.headers.get(BOOK_NAME_HEADER);
+  let name = DEFAULT_BOOK_NAME;
+  if (encodedName) {
+    try {
+      name = decodeURIComponent(encodedName) || DEFAULT_BOOK_NAME;
+    } catch {
+      // Keep the default when the header is not valid percent-encoding.
+    }
+  }
+  return new File([blob], name, {
+    type: response.headers.get("content-type") ?? "application/epub+zip",
+  });
+}
+
+export async function clearPendingBook(
+  cacheStorage: CacheStorageLike = defaultCacheStorage(),
+): Promise<void> {
+  const cache = await cacheStorage.open(SHARE_CACHE);
+  await cache.delete(PENDING_BOOK_KEY);
 }

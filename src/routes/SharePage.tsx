@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { classifyShare } from "../lib/share";
-import { readPendingShare } from "../lib/sharePayload";
+import { readPendingBook, readPendingShare } from "../lib/sharePayload";
 import { useStore } from "../lib/useStore";
 
 type Flow = { phase: "loading" } | { phase: "empty" };
@@ -16,6 +16,11 @@ export default function SharePage() {
     if (!store || started.current) return;
     started.current = true;
     void (async () => {
+      const book = await readPendingBook();
+      if (book) {
+        navigate("/add", { replace: true, state: { fromBookShare: true } });
+        return;
+      }
       const payload = await readPendingShare();
       if (!payload) {
         setFlow({ phase: "empty" });
@@ -42,11 +47,12 @@ export default function SharePage() {
       <section className="flow">
         <h1>Nothing received</h1>
         <p className="muted">
-          Share an article to Quiosco again, or paste the text manually.
+          Share an article or an EPUB file to Quiosco again, or add it from the
+          Add page.
         </p>
         <div className="row">
           <Link className="button primary" to="/add">
-            Paste text
+            Add manually
           </Link>
           <Link className="button" to="/">
             Back to list
