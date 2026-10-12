@@ -63,7 +63,9 @@ export function splitSentences(paragraph: string): string[] {
 // app (TTS and Copy) drops both markers. A sentence that is nothing but a
 // marker is returned unchanged so nothing speaks an empty line.
 const LIST_NUMBER = /^(\d{1,4})\s*[.)º°](?=\s|$)/;
-const STANDALONE_NUMBER = /^(\d{1,4})(?=\n)/;
+// Bare index before a newline, or before spaces + a flag on the same line
+// ("3 🇪🇸 …"). Do not match years glued to words ("2026 fue").
+const STANDALONE_NUMBER = /^(\d{1,4})(?=\n|\s+[\u{1F1E6}-\u{1F1FF}]{2})/u;
 const LEADING_FLAG = /^[\u{1F1E6}-\u{1F1FF}]{2}\s*/u;
 
 export interface LeadingMarkers {
@@ -104,5 +106,5 @@ export function splitLeadingNumber(sentence: string): LeadingMarkers {
   const match = LIST_NUMBER.exec(trimmed) ?? STANDALONE_NUMBER.exec(trimmed);
   if (!match) return { number: null, text: sentence };
   const text = trimmed.slice(match[0].length).replace(/^\s+/, "");
-  return { number: match[1] ?? null, text: text.length > 0 ? text : sentence };
+  return { number: match[1] ?? null, text };
 }
