@@ -72,6 +72,23 @@ describe("splitSentences", () => {
     ]);
   });
 
+  it("merges consecutive dialogue tags after a close", () => {
+    expect(splitSentences("—¡Fuera! —gritó—. —insistió—. Y se fue.")).toEqual([
+      "—¡Fuera! —gritó—. —insistió—.",
+      "Y se fue.",
+    ]);
+  });
+
+  it("merges a new line that opens lowercase (documented trade-off)", () => {
+    expect(splitSentences("—En marzo. —en abril.")).toEqual([
+      "—En marzo. —en abril.",
+    ]);
+  });
+
+  it("merges an en-dash dialogue tag", () => {
+    expect(splitSentences("–¡Vaya! –dijo–.")).toEqual(["–¡Vaya! –dijo–."]);
+  });
+
   it("still splits a new dialogue line after a closing tag", () => {
     expect(splitSentences("—Vamos. —De acuerdo.")).toEqual([
       "—Vamos.",

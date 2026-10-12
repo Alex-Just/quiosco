@@ -39,6 +39,12 @@ describe("paragraphizePlainBody", () => {
       "Primero párrafo aquí con bastante texto.\n\nSegundo párrafo también largo.";
     expect(paragraphizePlainBody(input)).toBe(input);
   });
+
+  it("keeps a dialogue tag inside its sentence when grouping", () => {
+    expect(
+      paragraphizePlainBody("—¡Vaya! —dijo el chico. —Lo sé. —Claro."),
+    ).toBe("—¡Vaya! —dijo el chico. —Lo sé.\n\n—Claro.");
+  });
 });
 
 describe("extractJsonLdArticle", () => {

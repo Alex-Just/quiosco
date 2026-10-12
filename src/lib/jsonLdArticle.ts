@@ -1,4 +1,5 @@
 import { MIN_ARTICLE_CHARS } from "./quality";
+import { splitSentences } from "./sentences";
 
 export interface JsonLdArticle {
   title: string | null;
@@ -8,7 +9,6 @@ export interface JsonLdArticle {
 /** Sentences per blank-line paragraph when JSON-LD ships one blob. */
 const SENTENCES_PER_PARAGRAPH = 2;
 
-const SENTENCE_BREAK = /(?<=[.!?…])\s+/;
 const ARTICLE_TYPES = new Set([
   "NewsArticle",
   "Article",
@@ -17,17 +17,15 @@ const ARTICLE_TYPES = new Set([
 
 /**
  * Turn a single-block articleBody into blank-line paragraphs so the quality
- * gate and Zen paging see real structure.
+ * gate and Zen paging see real structure. Uses the shared splitter, so
+ * abbreviations and dialogue tags never end a sentence.
  */
 export function paragraphizePlainBody(text: string): string {
   const trimmed = text.replace(/\r\n/g, "\n").trim();
   if (!trimmed) return "";
   if (/\n\s*\n/.test(trimmed)) return trimmed;
 
-  const sentences = trimmed
-    .split(SENTENCE_BREAK)
-    .map((sentence) => sentence.trim())
-    .filter((sentence) => sentence.length > 0);
+  const sentences = splitSentences(trimmed);
   if (sentences.length <= 1) return trimmed;
 
   const paragraphs: string[] = [];
