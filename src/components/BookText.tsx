@@ -22,8 +22,9 @@ type ChapterParts = {
 /**
  * Regular (non-Zen) book body: one section per chapter, each with its title
  * and its paragraphs. Paragraph indexes are the flat indexes of
- * `bookFlatParagraphs` (chapter title first), so the dimmed n/total marker and
- * the speech highlight match the Zen pane.
+ * `bookFlatParagraphs` (chapter title first) and drive the dimmed n/total
+ * marker and the sentence speech highlight. Zen indexes sentence units
+ * instead, so speech is stopped when switching between the two views.
  */
 export function BookText({
   chapters,

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { newArticle } from "./article";
 import {
-  assembleTranslatedParagraph,
   bookChapterStarts,
   bookFlatParagraphs,
   bookSentenceUnits,
@@ -108,31 +107,6 @@ describe("unitsByParagraph", () => {
     expect(grouped.get(1)).toEqual([2]);
     expect(grouped.get(2)).toEqual([3]);
     expect(grouped.size).toBe(3);
-  });
-});
-
-describe("assembleTranslatedParagraph", () => {
-  it("uses translations per unit and falls back to the source", () => {
-    const units = bookSentenceUnits(["Hola, mundo. ¿Qué tal?"]);
-    const result = assembleTranslatedParagraph(
-      units,
-      [0, 1],
-      new Map([[0, "Hello, world."]]),
-    );
-    expect(result).toContain("Hello, world.");
-    expect(result).toContain("¿Qué tal?");
-    expect(result).toBe("Hello, world. ¿Qué tal?");
-  });
-
-  it("separates a flag-led translation from the previous part", () => {
-    const units = bookSentenceUnits(["Hola, mundo. ¿Qué tal?"]);
-    expect(
-      assembleTranslatedParagraph(
-        units,
-        [0, 1],
-        new Map([[1, "🇷🇺 Как дела?"]]),
-      ),
-    ).toBe("Hola, mundo.\n\n🇷🇺 Как дела?");
   });
 });
 

@@ -1,5 +1,4 @@
 import { bodyParagraphs } from "./articleDisplayHelpers";
-import { gapBeforeSentence } from "./flagLines";
 import { splitSentences, stripSentenceMarkers } from "./sentences";
 import type { Article } from "./types";
 
@@ -97,24 +96,6 @@ export function unitsByParagraph(
     else byParagraph.set(unit.paragraphIndex, [index]);
   });
   return byParagraph;
-}
-
-/**
- * Paragraph text from its units: the cached translation when there is one,
- * the unit's source text otherwise, joined like tappable sentences.
- */
-export function assembleTranslatedParagraph(
-  units: readonly BookSentenceUnit[],
-  unitIndices: readonly number[],
-  translations: ReadonlyMap<number, string>,
-): string {
-  let result = "";
-  for (const index of unitIndices) {
-    const part = translations.get(index) ?? units[index]?.text ?? "";
-    if (!part) continue;
-    result += result ? gapBeforeSentence(part) + part : part;
-  }
-  return result;
 }
 
 /** True when every non-skipped unit of the paragraph has a translation. */

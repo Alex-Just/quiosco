@@ -231,8 +231,8 @@ async function jumpToLastParagraph(page: Page) {
     .getByRole("dialog", { name: "Chapters" })
     .getByRole("button", { name: "Capítulo final" })
     .click();
-  // The pane's counter gives the total; ArrowDown walks there one paragraph
-  // at a time, which is cheap enough at this size.
+  // The pane's counter gives the total; ArrowDown walks there one screen at a
+  // time, which is cheap enough at this size.
   const totalText = await page.locator(".zen-progress-label").textContent();
   const total = Number(/\/\s*(\d+)/.exec(totalText ?? "")?.[1] ?? 1);
   const current = Number(/^\s*(\d+)/.exec(totalText ?? "")?.[1] ?? 1);
@@ -335,7 +335,7 @@ test("reads a book in Zen, one sentence per screen, and resumes", async ({
   await setAppToken(page);
   await importBook(page);
 
-  // Reopening from the list starts the book in Zen at its first paragraph.
+  // Reopening from the list starts the book in Zen at its first sentence.
   await page.goto("/");
   await page.getByRole("link", { name: /Libro de prueba/ }).click();
   await expect(page.locator(".zen-pane .para")).toContainText("Capítulo uno");
@@ -366,10 +366,15 @@ test("reads a book in Zen, one sentence per screen, and resumes", async ({
   await page.keyboard.press("Escape");
   await expect(sentenceSheet).toHaveCount(0);
 
-  // The pane's key handler advances the paragraph.
+  // The pane's key handler advances one sentence.
   await page.keyboard.press("ArrowDown");
   await expect(page.locator(".zen-pane .para")).toContainText(
     "Primer capítulo",
+  );
+  // Sentence granularity: the second sentence of that paragraph is the next
+  // screen, not part of this one.
+  await expect(page.locator(".zen-pane .para")).not.toContainText(
+    "Segunda frase",
   );
   await expect(page.locator(".zen-progress-label")).toHaveText(/^2\//);
 
@@ -413,7 +418,7 @@ test("reads a book in Zen, one sentence per screen, and resumes", async ({
     .toBeGreaterThan(800);
   await expect(page.locator("#book-chapter-4 h2")).toBeInViewport();
 
-  // After the 200 ms debounce the Zen paragraph is stored; a reload resumes it.
+  // After the 200 ms debounce the Zen screen is stored; a reload resumes it.
   await expect.poll(() => savedZenIndex(page), { timeout: 10_000 }).toBe(1);
   await page.reload();
   await expect(page.locator(".zen-pane .para")).toContainText(
@@ -462,10 +467,12 @@ test("book Zen has the article Listen control with Auto", async ({ page }) => {
   await page.getByRole("link", { name: /Libro de prueba/ }).click();
 
   const listen = page.getByRole("button", { name: "Listen to original" });
+  const autoListen = page.getByRole("checkbox", {
+    name: "Auto-listen on each page",
+  });
   await expect(listen).toBeVisible();
-  await expect(
-    page.getByRole("checkbox", { name: "Auto-listen on each page" }),
-  ).toBeVisible();
+  await expect(autoListen).toBeVisible();
+  await expect(autoListen).not.toBeChecked();
 
   // The system voice is stubbed; speaking starts and stays until stopped.
   await page.evaluate(() => {
@@ -488,10 +495,10 @@ test("book Zen has the article Listen control with Auto", async ({ page }) => {
   await page.getByRole("button", { name: "Stop listening" }).click();
   await expect(listen).toBeVisible();
 
-  // With Auto on, turning the page starts the next sentence automatically.
-  await page
-    .getByRole("checkbox", { name: "Auto-listen on each page" })
-    .check();
+  // With Auto on, the current page keeps waiting; turning the page starts
+  // the next sentence automatically.
+  await autoListen.check();
+  await expect(listen).toBeVisible();
   await page.keyboard.press("ArrowDown");
   await expect(
     page.getByRole("button", { name: "Stop listening" }),
@@ -559,8 +566,7 @@ test("translates the Zen sentence from the cache and pauses on failure", async (
   await sheet.getByRole("button", { name: "Translation mode" }).click();
   await expect(sheet).toHaveCount(0);
 
-  // The paragraph mixes cached translations with the source text that is not
-  // translated yet, and each translated sentence keeps both languages.
+  // The screen shows the cached bilingual translation.
   await expect(page.locator(".zen-pane .para")).toContainText("ES-trad:");
   await expect(page.locator(".zen-pane .para")).toContainText(
     "🇪🇸 Capítulo uno",

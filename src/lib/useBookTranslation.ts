@@ -204,15 +204,7 @@ export function useBookTranslation(args: {
         // A failed cache read (e.g. IndexedDB) leaves the sentence on its
         // source text; there is nothing newer to publish.
       });
-  }, [
-    enabled,
-    store,
-    units,
-    paragraphUnits,
-    anchorUnit,
-    targetLanguage,
-    sessionVersion,
-  ]);
+  }, [enabled, store, units, anchorUnit, targetLanguage, sessionVersion]);
 
   // A paused session (upstream hiccup) resumes as soon as the device is back
   // online; auth and quota are sticky and need a token or a new day.

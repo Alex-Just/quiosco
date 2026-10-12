@@ -30,6 +30,7 @@ import { useSentenceSpeech } from "../lib/useSentenceSpeech";
 import { useZenPosition } from "../lib/useZenPosition";
 import { useZenSwipe } from "../lib/useZenSwipe";
 import { loadZenAutoListen, saveZenAutoListen } from "../lib/zenAutoListen";
+import { clampZenIndex } from "../lib/zenMode";
 
 const COPY_RESET_MS = 1500;
 
@@ -136,8 +137,11 @@ export default function BookReader({
   /** Zen screen index of each chapter's title paragraph. */
   const chapterUnitStarts = useMemo(
     () =>
-      chapterStarts.map((paragraph) => paragraphUnits.get(paragraph)?.[0] ?? 0),
-    [chapterStarts, paragraphUnits],
+      chapterStarts.map((start) => {
+        const index = units.findIndex((unit) => unit.paragraphIndex >= start);
+        return index === -1 ? 0 : index;
+      }),
+    [chapterStarts, units],
   );
 
   const {
@@ -176,6 +180,14 @@ export default function BookReader({
       )
     : null;
   const zenListenText = currentUnit?.text ?? "";
+
+  const onToggleZen = () => {
+    // Zen and regular mode index speech differently (sentence unit vs flat
+    // paragraph): stop the utterance before the highlight can land on an
+    // unrelated paragraph.
+    stopSpeechForViewChange();
+    setZenMode((open) => !open);
+  };
 
   // Full-screen document-level swipe steps Zen screens (the pane itself no
   // longer owns the gesture); pause it while an overlay is open.
@@ -218,6 +230,13 @@ export default function BookReader({
     // Reset until the restore for a newly opened book finishes.
     if (article.id) setZenUnit(null);
   }, [article.id]);
+
+  useEffect(() => {
+    if (paneParagraphs.length <= 0) return;
+    setZenUnit((index) =>
+      index == null ? index : clampZenIndex(index, paneParagraphs.length),
+    );
+  }, [paneParagraphs.length]);
 
   const onZenRestored = useCallback((index: number) => {
     setZenUnit(index);
@@ -345,7 +364,7 @@ export default function BookReader({
           onRetranslate={noop}
           onDelete={onDelete}
           onCopy={() => void copyBookText(article, setCopied)}
-          onToggleZen={() => setZenMode((open) => !open)}
+          onToggleZen={onToggleZen}
         />
       )}
       {chaptersOpen && (
