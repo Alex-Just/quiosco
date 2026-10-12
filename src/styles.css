@@ -96,8 +96,22 @@ body.zen-active .app-header {
   padding: 18px 16px calc(28px + env(safe-area-inset-bottom));
 }
 
+body.zen-active {
+  /* Zen owns vertical gestures on the whole screen, including empty margins. */
+  touch-action: none;
+  overscroll-behavior: none;
+}
+
 body.zen-active .app {
+  min-height: 100dvh;
   padding-top: calc(18px + env(safe-area-inset-top));
+  touch-action: none;
+}
+
+.article-zen {
+  min-height: 100%;
+  touch-action: none;
+  user-select: none;
 }
 
 h1 {
@@ -421,7 +435,7 @@ button.danger {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: calc(8px + env(safe-area-inset-top)) 16px 0;
+  padding: calc(8px + env(safe-area-inset-top)) 16px 16px;
   pointer-events: none;
 }
 
@@ -433,24 +447,20 @@ button.danger {
   line-height: 1;
 }
 
-.zen-progress-segments {
-  display: flex;
+.zen-progress-track {
   flex: 1;
-  align-items: center;
-  gap: 4px;
   min-width: 0;
-}
-
-.zen-progress-segment {
-  flex: 1;
   height: 3px;
-  max-width: 2.5rem;
   border-radius: 999px;
   background: var(--line);
+  overflow: hidden;
 }
 
-.zen-progress-segment.active {
+.zen-progress-fill {
+  height: 100%;
+  border-radius: 999px;
   background: var(--muted);
+  transition: width 120ms ease-out;
 }
 
 .zen-pane {
@@ -463,12 +473,6 @@ button.danger {
 
 .zen-pane .para {
   margin: 0;
-}
-
-.zen-hint {
-  margin: 20px 0 0;
-  text-align: center;
-  font-size: 0.85rem;
 }
 
 .zen-end {

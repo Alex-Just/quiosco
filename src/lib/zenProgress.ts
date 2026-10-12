@@ -4,10 +4,13 @@ export function zenProgressLabel(index: number, total: number): string {
   return `${index + 1}/${total}`;
 }
 
-/** Segment `segmentIndex` is filled when the reader has reached that page. */
-export function isZenProgressSegmentActive(
-  segmentIndex: number,
-  currentIndex: number,
-): boolean {
-  return segmentIndex <= currentIndex;
+/** Fraction of the article read at the given Zen paragraph (0..1). */
+export function zenProgressRatio(index: number, total: number): number {
+  if (total <= 0) return 0;
+  return (index + 1) / total;
+}
+
+/** CSS width for the solid Zen progress fill. */
+export function zenProgressPercent(index: number, total: number): string {
+  return `${zenProgressRatio(index, total) * 100}%`;
 }

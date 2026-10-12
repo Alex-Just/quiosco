@@ -1,14 +1,11 @@
-import {
-  isZenProgressSegmentActive,
-  zenProgressLabel,
-} from "../lib/zenProgress";
+import { zenProgressLabel, zenProgressPercent } from "../lib/zenProgress";
 
 type ArticleZenProgressProps = {
   index: number;
   total: number;
 };
 
-/** Top-of-screen page count and segmented progress for Zen reading. */
+/** Top-of-screen page count and solid progress line for Zen reading. */
 export function ArticleZenProgress({ index, total }: ArticleZenProgressProps) {
   if (total <= 0) return null;
   const label = zenProgressLabel(index, total);
@@ -23,18 +20,11 @@ export function ArticleZenProgress({ index, total }: ArticleZenProgressProps) {
       aria-valuetext={label}
     >
       <span className="zen-progress-label">{label}</span>
-      <div className="zen-progress-segments">
-        {Array.from({ length: total }, (_, segmentIndex) => (
-          <span
-            // biome-ignore lint/suspicious/noArrayIndexKey: segment order is the identity
-            key={segmentIndex}
-            className={
-              isZenProgressSegmentActive(segmentIndex, index)
-                ? "zen-progress-segment active"
-                : "zen-progress-segment"
-            }
-          />
-        ))}
+      <div className="zen-progress-track">
+        <div
+          className="zen-progress-fill"
+          style={{ width: zenProgressPercent(index, total) }}
+        />
       </div>
     </div>
   );

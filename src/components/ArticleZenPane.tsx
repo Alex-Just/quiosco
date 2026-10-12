@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { gapBeforeSentence, spaceFlagLines } from "../lib/flagLines";
 import {
   splitLeadingNumber,
@@ -6,7 +6,6 @@ import {
   stripSentenceMarkers,
 } from "../lib/sentences";
 import type { SentenceMenu } from "../lib/useSentenceSpeech";
-import { useZenSwipe } from "../lib/useZenSwipe";
 import { stepZenIndex } from "../lib/zenMode";
 
 type ArticleZenPaneProps = {
@@ -24,16 +23,8 @@ export function ArticleZenPane({
   isSpeaking,
   onOpenMenu,
 }: ArticleZenPaneProps) {
-  const [surface, setSurface] = useState<HTMLElement | null>(null);
   const total = paragraphs.length;
   const paragraph = paragraphs[index] ?? "";
-
-  useZenSwipe(surface, {
-    enabled: total > 1,
-    index,
-    total,
-    onIndexChange,
-  });
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -51,7 +42,7 @@ export function ArticleZenPane({
   const first = sentences[0] ? splitLeadingNumber(sentences[0]) : null;
 
   return (
-    <div className="article-text zen-pane" ref={setSurface}>
+    <div className="article-text zen-pane">
       <p className="para">
         {sentences.map((sentence, sentenceIndex) => {
           const raw = sentenceIndex === 0 && first ? first.text : sentence;
@@ -80,7 +71,6 @@ export function ArticleZenPane({
           );
         })}
       </p>
-      {total > 1 && <p className="muted zen-hint">Swipe up or down</p>}
     </div>
   );
 }

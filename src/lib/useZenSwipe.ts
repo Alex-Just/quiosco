@@ -9,19 +9,17 @@ type UseZenSwipeArgs = {
 };
 
 /**
- * Vertical swipe on the Zen surface steps the paragraph index.
- * Uses pointer capture so a drag that starts on a sentence button still counts.
+ * Vertical swipe anywhere on the page steps the Zen paragraph index.
+ * Listens on `document` so empty chrome and margins count, not only the
+ * text pane. Does not use pointer capture, so taps on buttons still work.
  * Short moves stay as taps.
  */
-export function useZenSwipe(
-  surface: HTMLElement | null,
-  args: UseZenSwipeArgs,
-): void {
+export function useZenSwipe(args: UseZenSwipeArgs): void {
   const argsRef = useRef(args);
   argsRef.current = args;
 
   useEffect(() => {
-    if (!surface || !args.enabled) return;
+    if (!args.enabled) return;
 
     let startX = 0;
     let startY = 0;
@@ -36,11 +34,6 @@ export function useZenSwipe(
       suppressClick = false;
       startX = lastX = event.clientX;
       startY = lastY = event.clientY;
-      try {
-        surface.setPointerCapture(event.pointerId);
-      } catch {
-        // Some hosts reject capture; pointerup on the surface still works.
-      }
     };
 
     const onPointerMove = (event: PointerEvent) => {
@@ -83,17 +76,17 @@ export function useZenSwipe(
       event.stopPropagation();
     };
 
-    surface.addEventListener("pointerdown", onPointerDown);
-    surface.addEventListener("pointermove", onPointerMove);
-    surface.addEventListener("pointerup", onPointerUp);
-    surface.addEventListener("pointercancel", onPointerCancel);
-    surface.addEventListener("click", onClickCapture, true);
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("pointermove", onPointerMove);
+    document.addEventListener("pointerup", onPointerUp);
+    document.addEventListener("pointercancel", onPointerCancel);
+    document.addEventListener("click", onClickCapture, true);
     return () => {
-      surface.removeEventListener("pointerdown", onPointerDown);
-      surface.removeEventListener("pointermove", onPointerMove);
-      surface.removeEventListener("pointerup", onPointerUp);
-      surface.removeEventListener("pointercancel", onPointerCancel);
-      surface.removeEventListener("click", onClickCapture, true);
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("pointerup", onPointerUp);
+      document.removeEventListener("pointercancel", onPointerCancel);
+      document.removeEventListener("click", onClickCapture, true);
     };
-  }, [surface, args.enabled]);
+  }, [args.enabled]);
 }

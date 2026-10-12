@@ -24,6 +24,7 @@ import { useArticleScroll } from "../lib/useArticleScroll";
 import { useSentenceSpeech } from "../lib/useSentenceSpeech";
 import { useStore } from "../lib/useStore";
 import { useZenPosition } from "../lib/useZenPosition";
+import { useZenSwipe } from "../lib/useZenSwipe";
 import { isZenEndPage, zenEndActions } from "../lib/zenEndActions";
 import { clampZenIndex } from "../lib/zenMode";
 
@@ -65,6 +66,18 @@ export default function ArticlePage() {
   const body = article ? articleBody(article, view) : "";
   const paragraphs = bodyParagraphs(body);
   const zenAvailable = compactChrome && paragraphs.length > 0;
+
+  useZenSwipe({
+    enabled:
+      zenMode &&
+      zenIndex != null &&
+      paragraphs.length > 1 &&
+      !moreOpen &&
+      !menu,
+    index: zenIndex ?? 0,
+    total: paragraphs.length,
+    onIndexChange: setZenIndex,
+  });
 
   useEffect(() => {
     // Reset until restore finishes for the newly opened article.

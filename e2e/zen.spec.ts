@@ -59,19 +59,39 @@ async function seedDoneArticle(page: Page, id: string, status = "unread") {
   );
 }
 
+test("zen swipe works outside the paragraph text", async ({ page }) => {
+  await seedDoneArticle(page, "zen-swipe-screen");
+  await page.goto("/article/zen-swipe-screen");
+
+  const bar = page.getByRole("progressbar", { name: "Article progress" });
+  await expect(bar).toHaveAttribute("aria-valuenow", "1");
+
+  // Drag in the left margin — outside the paragraph — to go to page 2.
+  const viewport = page.viewportSize();
+  if (!viewport) throw new Error("missing viewport");
+  const x = 12;
+  const y = Math.floor(viewport.height / 2);
+  const swipeDistancePx = 80;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x, y - swipeDistancePx, { steps: 5 });
+  await page.mouse.up();
+
+  await expect(bar).toHaveAttribute("aria-valuenow", "2");
+  await expect(bar.getByText("2/3", { exact: true })).toBeVisible();
+});
+
 test("zen progress line tracks the current paragraph", async ({ page }) => {
   await seedDoneArticle(page, "zen-progress");
   await page.goto("/article/zen-progress");
 
   const bar = page.getByRole("progressbar", { name: "Article progress" });
-  const segments = page.locator(".zen-progress-segment");
+  const fill = page.locator(".zen-progress-fill");
   await expect(bar).toBeVisible();
   await expect(bar).toHaveAttribute("aria-valuenow", "1");
   await expect(bar).toHaveAttribute("aria-valuemax", "3");
   await expect(bar.getByText("1/3", { exact: true })).toBeVisible();
-  await expect(segments).toHaveCount(3);
-  await expect(segments.nth(0)).toHaveClass(/active/);
-  await expect(segments.nth(1)).not.toHaveClass(/active/);
+  await expect(fill).toHaveAttribute("style", /width:\s*33\.3/);
 
   // Count lives in the top chrome, not inside the paragraph.
   await expect(page.locator(".zen-pane .para-index")).toHaveCount(0);
@@ -79,12 +99,12 @@ test("zen progress line tracks the current paragraph", async ({ page }) => {
   await page.keyboard.press("ArrowDown");
   await expect(bar.getByText("2/3", { exact: true })).toBeVisible();
   await expect(bar).toHaveAttribute("aria-valuenow", "2");
-  await expect(segments.nth(1)).toHaveClass(/active/);
+  await expect(fill).toHaveAttribute("style", /width:\s*66\.6/);
 
   await page.keyboard.press("ArrowDown");
   await expect(bar.getByText("3/3", { exact: true })).toBeVisible();
   await expect(bar).toHaveAttribute("aria-valuenow", "3");
-  await expect(segments.nth(2)).toHaveClass(/active/);
+  await expect(fill).toHaveAttribute("style", /width:\s*100%/);
 });
 
 test("zen end block archives below the article text and returns to the list", async ({
