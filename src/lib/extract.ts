@@ -1,5 +1,7 @@
 import { Readability } from "@mozilla/readability";
 import { cleanArticleText } from "./clean";
+import { extractJsonLdArticle } from "./jsonLdArticle";
+import { assessArticle } from "./quality";
 
 export interface ExtractedArticle {
   title: string | null;
@@ -35,6 +37,11 @@ export function decodeHtml(
 }
 
 export function extractArticle(html: string): ExtractedArticle | null {
+  // Vocento / Evolok soft walls often leave the full story in JSON-LD while
+  // the visible DOM is a teaser. Prefer that body when it passes quality.
+  const fromJsonLd = extractJsonLdArticle(html);
+  if (fromJsonLd && assessArticle(fromJsonLd.text).ok) return fromJsonLd;
+
   const doc = new DOMParser().parseFromString(html, "text/html");
   const parsed = new Readability(doc).parse();
   if (parsed) {
@@ -42,6 +49,7 @@ export function extractArticle(html: string): ExtractedArticle | null {
     if (text.trim().length > 0)
       return { title: parsed.title?.trim() || null, text };
   }
+  if (fromJsonLd) return fromJsonLd;
   const body = doc.body?.textContent ?? "";
   if (body.trim().length > 0)
     return { title: doc.title.trim() || null, text: cleanArticleText(body) };

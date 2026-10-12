@@ -62,6 +62,30 @@ describe("extractArticle", () => {
     expect(extractArticle("<html><body></body></html>")).toBeNull();
   });
 
+  it("prefers JSON-LD articleBody over a paywalled DOM teaser", () => {
+    const articleBody = [
+      "El Ayuntamiento de Valencia ha licitado el procedimiento para contratar las obras de limpieza de la fachada.",
+      "La actuación supone una intervención de especial relevancia sobre un edificio patrimonial emblemático.",
+      "La licitación contempla un presupuesto de 817.953 euros y un plazo de ejecución de cinco meses.",
+      "Los trabajos se realizarán sobre un edificio construido entre 1914 y 1928, referente histórico de la ciudad.",
+      "El proyecto contempla la limpieza de lamas, cristales, vidrieras y piedra con procedimientos adaptados a cada material.",
+      "Durante la ejecución se adoptarán medidas de seguridad para reducir las molestias a comerciantes y visitantes.",
+    ].join(" ");
+    const payload = JSON.stringify({
+      "@type": "NewsArticle",
+      headline: "Licitan las obras del Mercado Central",
+      articleBody,
+    });
+    const html = `<html><head><title>Shell</title>
+<script type="application/ld+json">${payload}</script></head>
+<body><p>Teaser corto.</p><div>Suscríbete para seguir leyendo</div></body></html>`;
+    const article = extractArticle(html);
+    expect(article?.title).toBe("Licitan las obras del Mercado Central");
+    expect(article?.text).toContain("Ayuntamiento de Valencia");
+    expect(article?.text).not.toContain("Suscríbete para seguir leyendo");
+    expect(assessArticle(article?.text ?? "").ok).toBe(true);
+  });
+
   it("decodes and extracts the El País fixture", () => {
     const html = decodeHtml(fixture("elpais.html.gz"), null);
     const article = extractArticle(html);
