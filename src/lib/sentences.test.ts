@@ -52,6 +52,37 @@ describe("splitSentences", () => {
     expect(splitSentences("   ")).toEqual([]);
   });
 
+  it("keeps a dialogue tag with the sentence it closes", () => {
+    expect(
+      splitSentences("—¡Ah, qué tragedia! —dijo Hermione. —Lo sé."),
+    ).toEqual(["—¡Ah, qué tragedia! —dijo Hermione.", "—Lo sé."]);
+  });
+
+  it("keeps an interrupting dialogue tag inside the sentence", () => {
+    expect(splitSentences("—¿Vienes? —preguntó—. —Enseguida.")).toEqual([
+      "—¿Vienes? —preguntó—.",
+      "—Enseguida.",
+    ]);
+  });
+
+  it("merges dialogue tags in any language", () => {
+    expect(splitSentences("—Привет! —сказал он. —Пока.")).toEqual([
+      "—Привет! —сказал он.",
+      "—Пока.",
+    ]);
+  });
+
+  it("still splits a new dialogue line after a closing tag", () => {
+    expect(splitSentences("—Vamos. —De acuerdo.")).toEqual([
+      "—Vamos.",
+      "—De acuerdo.",
+    ]);
+    expect(splitSentences("Llegó tarde. —¿Vienes?")).toEqual([
+      "Llegó tarde.",
+      "—¿Vienes?",
+    ]);
+  });
+
   it("splits bilingual stanzas at each language flag", () => {
     expect(
       splitSentences(

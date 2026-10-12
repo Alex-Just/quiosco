@@ -107,7 +107,7 @@ function buildEpub(): Uint8Array {
       "OEBPS/Text/cap001.xhtml": strToU8(
         chapterXml(
           null,
-          "Primer capítulo con texto suficiente para la prueba de importación. Segunda frase del mismo párrafo para probar el avance por frase.",
+          "Primer capítulo con texto suficiente para la prueba de importación. Segunda frase del mismo párrafo para probar el avance por frase. —¡Vaya! —dijo el chico—. Otra frase después.",
           ...FILLER,
         ),
       ),
@@ -459,6 +459,16 @@ test("reads a book in Zen, one sentence per screen, and resumes", async ({
   );
   await expect(page.locator(".zen-progress-label")).toHaveText(/^2\//);
   await expect(sentenceSheet).toHaveCount(0);
+
+  // A dialogue sentence with its tag stays one screen: the tag after the
+  // exclamation must not become a unit of its own.
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowDown");
+  await expect(page.locator(".zen-pane .para")).toContainText(
+    "—¡Vaya! —dijo el chico—.",
+  );
+  await expect(page.locator(".zen-pane .para")).not.toContainText("Otra frase");
+  await expect(page.locator(".zen-progress-label")).toHaveText(/^4\//);
 });
 
 test("book Zen has the article Listen control with Auto", async ({ page }) => {

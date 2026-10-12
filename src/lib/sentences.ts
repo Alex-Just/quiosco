@@ -1,9 +1,17 @@
 // Sentence splitter for tap-to-act on a single sentence. Splits on [.!?…]
 // followed by whitespace, then re-joins segments that only ended on a common
 // abbreviation or an initial, so "El Sr. García llegó." stays one sentence.
-// A miss degrades to a slightly larger or smaller tappable fragment, never to
+// A segment that opens with a dialogue-tag dash ("—dijo…", "—se burló…") also
+// rejoins: Spanish dialogue keeps the tag inside the sentence it closes, and
+// splitting it out would turn half a line into its own screen. A miss
+// degrades to a slightly larger or smaller tappable fragment, never to
 // broken rendering.
 const SENTENCE_BREAK = /(?<=[.!?…])\s+/;
+
+// A dialogue tag continues the previous sentence when the dash is followed by
+// a lowercase letter ("—dijo", "—se burló", "—сказал"). A new dialogue line
+// opens with a capital or an opening mark ("—Vamos.", "—¿Vienes?").
+const DIALOGUE_TAG_START = /^[—–]\s*\p{Ll}/u;
 
 const ABBREVIATIONS = new Set([
   "sr",
@@ -75,9 +83,15 @@ export function firstFlagStanza(text: string): string {
 
 function splitPunctuationSentences(stanza: string): string[] {
   const sentences: string[] = [];
+  const parts = stanza.split(SENTENCE_BREAK);
   let current = "";
-  for (const part of stanza.split(SENTENCE_BREAK)) {
+  for (let index = 0; index < parts.length; index += 1) {
+    const part = parts[index] ?? "";
     current = current ? `${current} ${part}` : part;
+    // A following dialogue tag belongs to the sentence that just closed, so
+    // hold the close until the tag has been folded in.
+    const next = parts[index + 1];
+    if (next && DIALOGUE_TAG_START.test(next)) continue;
     if (endsWithAbbreviation(current)) continue;
     sentences.push(current);
     current = "";
