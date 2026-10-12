@@ -28,6 +28,8 @@ export function sentenceCacheKey(
   source: string,
   material: BookTranslationMaterial,
 ): Promise<string> {
+  // v2: book replies carry the rules' bilingual table per sentence, so
+  // translation-only v1 entries must not be served under the new format.
   return sha256Hex(
     `quiosco:book:v2\n${material.targetLanguage}\n${material.rules}\n${normalizeSentence(source)}`,
   );

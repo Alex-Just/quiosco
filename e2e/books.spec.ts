@@ -559,6 +559,9 @@ test("translates the Zen paragraph from the cache and pauses on failure", async 
   await page.getByRole("button", { name: "More book actions" }).click();
   await page.getByRole("button", { name: "Translation mode" }).click();
   await expect(page.locator(".zen-pane .para")).toContainText("ES-trad:");
+  await expect(page.locator(".zen-pane .para")).toContainText(
+    "🇪🇸 Primer capítulo",
+  );
   await expect.poll(() => requests.length).toBe(settled);
 
   // Switching the mode off restores the original text; on again is cached.

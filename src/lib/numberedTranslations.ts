@@ -7,10 +7,14 @@ const BARE_NUMBER = /^\s*(\d{1,4})[.)]?\s*$/;
  * Parse a model reply of numbered translations into a 1-based sentence index →
  * translation-block map. Accepts both inline blocks ("1. Uno") and the rules'
  * table form ("1" on its own line, then the block's lines). Only the strict
- * prefix 1..k is accepted: parsing stops at the first gap, regression,
- * out-of-range index, or empty block, so a misaligned reply can never be
- * cached past its last trustworthy sentence. Continuation lines keep their
- * line breaks, so a block can hold both languages on separate lines.
+ * prefix of aligned openers is accepted: parsing stops at the first gap,
+ * regression, out-of-range index, or empty block. Lines are always filed
+ * under the opener the reply itself provides, so a reply that opens the next
+ * number before finishing an entry can truncate or misplace that entry — the
+ * numbering is the only alignment the reply gives — but the cache can never
+ * extend past the last aligned entry, and every entry holds exactly what the
+ * model wrote under its number. Continuation lines keep their line breaks, so
+ * a block can hold both languages on separate lines.
  */
 export function parseNumberedTranslations(
   raw: string,

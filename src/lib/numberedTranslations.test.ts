@@ -69,6 +69,38 @@ describe("parseNumberedTranslations", () => {
     );
   });
 
+  it("files lines under the opener the reply provides and stops at a repeat", () => {
+    // A model that opens "3" before finishing entry 2: the second "3"
+    // repeats, so parsing stops. Entry 1 is complete, entry 2 keeps only the
+    // line the model placed under it, and nothing past the repeat is cached.
+    const raw = [
+      "1",
+      "🇪🇸 One.",
+      "🇷🇺 Один.",
+      "2",
+      "🇪🇸 Two.",
+      "3",
+      "🇷🇺 Два.",
+      "3",
+      "🇪🇸 Tres.",
+      "🇷🇺 Три.",
+    ].join("\n");
+    expect(parseNumberedTranslations(raw, 3)).toEqual(
+      new Map([
+        [1, "🇪🇸 One.\n🇷🇺 Один."],
+        [2, "🇪🇸 Two."],
+        [3, "🇷🇺 Два."],
+      ]),
+    );
+  });
+
+  it("breaks the prefix on a numeric line that is not the next opener", () => {
+    const raw = ["1", "🇪🇸 Uno mil.", "2026", "🇷🇺 Один тысяча."].join("\n");
+    expect(parseNumberedTranslations(raw, 1)).toEqual(
+      new Map([[1, "🇪🇸 Uno mil."]]),
+    );
+  });
+
   it("stops at a gap", () => {
     expect(parseNumberedTranslations("1. Uno\n3. Tres", 3)).toEqual(
       new Map([[1, "Uno"]]),

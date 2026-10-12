@@ -29,6 +29,20 @@ describe("sentenceCacheKey", () => {
       await sentenceCacheKey("Hola.", { ...material, rules: "Other." }),
     ).not.toBe(base);
   });
+
+  it("pins the v2 wire material", async () => {
+    // The namespace only changes when the reply format changes, so old
+    // entries cannot be served under a new contract; keep this literal in
+    // sync with the key material in sentenceCacheKey.
+    await expect(
+      sentenceCacheKey("Hola, mundo.", {
+        targetLanguage: "Russian",
+        rules: "No flags.",
+      }),
+    ).resolves.toBe(
+      "64d1cb5cff3ef9ea06dec8ddac06f86216af31bfbd8c3daddfe44d779fac59fc",
+    );
+  });
 });
 
 describe("normalizeSentence", () => {
