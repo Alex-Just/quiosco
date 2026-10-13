@@ -10,6 +10,7 @@ import {
   nextWindow,
   type WindowPlan,
 } from "./bookWindow";
+import { repairFlagMarkers } from "./flagLines";
 import { parseNumberedTranslations } from "./numberedTranslations";
 import { buildBookUserMessage } from "./prompt";
 import type { ArticleStore } from "./store";
@@ -169,7 +170,7 @@ export async function translateWindow(args: {
     entries.push({
       key,
       source: unit.text,
-      translation,
+      translation: repairFlagMarkers(translation),
       targetLanguage,
       rulesHash: rulesHashValue,
       model,

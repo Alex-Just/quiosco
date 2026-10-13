@@ -1,11 +1,48 @@
 import { describe, expect, it } from "vitest";
-import { gapBeforeSentence, spaceFlagLines, startsWithFlag } from "./flagLines";
+import {
+  gapBeforeSentence,
+  repairFlagMarkers,
+  spaceFlagLines,
+  startsWithFlag,
+} from "./flagLines";
 
 describe("startsWithFlag", () => {
   it("detects a leading flag", () => {
     expect(startsWithFlag("🇷🇺 Текст")).toBe(true);
     expect(startsWithFlag("  🇪🇸 Hola")).toBe(true);
     expect(startsWithFlag("Hola 🇪🇸")).toBe(false);
+  });
+});
+
+describe("repairFlagMarkers", () => {
+  it("replaces a leading object-replacement char with a Cyrillic flag", () => {
+    expect(
+      repairFlagMarkers("🇪🇸 Crookshanks se subió.\n\uFFFCУ Живоглот забрался."),
+    ).toBe("🇪🇸 Crookshanks se subió.\n🇷🇺 У Живоглот забрался.");
+  });
+
+  it("completes a lone regional R before Cyrillic text", () => {
+    expect(repairFlagMarkers("🇪🇸 Hola.\n🇷 Текст.")).toBe("🇪🇸 Hola.\n🇷🇺 Текст.");
+  });
+
+  it("leaves clean flag pairs and flagless Cyrillic alone", () => {
+    expect(repairFlagMarkers("🇪🇸 Hola.\n🇷🇺 Привет.")).toBe(
+      "🇪🇸 Hola.\n🇷🇺 Привет.",
+    );
+    expect(repairFlagMarkers("Просто текст без флага.")).toBe(
+      "Просто текст без флага.",
+    );
+  });
+
+  it("restores stanza spacing after repairing OBJ", () => {
+    const repaired = repairFlagMarkers(
+      "🇪🇸 Crookshanks se ovilló, ronroneando.\n\uFFFCУ Живоглот мурлыча.",
+    );
+    expect(startsWithFlag(repaired.split("\n")[1] ?? "")).toBe(true);
+    expect(spaceFlagLines(repaired)).toBe(
+      "🇪🇸 Crookshanks se ovilló, ronroneando.\n\n🇷🇺 У Живоглот мурлыча.",
+    );
+    expect(gapBeforeSentence("🇷🇺 У Живоглот мурлыча.")).toBe("\n\n");
   });
 });
 

@@ -1,5 +1,9 @@
 import { Fragment } from "react";
-import { gapBeforeSentence, spaceFlagLines } from "../lib/flagLines";
+import {
+  gapBeforeSentence,
+  repairFlagMarkers,
+  spaceFlagLines,
+} from "../lib/flagLines";
 import {
   splitLeadingNumber,
   splitSentences,
@@ -26,7 +30,7 @@ export function SentenceParagraph({
   isSpeaking,
   onOpenMenu,
 }: SentenceParagraphProps) {
-  const sentences = splitSentences(paragraph);
+  const sentences = splitSentences(repairFlagMarkers(paragraph));
   const first = sentences[0] ? splitLeadingNumber(sentences[0]) : null;
   return (
     <p className="para">

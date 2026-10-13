@@ -1,5 +1,9 @@
 import { Fragment, useEffect } from "react";
-import { gapBeforeSentence, spaceFlagLines } from "../lib/flagLines";
+import {
+  gapBeforeSentence,
+  repairFlagMarkers,
+  spaceFlagLines,
+} from "../lib/flagLines";
 import {
   splitLeadingNumber,
   splitSentences,
@@ -27,7 +31,7 @@ export function ArticleZenPane({
   displayText,
 }: ArticleZenPaneProps) {
   const total = paragraphs.length;
-  const paragraph = displayText ?? paragraphs[index] ?? "";
+  const paragraph = repairFlagMarkers(displayText ?? paragraphs[index] ?? "");
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
