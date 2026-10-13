@@ -99,6 +99,11 @@ body.zen-active .app-header {
   padding: 18px 16px calc(28px + env(safe-area-inset-bottom));
 }
 
+body.settings-route .app {
+  /* Header normally owns the top safe area; Settings hides it. */
+  padding-top: calc(18px + env(safe-area-inset-top));
+}
+
 body.zen-active {
   /* Zen owns vertical gestures on the whole screen, including empty margins. */
   touch-action: none;
@@ -711,8 +716,22 @@ button.danger {
   font-size: 0.95rem;
 }
 
+.settings-title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 4px 0 12px;
+}
+
+.settings-title-row h1 {
+  margin: 0;
+}
+
 .settings-build {
-  margin-top: 2rem;
+  margin: 0;
+  flex-shrink: 0;
+  font-size: 0.85rem;
 }
 
 .settings input:not([type="checkbox"]),

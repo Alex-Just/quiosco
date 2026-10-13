@@ -79,7 +79,10 @@ export default function SettingsPage() {
 
   return (
     <section className="settings">
-      <h1>Settings</h1>
+      <div className="settings-title-row">
+        <h1>Settings</h1>
+        <p className="muted settings-build">Build {__BUILD_ID__}</p>
+      </div>
       <label>
         Target language
         <input
@@ -194,7 +197,6 @@ export default function SettingsPage() {
         </span>
       </div>
       {syncState && <p className="muted">{syncState}</p>}
-      <p className="muted settings-build">Build {__BUILD_ID__}</p>
     </section>
   );
 }
