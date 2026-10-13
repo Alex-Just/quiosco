@@ -34,6 +34,10 @@ describe("settings", () => {
     expect(loadSettings().voice).toBe("elvira");
   });
 
+  it("returns defaults when no browser storage exists", () => {
+    expect(loadSettings({ getItem: () => null })).toEqual(DEFAULT_SETTINGS);
+  });
+
   it("round-trips each voice value", () => {
     for (const voice of ["system", "elvira", "alvaro"] as const) {
       saveSettings({ ...DEFAULT_SETTINGS, voice });

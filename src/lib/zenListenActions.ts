@@ -63,9 +63,12 @@ export async function toggleZenOriginalListen(
   }
   if (!text) return;
 
-  const settings = loadSettings();
-  const voice = args.voice ?? settings.voice;
-  const token = args.token ?? settings.appToken;
+  const settings =
+    args.voice === undefined || args.token === undefined
+      ? loadSettings()
+      : null;
+  const voice = args.voice ?? settings?.voice ?? "system";
+  const token = args.token ?? settings?.appToken ?? "";
   const edgePreferred = voice !== "system" && token.trim().length > 0;
   if (!canSpeak() && !edgePreferred) {
     args.setHint("Text-to-speech is not available in this browser.");

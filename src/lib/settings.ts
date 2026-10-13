@@ -22,11 +22,38 @@ export const DEFAULT_SETTINGS: Settings = {
   voice: DEFAULT_VOICE,
 };
 
-export function loadSettings(
-  storage: Pick<Storage, "getItem"> = localStorage,
-): Settings {
+/**
+ * Resolve browser storage without a bare `localStorage` identifier.
+ * Node CI has no localStorage; a default parameter of `= localStorage`
+ * throws ReferenceError before the function body runs.
+ */
+function resolveStorage(): SettingsStorage | null {
   try {
-    const raw = storage.getItem(SETTINGS_KEY);
+    const storage = globalThis.localStorage;
+    return storage ?? null;
+  } catch {
+    return null;
+  }
+}
+
+const MEMORY_STORAGE = (): SettingsStorage => {
+  const map = new Map<string, string>();
+  return {
+    getItem: (key) => map.get(key) ?? null,
+    setItem: (key, value) => {
+      map.set(key, value);
+    },
+    removeItem: (key) => {
+      map.delete(key);
+    },
+  };
+};
+
+export function loadSettings(storage?: Pick<Storage, "getItem">): Settings {
+  const store = storage ?? resolveStorage();
+  if (!store) return { ...DEFAULT_SETTINGS };
+  try {
+    const raw = store.getItem(SETTINGS_KEY);
     if (!raw) return { ...DEFAULT_SETTINGS };
     const parsed = JSON.parse(raw) as Partial<Settings>;
     return {
@@ -60,7 +87,7 @@ export function loadSettings(
 
 export function saveSettings(
   settings: Settings,
-  storage: SettingsStorage = localStorage,
+  storage: SettingsStorage = resolveStorage() ?? MEMORY_STORAGE(),
 ): void {
   storage.setItem(
     SETTINGS_KEY,
@@ -69,16 +96,17 @@ export function saveSettings(
   storage.setItem(SETTINGS_DIRTY_KEY, "1");
 }
 
-export function isSettingsDirty(
-  storage: Pick<Storage, "getItem"> = localStorage,
-): boolean {
-  return storage.getItem(SETTINGS_DIRTY_KEY) === "1";
+export function isSettingsDirty(storage?: Pick<Storage, "getItem">): boolean {
+  const store = storage ?? resolveStorage();
+  if (!store) return false;
+  return store.getItem(SETTINGS_DIRTY_KEY) === "1";
 }
 
 export function clearSettingsDirty(
-  storage: Pick<Storage, "removeItem"> = localStorage,
+  storage?: Pick<Storage, "removeItem">,
 ): void {
-  storage.removeItem(SETTINGS_DIRTY_KEY);
+  const store = storage ?? resolveStorage();
+  store?.removeItem(SETTINGS_DIRTY_KEY);
 }
 
 const SYNCED_FIELDS = [
@@ -91,7 +119,7 @@ const SYNCED_FIELDS = [
 
 export function applyRemoteSettings(
   remote: { updatedAt: number; data: string },
-  storage: SettingsStorage = localStorage,
+  storage: SettingsStorage = resolveStorage() ?? MEMORY_STORAGE(),
 ): Settings | null {
   const current = loadSettings(storage);
   if (remote.updatedAt < (current.updatedAt ?? 0)) return null;
