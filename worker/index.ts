@@ -5,6 +5,7 @@ import { handleFetchRung } from "./fetchRung";
 import { applySecurityHeaders, jsonResponse } from "./headers";
 import { handleSync } from "./sync";
 import { handleTranslate } from "./translate";
+import { handleTts } from "./tts";
 
 export default {
   fetch(request: Request, env: Env): Promise<Response> {
@@ -60,6 +61,8 @@ async function handleApi(
     response = await handleFetchRung(request, env);
   } else if (url.pathname === "/api/translate" && request.method === "POST") {
     response = await handleTranslate(request, env);
+  } else if (url.pathname === "/api/tts" && request.method === "POST") {
+    response = await handleTts(request);
   } else if (url.pathname === "/api/decide" && request.method === "POST") {
     response = await handleDecide(request, env);
   } else if (url.pathname === "/api/sync" && request.method === "POST") {

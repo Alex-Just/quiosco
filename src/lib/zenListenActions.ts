@@ -1,3 +1,5 @@
+import { loadSettings } from "./settings";
+import { speakWithVoice } from "./speakWithVoice";
 import {
   canSpeak as defaultCanSpeak,
   speakSentence as defaultSpeakSentence,
@@ -6,6 +8,7 @@ import {
   ORIGINAL_LANG,
   type SpeakHandlers,
 } from "./speech";
+import type { VoiceSetting } from "./types";
 
 /** sentenceIndex marker meaning the whole Zen paragraph is speaking. */
 export const ZEN_PARAGRAPH_SPEECH_INDEX = -1;
@@ -20,13 +23,17 @@ export type ToggleZenOriginalListenArgs = {
   setSpeaking: (value: SpeakingRef) => void;
   setHint: (hint: string | null) => void;
   canSpeak?: () => boolean;
+  /** Test seam: sync system speak. Production uses speakWithVoice. */
   speakSentence?: (
     text: string,
     lang: string,
     handlers?: SpeakHandlers,
   ) => boolean;
+  speakWithVoiceFn?: typeof speakWithVoice;
   stopSpeaking?: () => void;
   originalLang?: string;
+  voice?: VoiceSetting;
+  token?: string;
 };
 
 export function isZenOriginalListening(
@@ -40,11 +47,10 @@ export function isZenOriginalListening(
 }
 
 /** Toggle TTS for the original text of the current Zen paragraph. */
-export function toggleZenOriginalListen(
+export async function toggleZenOriginalListen(
   args: ToggleZenOriginalListenArgs,
-): void {
+): Promise<void> {
   const canSpeak = args.canSpeak ?? defaultCanSpeak;
-  const speakSentence = args.speakSentence ?? defaultSpeakSentence;
   const stopSpeaking = args.stopSpeaking ?? defaultStopSpeaking;
   const originalLang = args.originalLang ?? ORIGINAL_LANG;
   const text = args.text.trim();
@@ -56,14 +62,19 @@ export function toggleZenOriginalListen(
     return;
   }
   if (!text) return;
-  if (!canSpeak()) {
+
+  const settings = loadSettings();
+  const voice = args.voice ?? settings.voice;
+  const token = args.token ?? settings.appToken;
+  const edgePreferred = voice !== "system" && token.trim().length > 0;
+  if (!canSpeak() && !edgePreferred) {
     args.setHint("Text-to-speech is not available in this browser.");
     return;
   }
 
   args.speechRun.current += 1;
   const runId = args.speechRun.current;
-  const started = speakSentence(text, originalLang, {
+  const handlers: SpeakHandlers = {
     onEnd: () => {
       if (args.speechRun.current === runId) args.setSpeaking(null);
     },
@@ -74,11 +85,33 @@ export function toggleZenOriginalListen(
         args.setHint("Could not play this sentence with the system voice.");
       }
     },
+  };
+
+  // Mark speaking before the Edge fetch so Stop works during synthesis.
+  args.setSpeaking({
+    paragraph: args.paragraph,
+    sentenceIndex: ZEN_PARAGRAPH_SPEECH_INDEX,
   });
-  if (started) {
-    args.setSpeaking({
-      paragraph: args.paragraph,
-      sentenceIndex: ZEN_PARAGRAPH_SPEECH_INDEX,
+
+  let started = false;
+  if (args.speakSentence) {
+    started = args.speakSentence(text, originalLang, handlers);
+  } else {
+    const speak = args.speakWithVoiceFn ?? speakWithVoice;
+    started = await speak({
+      text,
+      lang: originalLang,
+      token,
+      voice,
+      handlers,
+      speakSentence: defaultSpeakSentence,
     });
+  }
+
+  if (
+    (!started || args.speechRun.current !== runId) &&
+    args.speechRun.current === runId
+  ) {
+    args.setSpeaking(null);
   }
 }

@@ -3,7 +3,13 @@ import { createApi } from "../lib/api";
 import { formatDateTime } from "../lib/format";
 import { loadSettings, saveSettings } from "../lib/settings";
 import { LAST_SYNC_KEY, runSyncNow, scheduleSync } from "../lib/sync";
-import type { Settings } from "../lib/types";
+import type { Settings, VoiceSetting } from "../lib/types";
+
+const VOICE_OPTIONS: { value: VoiceSetting; label: string }[] = [
+  { value: "system", label: "System" },
+  { value: "elvira", label: "Elvira" },
+  { value: "alvaro", label: "Álvaro" },
+];
 
 const MODEL_SUGGESTIONS = [
   "space-bunny-free",
@@ -75,6 +81,21 @@ export default function SettingsPage() {
           value={settings.targetLanguage}
           onChange={(event) => update({ targetLanguage: event.target.value })}
         />
+      </label>
+      <label>
+        Voice
+        <select
+          value={settings.voice}
+          onChange={(event) =>
+            update({ voice: event.target.value as VoiceSetting })
+          }
+        >
+          {VOICE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
       </label>
       <label>
         Translation rules (baked into the prompt)

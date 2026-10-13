@@ -74,6 +74,26 @@ describe("router", () => {
     expect(response.status).toBe(404);
   });
 
+  it("requires auth for /api/tts and rejects bad voices when authorized", async () => {
+    const missing = await handleRequest(
+      new Request("https://app.example/api/tts", {
+        method: "POST",
+        body: JSON.stringify({ text: "Hola.", voice: "es-ES-ElviraNeural" }),
+      }),
+      makeEnv(),
+    );
+    expect(missing.status).toBe(401);
+
+    const badVoice = await handleRequest(
+      authed("/api/tts", {
+        method: "POST",
+        body: JSON.stringify({ text: "Hola.", voice: "en-US-JennyNeural" }),
+      }),
+      makeEnv(),
+    );
+    expect(badVoice.status).toBe(400);
+  });
+
   it("rejects wrong methods on api routes", async () => {
     const response = await handleRequest(
       authed("/api/health", { method: "POST" }),

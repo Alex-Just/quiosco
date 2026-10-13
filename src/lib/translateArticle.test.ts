@@ -15,6 +15,7 @@ const settings: Settings = {
   model: "m",
   appToken: "t",
   autoTranslate: true,
+  voice: "elvira",
 };
 
 function makeArticle(overrides: Partial<Article> = {}): Article {

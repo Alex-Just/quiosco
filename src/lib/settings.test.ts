@@ -28,6 +28,19 @@ describe("settings", () => {
     expect(loadSettings()).toEqual(DEFAULT_SETTINGS);
   });
 
+  it("defaults voice to elvira", () => {
+    expect(DEFAULT_SETTINGS.voice).toBe("elvira");
+    localStorage.clear();
+    expect(loadSettings().voice).toBe("elvira");
+  });
+
+  it("round-trips each voice value", () => {
+    for (const voice of ["system", "elvira", "alvaro"] as const) {
+      saveSettings({ ...DEFAULT_SETTINGS, voice });
+      expect(loadSettings().voice).toBe(voice);
+    }
+  });
+
   it("merges partial data with defaults", () => {
     localStorage.setItem(
       "quiosco.settings.v1",
@@ -37,6 +50,7 @@ describe("settings", () => {
     expect(loaded.rules).toBe("Be terse.");
     expect(loaded.model).toBe(DEFAULT_SETTINGS.model);
     expect(loaded.autoTranslate).toBe(true);
+    expect(loaded.voice).toBe("elvira");
   });
 
   it("stamps updatedAt and marks dirty on save", () => {
@@ -64,6 +78,17 @@ describe("settings", () => {
     expect(applied?.model).toBe("new");
     expect(applied?.targetLanguage).toBe("French");
     expect(loadSettings().appToken).toBe("local-token");
+  });
+
+  it("merges remote voice into synced settings", () => {
+    localStorage.clear();
+    saveSettings({ ...DEFAULT_SETTINGS, voice: "system", appToken: "t" });
+    const applied = applyRemoteSettings({
+      updatedAt: Date.now() + 1000,
+      data: JSON.stringify({ voice: "alvaro" }),
+    });
+    expect(applied?.voice).toBe("alvaro");
+    expect(loadSettings().appToken).toBe("t");
   });
 
   it("ignores older remote settings", () => {

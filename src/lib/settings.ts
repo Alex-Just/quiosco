@@ -1,8 +1,17 @@
-import type { Settings } from "./types";
+import type { Settings, VoiceSetting } from "./types";
 
 export const SETTINGS_KEY = "quiosco.settings.v1";
 const SETTINGS_DIRTY_KEY = "quiosco.settings.dirty";
 type SettingsStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+
+const VOICE_SETTINGS = new Set<VoiceSetting>(["system", "elvira", "alvaro"]);
+const DEFAULT_VOICE: VoiceSetting = "elvira";
+
+function parseVoice(value: unknown): VoiceSetting {
+  return typeof value === "string" && VOICE_SETTINGS.has(value as VoiceSetting)
+    ? (value as VoiceSetting)
+    : DEFAULT_VOICE;
+}
 
 export const DEFAULT_SETTINGS: Settings = {
   targetLanguage: "English",
@@ -10,6 +19,7 @@ export const DEFAULT_SETTINGS: Settings = {
   model: "space-bunny-free",
   appToken: "",
   autoTranslate: true,
+  voice: DEFAULT_VOICE,
 };
 
 export function loadSettings(
@@ -40,6 +50,7 @@ export function loadSettings(
         typeof parsed.autoTranslate === "boolean"
           ? parsed.autoTranslate
           : DEFAULT_SETTINGS.autoTranslate,
+      voice: parseVoice(parsed.voice),
       updatedAt: typeof parsed.updatedAt === "number" ? parsed.updatedAt : 0,
     };
   } catch {
@@ -75,6 +86,7 @@ const SYNCED_FIELDS = [
   "rules",
   "model",
   "autoTranslate",
+  "voice",
 ] as const;
 
 export function applyRemoteSettings(
@@ -95,6 +107,13 @@ export function applyRemoteSettings(
     const value = parsed[field];
     if (field === "autoTranslate") {
       if (typeof value === "boolean") next.autoTranslate = value;
+    } else if (field === "voice") {
+      if (
+        typeof value === "string" &&
+        VOICE_SETTINGS.has(value as VoiceSetting)
+      ) {
+        next.voice = value as VoiceSetting;
+      }
     } else if (typeof value === "string") {
       next[field] = value;
     }

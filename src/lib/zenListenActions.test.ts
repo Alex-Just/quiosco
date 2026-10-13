@@ -5,13 +5,13 @@ import {
 } from "./zenListenActions";
 
 describe("toggleZenOriginalListen", () => {
-  it("stops when this paragraph is already speaking", () => {
+  it("stops when this paragraph is already speaking", async () => {
     const stopSpeaking = vi.fn();
     const speakSentence = vi.fn(() => true);
     const setSpeaking = vi.fn();
     const speechRun = { current: 3 };
 
-    toggleZenOriginalListen({
+    await toggleZenOriginalListen({
       paragraph: 2,
       text: "Hola mundo suficientemente largo.",
       speaking: { paragraph: 2, sentenceIndex: ZEN_PARAGRAPH_SPEECH_INDEX },
@@ -29,13 +29,13 @@ describe("toggleZenOriginalListen", () => {
     expect(speechRun.current).toBe(4);
   });
 
-  it("starts original-language speech for the paragraph", () => {
+  it("starts original-language speech for the paragraph", async () => {
     const stopSpeaking = vi.fn();
     const speakSentence = vi.fn(() => true);
     const setSpeaking = vi.fn();
     const speechRun = { current: 1 };
 
-    toggleZenOriginalListen({
+    await toggleZenOriginalListen({
       paragraph: 0,
       text: "Hola mundo suficientemente largo.",
       speaking: null,
@@ -59,9 +59,9 @@ describe("toggleZenOriginalListen", () => {
     });
   });
 
-  it("no-ops when there is no speakable text", () => {
+  it("no-ops when there is no speakable text", async () => {
     const speakSentence = vi.fn(() => true);
-    toggleZenOriginalListen({
+    await toggleZenOriginalListen({
       paragraph: 0,
       text: "   ",
       speaking: null,

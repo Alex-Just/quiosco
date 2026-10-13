@@ -28,6 +28,7 @@ const settings: Settings = {
   model: "m",
   appToken: "t",
   autoTranslate: true,
+  voice: "elvira",
   updatedAt: 10,
 };
 
@@ -231,6 +232,30 @@ describe("syncNow", () => {
     expect(
       JSON.parse(storage.getItem("quiosco.settings.v1") ?? "{}").model,
     ).toBe("remote-model");
+    store.close();
+  });
+
+  it("pushes voice in dirty settings", async () => {
+    const store = await createStore(`test-${randomUUID()}`);
+    const storage = fakeStorage();
+    storage.setItem(
+      SETTINGS_KEY,
+      JSON.stringify({ ...settings, voice: "alvaro", updatedAt: 5 }),
+    );
+    storage.setItem("quiosco.settings.dirty", "1");
+    const seen: SyncRequest[] = [];
+    const api = fakeApi((request) => {
+      seen.push(request);
+      return { cursor: 1, articles: [], settings: null };
+    });
+    await syncNow(
+      store,
+      { ...settings, voice: "alvaro", updatedAt: 5 },
+      api,
+      storage,
+    );
+    expect(seen[0]?.settings).toBeTruthy();
+    expect(JSON.parse(seen[0]?.settings?.data ?? "{}").voice).toBe("alvaro");
     store.close();
   });
 

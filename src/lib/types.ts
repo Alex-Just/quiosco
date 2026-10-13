@@ -78,12 +78,17 @@ export interface Article {
   deleted?: boolean;
 }
 
+/** Castilian Edge neural voices, or the device speechSynthesis engine. */
+export type VoiceSetting = "system" | "elvira" | "alvaro";
+
 export interface Settings {
   targetLanguage: string;
   rules: string;
   model: string;
   appToken: string;
   autoTranslate: boolean;
+  /** Preferred TTS: Edge Elvira/Álvaro, or system. */
+  voice: VoiceSetting;
   /** LWW clock for settings sync. */
   updatedAt?: number;
 }

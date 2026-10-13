@@ -1,8 +1,11 @@
+import { stopEdgeAudio } from "./edgeAudio";
+
 // Thin wrapper over the Web Speech API. On Android Chrome (including the
 // installed PWA) speechSynthesis is backed by the device's selected TTS
 // engine, so no extra permissions or services are involved. Voice lists load
 // asynchronously, so we set `lang` and let the browser pick a matching voice,
 // surfacing failures through onError instead of failing silently.
+// stopSpeaking also clears Edge HTMLAudioElement playback from speakWithVoice.
 export const ORIGINAL_LANG = "es-ES";
 
 const LANGUAGE_CODES: Record<string, string> = {
@@ -69,5 +72,6 @@ export function speakSentence(
 }
 
 export function stopSpeaking(): void {
+  stopEdgeAudio();
   if (canSpeak()) window.speechSynthesis.cancel();
 }

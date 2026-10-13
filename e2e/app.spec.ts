@@ -18,6 +18,20 @@ test("html document carries CSP and nosniff", async ({ page }) => {
   expect(response?.headers()["x-content-type-options"]).toBe("nosniff");
 });
 
+test("settings Voice offers System, Elvira, and Álvaro", async ({ page }) => {
+  await page.goto("/settings");
+  const voice = page.getByLabel("Voice");
+  await expect(voice).toBeVisible();
+  await expect(voice).toHaveValue("elvira");
+  await expect(voice.locator("option")).toHaveText([
+    "System",
+    "Elvira",
+    "Álvaro",
+  ]);
+  await voice.selectOption("alvaro");
+  await expect(voice).toHaveValue("alvaro");
+});
+
 test("api requires the bearer token", async ({ request }) => {
   expect((await request.get("/api/health")).status()).toBe(401);
   const authed = await request.get("/api/health", {

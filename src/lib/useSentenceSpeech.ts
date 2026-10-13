@@ -56,7 +56,7 @@ export function useSentenceSpeech(view: ArticleView): {
 
   const onListen = () => {
     if (menu) {
-      listenToSentence({
+      void listenToSentence({
         menu,
         view,
         speaking,
@@ -69,7 +69,7 @@ export function useSentenceSpeech(view: ArticleView): {
   };
 
   const onListenZenOriginal = (paragraph: number, text: string) => {
-    toggleZenOriginalListen({
+    void toggleZenOriginalListen({
       paragraph,
       text,
       speaking,

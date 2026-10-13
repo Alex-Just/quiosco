@@ -1,8 +1,10 @@
 import { loadSettings } from "./settings";
+import { speakWithVoice } from "./speakWithVoice";
 import {
   canSpeak,
   isCancellation,
   ORIGINAL_LANG,
+  type SpeakHandlers,
   speakSentence,
   speechLangFor,
   stopSpeaking,
@@ -31,9 +33,12 @@ export type ListenToSentenceContext = {
   setSpeaking: (value: SpeakingRef) => void;
   setMenu: (menu: SentenceMenu | null) => void;
   setHint: (hint: string | null) => void;
+  speakWithVoiceFn?: typeof speakWithVoice;
 };
 
-export function listenToSentence(ctx: ListenToSentenceContext): void {
+export async function listenToSentence(
+  ctx: ListenToSentenceContext,
+): Promise<void> {
   const { menu, view, speaking, speechRun, setSpeaking, setMenu, setHint } =
     ctx;
   const { paragraph, sentenceIndex, sentence } = menu;
@@ -44,18 +49,22 @@ export function listenToSentence(ctx: ListenToSentenceContext): void {
     setMenu(null);
     return;
   }
-  if (!canSpeak()) {
-    setHint("Text-to-speech is not available in this browser.");
-    return;
-  }
   const settings = loadSettings();
   const lang =
     view === "translation"
       ? speechLangFor(settings.targetLanguage)
       : ORIGINAL_LANG;
+  const edgePreferred =
+    settings.voice !== "system" &&
+    lang === ORIGINAL_LANG &&
+    settings.appToken.trim().length > 0;
+  if (!canSpeak() && !edgePreferred) {
+    setHint("Text-to-speech is not available in this browser.");
+    return;
+  }
   speechRun.current += 1;
   const runId = speechRun.current;
-  const started = speakSentence(sentence, lang, {
+  const handlers: SpeakHandlers = {
     onEnd: () => {
       if (speechRun.current === runId) setSpeaking(null);
     },
@@ -66,9 +75,25 @@ export function listenToSentence(ctx: ListenToSentenceContext): void {
         setHint("Could not play this sentence with the system voice.");
       }
     },
-  });
+  };
   setMenu(null);
-  if (started) setSpeaking({ paragraph, sentenceIndex });
+  setSpeaking({ paragraph, sentenceIndex });
+
+  const speak = ctx.speakWithVoiceFn ?? speakWithVoice;
+  const started = await speak({
+    text: sentence,
+    lang,
+    token: settings.appToken,
+    voice: settings.voice,
+    handlers,
+    speakSentence,
+  });
+  if (
+    (!started || speechRun.current !== runId) &&
+    speechRun.current === runId
+  ) {
+    setSpeaking(null);
+  }
 }
 
 export async function copySentenceToClipboard(
