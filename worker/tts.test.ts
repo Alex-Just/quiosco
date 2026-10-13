@@ -128,10 +128,6 @@ describe("handleTts", () => {
       { synthesize },
     );
     expect(response.status).toBe(200);
-    expect(synthesize).toHaveBeenCalledWith(
-      "Hola.",
-      "edge",
-      EDGE_VOICE_ELVIRA,
-    );
+    expect(synthesize).toHaveBeenCalledWith("Hola.", "edge", EDGE_VOICE_ELVIRA);
   });
 });
