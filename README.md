@@ -63,17 +63,18 @@ This repository tracks hooks in `.githooks/`. Enable them in your clone once:
 git config core.hooksPath .githooks
 ```
 
-`pre-push` runs the Qlty quality check on the commits being pushed and blocks
-the push when new issues appear. It is a guardrail, not a guarantee:
+`pre-push` runs `pnpm check` first (same steps as the CI `check` job:
+typecheck, lint, test, build, scan), then the Qlty quality check. It blocks
+the push when either step fails. It is a guardrail, not a guarantee:
 `--no-verify` skips it, and a clone that did not run the `git config` command
 has no hooks at all.
 
 ## Code quality
 
-The `pre-push` hook runs [Qlty](https://qlty.sh) over the files in the commits
-being pushed. It compares them with the upstream branch, so existing issues
-never block a push. Only new issues in changed files do. The check is free,
-runs locally, and needs no account.
+The `pre-push` hook runs `pnpm check`, then [Qlty](https://qlty.sh) over the
+files in the commits being pushed. Qlty compares them with the upstream
+branch, so existing issues never block a push. Only new issues in changed
+files do. The check is free, runs locally, and needs no account.
 
 ```bash
 curl https://qlty.sh | sh

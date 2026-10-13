@@ -716,9 +716,12 @@ button.danger {
 }
 
 .settings input:not([type="checkbox"]),
+.settings select,
 .settings textarea,
 .add input:not([type="checkbox"]),
+.add select,
 .add textarea {
+  box-sizing: border-box;
   width: 100%;
   margin-top: 6px;
   padding: 12px 14px;
@@ -728,6 +731,20 @@ button.danger {
   color: var(--fg);
   font: inherit;
   font-size: 1rem;
+}
+
+.settings select,
+.add select {
+  /* Match the input box on iOS, where native selects ignore most chrome. */
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) calc(50% - 3px),
+    calc(100% - 12px) calc(50% - 3px);
+  background-size: 6px 6px;
+  background-repeat: no-repeat;
+  padding-right: 36px;
 }
 
 .settings textarea,
@@ -742,8 +759,10 @@ button.danger {
 }
 
 .settings input:focus,
+.settings select:focus,
 .settings textarea:focus,
 .add input:focus,
+.add select:focus,
 .add textarea:focus {
   border-color: var(--accent);
 }

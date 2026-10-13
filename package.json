@@ -17,6 +17,7 @@
     "smoke": "vite-node scripts/smoke.ts",
     "e2e": "playwright test",
     "scan": "node scripts/scan-bundle.mjs",
+    "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm scan",
     "deploy": "pnpm build && node scripts/wrangler-run.mjs deploy"
   },
   "dependencies": {
