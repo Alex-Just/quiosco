@@ -1,3 +1,8 @@
+/** U+2398 NEXT PAGE — reads as a small clipboard glyph on Android Chrome. */
+const ZEN_COPY_ICON = "\u2398";
+/** Brief success mark while the Copied aria-label is active. */
+const ZEN_COPY_DONE_ICON = "\u2713";
+
 type ArticleZenListenButtonProps = {
   listening: boolean;
   autoListen: boolean;
@@ -28,7 +33,7 @@ export function ArticleZenListenButton({
         disabled={disabled}
         onClick={onCopy}
       >
-        {copied ? "Copied" : "Copy"}
+        {copied ? ZEN_COPY_DONE_ICON : ZEN_COPY_ICON}
       </button>
       <label className="zen-listen-auto">
         <input
