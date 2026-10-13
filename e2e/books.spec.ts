@@ -476,13 +476,19 @@ test("book Zen has the article Listen control with Auto", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("link", { name: /Libro de prueba/ }).click();
 
+  const copy = page.getByRole("button", { name: "Copy original page" });
   const listen = page.getByRole("button", { name: "Listen to original" });
   const autoListen = page.getByRole("checkbox", {
     name: "Auto-listen on each page",
   });
+  await expect(copy).toBeVisible();
   await expect(listen).toBeVisible();
   await expect(autoListen).toBeVisible();
   await expect(autoListen).not.toBeChecked();
+  const copyBox = await copy.boundingBox();
+  const autoBox = await autoListen.boundingBox();
+  if (!copyBox || !autoBox) throw new Error("missing boxes");
+  expect(copyBox.x + copyBox.width).toBeLessThanOrEqual(autoBox.x);
 
   // The system voice is stubbed; speaking starts and stays until stopped.
   await page.evaluate(() => {

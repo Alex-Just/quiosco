@@ -30,6 +30,7 @@ import { useSentenceSpeech } from "../lib/useSentenceSpeech";
 import { useZenPosition } from "../lib/useZenPosition";
 import { useZenSwipe } from "../lib/useZenSwipe";
 import { loadZenAutoListen, saveZenAutoListen } from "../lib/zenAutoListen";
+import { copyZenPageOriginal } from "../lib/zenCopyActions";
 import { clampZenIndex } from "../lib/zenMode";
 
 const COPY_RESET_MS = 1500;
@@ -116,6 +117,7 @@ export default function BookReader({
     () => article.bookTranslationOn === true && Boolean(settings.appToken),
   );
   const [autoListen, setAutoListen] = useState(() => loadZenAutoListen());
+  const [pageCopied, setPageCopied] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [chaptersOpen, setChaptersOpen] = useState(false);
   const [copied, setCopied] = useState<"none" | "original">("none");
@@ -153,6 +155,7 @@ export default function BookReader({
     menu,
     setMenu,
     hint,
+    setHint,
     isSpeaking,
     isZenOriginalSpeaking,
     onListen,
@@ -345,7 +348,11 @@ export default function BookReader({
               listening={isZenOriginalSpeaking(zenUnit)}
               autoListen={autoListen}
               disabled={zenListenText.length === 0}
+              copied={pageCopied}
               onClick={() => onListenZenOriginal(zenUnit, zenListenText)}
+              onCopy={() =>
+                void copyZenPageOriginal(zenListenText, setPageCopied, setHint)
+              }
               onAutoListenChange={(enabled) => {
                 setAutoListen(enabled);
                 saveZenAutoListen(enabled);

@@ -26,6 +26,7 @@ export function useSentenceSpeech(view: ArticleView): {
   menu: SentenceMenu | null;
   setMenu: (menu: SentenceMenu | null) => void;
   hint: string | null;
+  setHint: (hint: string | null) => void;
   isSpeaking: (paragraph: number, sentenceIndex: number) => boolean;
   isZenOriginalSpeaking: (paragraph: number) => boolean;
   onListen: () => void;
@@ -94,6 +95,7 @@ export function useSentenceSpeech(view: ArticleView): {
     menu,
     setMenu,
     hint,
+    setHint,
     isSpeaking,
     isZenOriginalSpeaking,
     onListen,

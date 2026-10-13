@@ -526,6 +526,23 @@ button.danger {
   border: 0;
 }
 
+.zen-listen-copy {
+  min-height: calc(var(--tap) - 8px);
+  padding: 0 8px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 500;
+  opacity: 0.75;
+}
+
+.zen-listen-copy:disabled {
+  opacity: 0.4;
+}
+
 .zen-listen-auto {
   display: inline-flex;
   align-items: center;

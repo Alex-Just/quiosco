@@ -29,6 +29,7 @@ import { useSentenceSpeech } from "../lib/useSentenceSpeech";
 import { useZenPosition } from "../lib/useZenPosition";
 import { useZenSwipe } from "../lib/useZenSwipe";
 import { loadZenAutoListen, saveZenAutoListen } from "../lib/zenAutoListen";
+import { copyZenPageOriginal } from "../lib/zenCopyActions";
 import { isZenEndPage, zenEndActions } from "../lib/zenEndActions";
 import { originalParagraphForZen } from "../lib/zenListenOriginal";
 import { clampZenIndex } from "../lib/zenMode";
@@ -57,12 +58,14 @@ export default function ArticleReader({
   /** null until the saved Zen index has been read (avoids saving 0 too early). */
   const [zenIndex, setZenIndex] = useState<number | null>(null);
   const [autoListen, setAutoListen] = useState(() => loadZenAutoListen());
+  const [pageCopied, setPageCopied] = useState(false);
 
   const actions = useArticleActions(store, article, setArticle, navigate);
   const {
     menu,
     setMenu,
     hint,
+    setHint,
     isSpeaking,
     isZenOriginalSpeaking,
     onListen,
@@ -243,7 +246,15 @@ export default function ArticleReader({
                 listening={isZenOriginalSpeaking(zenIndex)}
                 autoListen={autoListen}
                 disabled={zenListenText.length === 0}
+                copied={pageCopied}
                 onClick={() => onListenZenOriginal(zenIndex, zenListenText)}
+                onCopy={() =>
+                  void copyZenPageOriginal(
+                    zenListenText,
+                    setPageCopied,
+                    setHint,
+                  )
+                }
                 onAutoListenChange={(enabled) => {
                   setAutoListen(enabled);
                   saveZenAutoListen(enabled);

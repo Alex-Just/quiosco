@@ -62,6 +62,31 @@ async function seedDoneArticle(page: Page, id: string, status = "unread") {
   );
 }
 
+test("zen copy button writes the current page original to the clipboard", async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await seedDoneArticle(page, "zen-copy");
+  await page.goto("/article/zen-copy");
+
+  const copy = page.getByRole("button", { name: "Copy original page" });
+  const auto = page.getByRole("checkbox", {
+    name: "Auto-listen on each page",
+  });
+  await expect(copy).toBeVisible();
+  const copyBox = await copy.boundingBox();
+  const autoBox = await auto.boundingBox();
+  if (!copyBox || !autoBox) throw new Error("missing boxes");
+  expect(copyBox.x + copyBox.width).toBeLessThanOrEqual(autoBox.x);
+
+  await copy.click();
+  await expect(page.getByRole("button", { name: "Copied" })).toBeVisible();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+    PARAGRAPHS[0],
+  );
+});
+
 test("zen listen button speaks original text from the current page", async ({
   page,
 }) => {
