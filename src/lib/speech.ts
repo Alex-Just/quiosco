@@ -1,12 +1,15 @@
 import { stopEdgeAudio } from "./edgeAudio";
 
 // Thin wrapper over the Web Speech API. On Android Chrome (including the
-// installed PWA) speechSynthesis is backed by the device's selected TTS
-// engine, so no extra permissions or services are involved. Voice lists load
-// asynchronously, so we set `lang` and let the browser pick a matching voice,
-// surfacing failures through onError instead of failing silently.
+// installed PWA) speechSynthesis is backed by the device's TTS engines.
+// Voice lists can load asynchronously; we still set `lang`, and when Castilian
+// Google voices are already listed we bind one explicitly.
 // stopSpeaking also clears Edge HTMLAudioElement playback from speakWithVoice.
 export const ORIGINAL_LANG = "es-ES";
+
+/** Android Chrome Castilian network voice (better than many device defaults). */
+export const GOOGLE_ES_VOICE_NAME = "Google español";
+const GOOGLE_VOICE_NAME_MARKER = "Google";
 
 const LANGUAGE_CODES: Record<string, string> = {
   english: "en-US",
@@ -55,6 +58,30 @@ export interface SpeakHandlers {
   onError?: (reason: string) => void;
 }
 
+type SpeechVoiceLike = Pick<SpeechSynthesisVoice, "name" | "lang">;
+
+function isCastilianLang(lang: string): boolean {
+  return lang === ORIGINAL_LANG || lang.toLowerCase().startsWith("es-es");
+}
+
+/**
+ * Prefer Android's "Google español" (es-ES) when speaking Castilian.
+ * Returns null when no matching voice is listed yet.
+ */
+export function pickSpeechVoice(
+  lang: string,
+  voices: readonly SpeechVoiceLike[],
+): SpeechVoiceLike | null {
+  if (!isCastilianLang(lang) || voices.length === 0) return null;
+  const castilian = voices.filter((voice) => isCastilianLang(voice.lang));
+  const exact = castilian.find((voice) => voice.name === GOOGLE_ES_VOICE_NAME);
+  if (exact) return exact;
+  return (
+    castilian.find((voice) => voice.name.includes(GOOGLE_VOICE_NAME_MARKER)) ??
+    null
+  );
+}
+
 export function speakSentence(
   text: string,
   lang: string,
@@ -65,6 +92,14 @@ export function speakSentence(
   synth.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
   if (lang) utterance.lang = lang;
+  const voices = synth.getVoices();
+  const preferred = pickSpeechVoice(lang, voices);
+  if (preferred) {
+    const live = voices.find(
+      (voice) => voice.name === preferred.name && voice.lang === preferred.lang,
+    );
+    if (live) utterance.voice = live;
+  }
   utterance.onend = () => handlers.onEnd?.();
   utterance.onerror = (event) => handlers.onError?.(event.error);
   synth.speak(utterance);

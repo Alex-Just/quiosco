@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { isCancellation, ORIGINAL_LANG, speechLangFor } from "./speech";
+import {
+  GOOGLE_ES_VOICE_NAME,
+  isCancellation,
+  ORIGINAL_LANG,
+  pickSpeechVoice,
+  speechLangFor,
+} from "./speech";
 
 describe("speechLangFor", () => {
   it("maps the common target languages to BCP-47 codes", () => {
@@ -19,6 +25,39 @@ describe("speechLangFor", () => {
 
   it("exposes the original-article language", () => {
     expect(ORIGINAL_LANG).toBe("es-ES");
+  });
+});
+
+describe("pickSpeechVoice", () => {
+  const voices = [
+    { name: "Spanish Spain", lang: "es-ES" },
+    { name: GOOGLE_ES_VOICE_NAME, lang: "es-ES" },
+    { name: "Google US English", lang: "en-US" },
+  ];
+
+  it("prefers Google español for Castilian", () => {
+    expect(pickSpeechVoice(ORIGINAL_LANG, voices)?.name).toBe(
+      GOOGLE_ES_VOICE_NAME,
+    );
+  });
+
+  it("falls back to any Google es-ES voice when the exact name is missing", () => {
+    const withoutExact = [
+      { name: "Spanish Spain", lang: "es-ES" },
+      { name: "Google español de España", lang: "es-ES" },
+    ];
+    expect(pickSpeechVoice("es-ES", withoutExact)?.name).toBe(
+      "Google español de España",
+    );
+  });
+
+  it("returns null when no Castilian Google voice is listed", () => {
+    expect(
+      pickSpeechVoice(ORIGINAL_LANG, [
+        { name: "Spanish Spain", lang: "es-ES" },
+      ]),
+    ).toBeNull();
+    expect(pickSpeechVoice("en-US", voices)).toBeNull();
   });
 });
 
