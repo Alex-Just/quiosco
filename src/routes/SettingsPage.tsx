@@ -132,7 +132,7 @@ export default function SettingsPage() {
             />
           </label>
           <p className="muted">
-            Set ELEVENLABS_API_KEY on the Worker like OPENCODE_API_KEY.
+            Store the ElevenLabs key as a Worker secret (see README).
           </p>
         </>
       )}
