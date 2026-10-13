@@ -8,7 +8,7 @@ import {
   ORIGINAL_LANG,
   type SpeakHandlers,
 } from "./speech";
-import type { VoiceSetting } from "./types";
+import type { EdgeVoiceSetting, TtsProvider } from "./types";
 
 /** sentenceIndex marker meaning the whole Zen paragraph is speaking. */
 export const ZEN_PARAGRAPH_SPEECH_INDEX = -1;
@@ -32,7 +32,9 @@ export type ToggleZenOriginalListenArgs = {
   speakWithVoiceFn?: typeof speakWithVoice;
   stopSpeaking?: () => void;
   originalLang?: string;
-  voice?: VoiceSetting;
+  ttsProvider?: TtsProvider;
+  edgeVoice?: EdgeVoiceSetting;
+  elevenLabsVoiceId?: string;
   token?: string;
 };
 
@@ -63,14 +65,22 @@ export async function toggleZenOriginalListen(
   }
   if (!text) return;
 
-  const settings =
-    args.voice === undefined || args.token === undefined
-      ? loadSettings()
-      : null;
-  const voice = args.voice ?? settings?.voice ?? "system";
+  const needsSettings =
+    args.ttsProvider === undefined ||
+    args.edgeVoice === undefined ||
+    args.elevenLabsVoiceId === undefined ||
+    args.token === undefined;
+  const settings = needsSettings ? loadSettings() : null;
+  const ttsProvider = args.ttsProvider ?? settings?.ttsProvider ?? "system";
+  const edgeVoice = args.edgeVoice ?? settings?.edgeVoice ?? "elvira";
+  const elevenLabsVoiceId =
+    args.elevenLabsVoiceId ?? settings?.elevenLabsVoiceId ?? "";
   const token = args.token ?? settings?.appToken ?? "";
-  const edgePreferred = voice !== "system" && token.trim().length > 0;
-  if (!canSpeak() && !edgePreferred) {
+  const cloudPreferred =
+    ttsProvider !== "system" &&
+    token.trim().length > 0 &&
+    (ttsProvider !== "elevenlabs" || elevenLabsVoiceId.trim().length > 0);
+  if (!canSpeak() && !cloudPreferred) {
     args.setHint("Text-to-speech is not available in this browser.");
     return;
   }
@@ -90,7 +100,7 @@ export async function toggleZenOriginalListen(
     },
   };
 
-  // Mark speaking before the Edge fetch so Stop works during synthesis.
+  // Mark speaking before the cloud fetch so Stop works during synthesis.
   args.setSpeaking({
     paragraph: args.paragraph,
     sentenceIndex: ZEN_PARAGRAPH_SPEECH_INDEX,
@@ -105,7 +115,9 @@ export async function toggleZenOriginalListen(
       text,
       lang: originalLang,
       token,
-      voice,
+      ttsProvider,
+      edgeVoice,
+      elevenLabsVoiceId,
       handlers,
       speakSentence: defaultSpeakSentence,
     });

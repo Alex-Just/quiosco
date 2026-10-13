@@ -51,7 +51,9 @@ describe("settings without browser storage", () => {
         canSpeak: () => true,
         speakSentence,
         stopSpeaking: vi.fn(),
-        voice: "system",
+        ttsProvider: "system",
+        edgeVoice: "elvira",
+        elevenLabsVoiceId: "",
         token: "",
       });
       expect(speakSentence).toHaveBeenCalled();

@@ -105,6 +105,8 @@ hook.
 4. **Secrets**:
    `pnpm exec wrangler secret put OPENCODE_API_KEY` and
    `pnpm exec wrangler secret put APP_TOKEN` (generate: `openssl rand -hex 32`).
+   Optional for premium TTS: `pnpm exec wrangler secret put ELEVENLABS_API_KEY`
+   (Settings → TTS provider → ElevenLabs; paste any Voice ID in the app).
    Recommended: `pnpm exec wrangler secret put JINA_API_KEY` (free key from
    jina.ai) — Cloudflare's shared egress IPs are rate-limited on the reader's
    anonymous tier, so the `jina` fallback rung returns 429 without it.

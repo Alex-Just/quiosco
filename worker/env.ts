@@ -24,6 +24,8 @@ export interface D1Like {
 
 export interface Env {
   OPENCODE_API_KEY: string;
+  /** Optional; required only when Settings TTS provider is ElevenLabs. */
+  ELEVENLABS_API_KEY?: string;
   APP_TOKEN: string;
   JINA_API_KEY?: string;
   BUDGET: KVNamespaceLike;

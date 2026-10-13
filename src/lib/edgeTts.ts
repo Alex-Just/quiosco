@@ -1,28 +1,28 @@
-import type { VoiceSetting } from "./types";
+import type { EdgeVoiceSetting } from "./types";
 
 export const EDGE_VOICE_ELVIRA = "es-ES-ElviraNeural";
 export const EDGE_VOICE_ALVARO = "es-ES-AlvaroNeural";
 
 const TTS_CLIENT_TIMEOUT_MS = 45_000;
 
-/** Map Settings voice to an Edge neural name, or null for system TTS. */
-export function settingsVoiceToEdgeName(voice: VoiceSetting): string | null {
-  if (voice === "elvira") return EDGE_VOICE_ELVIRA;
-  if (voice === "alvaro") return EDGE_VOICE_ALVARO;
-  return null;
+/** Map Settings edge voice to an Edge neural name. */
+export function edgeVoiceToEdgeName(voice: EdgeVoiceSetting): string {
+  return voice === "alvaro" ? EDGE_VOICE_ALVARO : EDGE_VOICE_ELVIRA;
 }
 
-export type FetchEdgeTtsAudio = (
+export type FetchTtsAudio = (
   text: string,
-  edgeVoice: string,
+  provider: "edge" | "elevenlabs",
+  voice: string,
   token: string,
   signal?: AbortSignal,
 ) => Promise<Blob>;
 
-/** Fetch MP3 audio for one utterance from the Worker Edge proxy. */
-export async function fetchEdgeTtsAudio(
+/** Fetch MP3 audio from the Worker TTS proxy (Edge or ElevenLabs). */
+export async function fetchTtsAudio(
   text: string,
-  edgeVoice: string,
+  provider: "edge" | "elevenlabs",
+  voice: string,
   token: string,
   signal?: AbortSignal,
   fetchFn: typeof fetch = fetch,
@@ -36,11 +36,30 @@ export async function fetchEdgeTtsAudio(
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ text, voice: edgeVoice }),
+    body: JSON.stringify({ text, provider, voice }),
     signal: combined,
   });
   if (!response.ok) {
-    throw new Error(`Edge TTS request failed: ${response.status}`);
+    throw new Error(`TTS request failed: ${response.status}`);
   }
   return response.blob();
+}
+
+/** @deprecated Use fetchTtsAudio with provider "edge". */
+export async function fetchEdgeTtsAudio(
+  text: string,
+  edgeVoice: string,
+  token: string,
+  signal?: AbortSignal,
+  fetchFn: typeof fetch = fetch,
+): Promise<Blob> {
+  return fetchTtsAudio(text, "edge", edgeVoice, token, signal, fetchFn);
+}
+
+/** @deprecated Use edgeVoiceToEdgeName. */
+export function settingsVoiceToEdgeName(
+  voice: "system" | "elvira" | "alvaro",
+): string | null {
+  if (voice === "system") return null;
+  return edgeVoiceToEdgeName(voice === "alvaro" ? "alvaro" : "elvira");
 }

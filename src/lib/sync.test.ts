@@ -28,7 +28,9 @@ const settings: Settings = {
   model: "m",
   appToken: "t",
   autoTranslate: true,
-  voice: "elvira",
+  ttsProvider: "edge",
+  edgeVoice: "elvira",
+  elevenLabsVoiceId: "",
   updatedAt: 10,
 };
 
@@ -235,27 +237,27 @@ describe("syncNow", () => {
     store.close();
   });
 
-  it("pushes voice in dirty settings", async () => {
+  it("pushes tts provider fields in dirty settings", async () => {
     const store = await createStore(`test-${randomUUID()}`);
     const storage = fakeStorage();
-    storage.setItem(
-      SETTINGS_KEY,
-      JSON.stringify({ ...settings, voice: "alvaro", updatedAt: 5 }),
-    );
+    const dirty = {
+      ...settings,
+      ttsProvider: "elevenlabs" as const,
+      elevenLabsVoiceId: "vid",
+      updatedAt: 5,
+    };
+    storage.setItem(SETTINGS_KEY, JSON.stringify(dirty));
     storage.setItem("quiosco.settings.dirty", "1");
     const seen: SyncRequest[] = [];
     const api = fakeApi((request) => {
       seen.push(request);
       return { cursor: 1, articles: [], settings: null };
     });
-    await syncNow(
-      store,
-      { ...settings, voice: "alvaro", updatedAt: 5 },
-      api,
-      storage,
-    );
+    await syncNow(store, dirty, api, storage);
     expect(seen[0]?.settings).toBeTruthy();
-    expect(JSON.parse(seen[0]?.settings?.data ?? "{}").voice).toBe("alvaro");
+    const data = JSON.parse(seen[0]?.settings?.data ?? "{}");
+    expect(data.ttsProvider).toBe("elevenlabs");
+    expect(data.elevenLabsVoiceId).toBe("vid");
     store.close();
   });
 

@@ -3,90 +3,102 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { speakWithVoice } from "./speakWithVoice";
 import { ORIGINAL_LANG, stopSpeaking } from "./speech";
 
+const base = {
+  text: "Hola.",
+  lang: ORIGINAL_LANG,
+  token: "tok",
+  edgeVoice: "elvira" as const,
+  elevenLabsVoiceId: "",
+};
+
 describe("speakWithVoice", () => {
   afterEach(() => {
     stopSpeaking();
     vi.restoreAllMocks();
   });
 
-  it("uses the system engine for voice=system", async () => {
+  it("uses the system engine for provider=system", async () => {
     const speakSentence = vi.fn(() => true);
-    const fetchEdge = vi.fn();
-    const playEdge = vi.fn();
+    const fetchTts = vi.fn();
     await speakWithVoice({
-      text: "Hola.",
-      lang: ORIGINAL_LANG,
-      token: "tok",
-      voice: "system",
+      ...base,
+      ttsProvider: "system",
       speakSentence,
-      fetchEdgeAudio: fetchEdge,
-      playEdgeAudio: playEdge,
-    });
-    expect(speakSentence).toHaveBeenCalled();
-    expect(fetchEdge).not.toHaveBeenCalled();
-  });
-
-  it("uses the system engine for non-Spanish language", async () => {
-    const speakSentence = vi.fn(() => true);
-    const fetchEdge = vi.fn();
-    await speakWithVoice({
-      text: "Hello.",
-      lang: "en-US",
-      token: "tok",
-      voice: "elvira",
-      speakSentence,
-      fetchEdgeAudio: fetchEdge,
+      fetchTtsAudio: fetchTts,
       playEdgeAudio: vi.fn(),
     });
     expect(speakSentence).toHaveBeenCalled();
-    expect(fetchEdge).not.toHaveBeenCalled();
+    expect(fetchTts).not.toHaveBeenCalled();
   });
 
-  it("uses the system engine when the app token is missing", async () => {
+  it("uses the system engine when ElevenLabs voice id is empty", async () => {
     const speakSentence = vi.fn(() => true);
-    const fetchEdge = vi.fn();
+    const fetchTts = vi.fn();
     await speakWithVoice({
-      text: "Hola.",
-      lang: ORIGINAL_LANG,
-      token: "",
-      voice: "elvira",
+      ...base,
+      ttsProvider: "elevenlabs",
+      elevenLabsVoiceId: "  ",
       speakSentence,
-      fetchEdgeAudio: fetchEdge,
+      fetchTtsAudio: fetchTts,
       playEdgeAudio: vi.fn(),
     });
     expect(speakSentence).toHaveBeenCalled();
-    expect(fetchEdge).not.toHaveBeenCalled();
+    expect(fetchTts).not.toHaveBeenCalled();
   });
 
-  it("plays Edge audio for Elvira on es-ES", async () => {
+  it("plays Edge audio for provider=edge", async () => {
     const speakSentence = vi.fn(() => true);
     const blob = new Blob([new Uint8Array([1])], { type: "audio/mpeg" });
-    const fetchEdge = vi.fn(async () => blob);
+    const fetchTts = vi.fn(async () => blob);
     const playEdge = vi.fn(async () => undefined);
     const started = await speakWithVoice({
-      text: "Hola.",
-      lang: ORIGINAL_LANG,
-      token: "tok",
-      voice: "elvira",
+      ...base,
+      ttsProvider: "edge",
       speakSentence,
-      fetchEdgeAudio: fetchEdge,
+      fetchTtsAudio: fetchTts,
       playEdgeAudio: playEdge,
     });
     expect(started).toBe(true);
-    expect(fetchEdge).toHaveBeenCalled();
-    expect(playEdge).toHaveBeenCalledWith(blob, expect.any(Object));
+    expect(fetchTts).toHaveBeenCalledWith(
+      "Hola.",
+      "edge",
+      "es-ES-ElviraNeural",
+      "tok",
+      expect.any(AbortSignal),
+    );
     expect(speakSentence).not.toHaveBeenCalled();
   });
 
-  it("falls back to system when Edge fails", async () => {
+  it("plays ElevenLabs audio for provider=elevenlabs with a voice id", async () => {
+    const speakSentence = vi.fn(() => true);
+    const blob = new Blob([new Uint8Array([1])], { type: "audio/mpeg" });
+    const fetchTts = vi.fn(async () => blob);
+    const playEdge = vi.fn(async () => undefined);
+    await speakWithVoice({
+      ...base,
+      ttsProvider: "elevenlabs",
+      elevenLabsVoiceId: "voice-xyz",
+      speakSentence,
+      fetchTtsAudio: fetchTts,
+      playEdgeAudio: playEdge,
+    });
+    expect(fetchTts).toHaveBeenCalledWith(
+      "Hola.",
+      "elevenlabs",
+      "voice-xyz",
+      "tok",
+      expect.any(AbortSignal),
+    );
+    expect(speakSentence).not.toHaveBeenCalled();
+  });
+
+  it("falls back to system when cloud TTS fails", async () => {
     const speakSentence = vi.fn(() => true);
     const started = await speakWithVoice({
-      text: "Hola.",
-      lang: ORIGINAL_LANG,
-      token: "tok",
-      voice: "alvaro",
+      ...base,
+      ttsProvider: "edge",
       speakSentence,
-      fetchEdgeAudio: async () => {
+      fetchTtsAudio: async () => {
         throw new Error("down");
       },
       playEdgeAudio: vi.fn(),

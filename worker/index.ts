@@ -62,7 +62,7 @@ async function handleApi(
   } else if (url.pathname === "/api/translate" && request.method === "POST") {
     response = await handleTranslate(request, env);
   } else if (url.pathname === "/api/tts" && request.method === "POST") {
-    response = await handleTts(request);
+    response = await handleTts(request, { env });
   } else if (url.pathname === "/api/decide" && request.method === "POST") {
     response = await handleDecide(request, env);
   } else if (url.pathname === "/api/sync" && request.method === "POST") {

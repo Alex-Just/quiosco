@@ -6,6 +6,7 @@ import {
   DEFAULT_SETTINGS,
   isSettingsDirty,
   loadSettings,
+  migrateLegacyVoice,
   saveSettings,
 } from "./settings";
 
@@ -28,21 +29,41 @@ describe("settings", () => {
     expect(loadSettings()).toEqual(DEFAULT_SETTINGS);
   });
 
-  it("defaults voice to elvira", () => {
-    expect(DEFAULT_SETTINGS.voice).toBe("elvira");
+  it("defaults to Edge Elvira with an empty ElevenLabs voice id", () => {
+    expect(DEFAULT_SETTINGS.ttsProvider).toBe("edge");
+    expect(DEFAULT_SETTINGS.edgeVoice).toBe("elvira");
+    expect(DEFAULT_SETTINGS.elevenLabsVoiceId).toBe("");
     localStorage.clear();
-    expect(loadSettings().voice).toBe("elvira");
+    expect(loadSettings().ttsProvider).toBe("edge");
   });
 
   it("returns defaults when no browser storage exists", () => {
     expect(loadSettings({ getItem: () => null })).toEqual(DEFAULT_SETTINGS);
   });
 
-  it("round-trips each voice value", () => {
-    for (const voice of ["system", "elvira", "alvaro"] as const) {
-      saveSettings({ ...DEFAULT_SETTINGS, voice });
-      expect(loadSettings().voice).toBe(voice);
-    }
+  it("migrates legacy flat voice values", () => {
+    expect(migrateLegacyVoice("system")).toEqual({
+      ttsProvider: "system",
+      edgeVoice: "elvira",
+    });
+    expect(migrateLegacyVoice("alvaro")).toEqual({
+      ttsProvider: "edge",
+      edgeVoice: "alvaro",
+    });
+    expect(migrateLegacyVoice("elvira")).toEqual({
+      ttsProvider: "edge",
+      edgeVoice: "elvira",
+    });
+  });
+
+  it("loads legacy voice from storage into the new shape", () => {
+    localStorage.setItem(
+      "quiosco.settings.v1",
+      JSON.stringify({ voice: "alvaro" }),
+    );
+    const loaded = loadSettings();
+    expect(loaded.ttsProvider).toBe("edge");
+    expect(loaded.edgeVoice).toBe("alvaro");
   });
 
   it("merges partial data with defaults", () => {
@@ -54,7 +75,7 @@ describe("settings", () => {
     expect(loaded.rules).toBe("Be terse.");
     expect(loaded.model).toBe(DEFAULT_SETTINGS.model);
     expect(loaded.autoTranslate).toBe(true);
-    expect(loaded.voice).toBe("elvira");
+    expect(loaded.ttsProvider).toBe("edge");
   });
 
   it("stamps updatedAt and marks dirty on save", () => {
@@ -84,15 +105,33 @@ describe("settings", () => {
     expect(loadSettings().appToken).toBe("local-token");
   });
 
-  it("merges remote voice into synced settings", () => {
+  it("merges remote ttsProvider and elevenLabsVoiceId", () => {
     localStorage.clear();
-    saveSettings({ ...DEFAULT_SETTINGS, voice: "system", appToken: "t" });
+    saveSettings({
+      ...DEFAULT_SETTINGS,
+      ttsProvider: "system",
+      appToken: "t",
+    });
     const applied = applyRemoteSettings({
       updatedAt: Date.now() + 1000,
-      data: JSON.stringify({ voice: "alvaro" }),
+      data: JSON.stringify({
+        ttsProvider: "elevenlabs",
+        elevenLabsVoiceId: "voice-abc",
+      }),
     });
-    expect(applied?.voice).toBe("alvaro");
+    expect(applied?.ttsProvider).toBe("elevenlabs");
+    expect(applied?.elevenLabsVoiceId).toBe("voice-abc");
     expect(loadSettings().appToken).toBe("t");
+  });
+
+  it("migrates remote legacy voice when new fields are absent", () => {
+    localStorage.clear();
+    saveSettings({ ...DEFAULT_SETTINGS, appToken: "t" });
+    const applied = applyRemoteSettings({
+      updatedAt: Date.now() + 1000,
+      data: JSON.stringify({ voice: "system" }),
+    });
+    expect(applied?.ttsProvider).toBe("system");
   });
 
   it("ignores older remote settings", () => {

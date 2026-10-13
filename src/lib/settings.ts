@@ -1,16 +1,46 @@
-import type { Settings, VoiceSetting } from "./types";
+import type {
+  EdgeVoiceSetting,
+  Settings,
+  TtsProvider,
+  VoiceSetting,
+} from "./types";
 
 export const SETTINGS_KEY = "quiosco.settings.v1";
 const SETTINGS_DIRTY_KEY = "quiosco.settings.dirty";
 type SettingsStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
-const VOICE_SETTINGS = new Set<VoiceSetting>(["system", "elvira", "alvaro"]);
-const DEFAULT_VOICE: VoiceSetting = "elvira";
+const TTS_PROVIDERS = new Set<TtsProvider>(["system", "edge", "elevenlabs"]);
+const EDGE_VOICES = new Set<EdgeVoiceSetting>(["elvira", "alvaro"]);
+const DEFAULT_PROVIDER: TtsProvider = "edge";
+const DEFAULT_EDGE_VOICE: EdgeVoiceSetting = "elvira";
 
-function parseVoice(value: unknown): VoiceSetting {
-  return typeof value === "string" && VOICE_SETTINGS.has(value as VoiceSetting)
-    ? (value as VoiceSetting)
-    : DEFAULT_VOICE;
+function parseProvider(value: unknown): TtsProvider {
+  return typeof value === "string" && TTS_PROVIDERS.has(value as TtsProvider)
+    ? (value as TtsProvider)
+    : DEFAULT_PROVIDER;
+}
+
+function parseEdgeVoice(value: unknown): EdgeVoiceSetting {
+  return typeof value === "string" && EDGE_VOICES.has(value as EdgeVoiceSetting)
+    ? (value as EdgeVoiceSetting)
+    : DEFAULT_EDGE_VOICE;
+}
+
+/** Map the legacy flat `voice` field into provider + edgeVoice. */
+export function migrateLegacyVoice(voice: unknown): {
+  ttsProvider: TtsProvider;
+  edgeVoice: EdgeVoiceSetting;
+} {
+  if (voice === "system") {
+    return { ttsProvider: "system", edgeVoice: DEFAULT_EDGE_VOICE };
+  }
+  if (voice === "alvaro") {
+    return { ttsProvider: "edge", edgeVoice: "alvaro" };
+  }
+  if (voice === "elvira") {
+    return { ttsProvider: "edge", edgeVoice: "elvira" };
+  }
+  return { ttsProvider: DEFAULT_PROVIDER, edgeVoice: DEFAULT_EDGE_VOICE };
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -19,7 +49,9 @@ export const DEFAULT_SETTINGS: Settings = {
   model: "space-bunny-free",
   appToken: "",
   autoTranslate: true,
-  voice: DEFAULT_VOICE,
+  ttsProvider: DEFAULT_PROVIDER,
+  edgeVoice: DEFAULT_EDGE_VOICE,
+  elevenLabsVoiceId: "",
 };
 
 /**
@@ -49,37 +81,57 @@ const MEMORY_STORAGE = (): SettingsStorage => {
   };
 };
 
+function settingsFromPartial(
+  parsed: Partial<Settings> & { voice?: unknown },
+): Settings {
+  const hasNewShape =
+    typeof parsed.ttsProvider === "string" ||
+    typeof parsed.edgeVoice === "string" ||
+    typeof parsed.elevenLabsVoiceId === "string";
+  const migrated = hasNewShape
+    ? {
+        ttsProvider: parseProvider(parsed.ttsProvider),
+        edgeVoice: parseEdgeVoice(parsed.edgeVoice),
+      }
+    : migrateLegacyVoice(parsed.voice);
+
+  return {
+    targetLanguage:
+      typeof parsed.targetLanguage === "string"
+        ? parsed.targetLanguage
+        : DEFAULT_SETTINGS.targetLanguage,
+    rules:
+      typeof parsed.rules === "string" ? parsed.rules : DEFAULT_SETTINGS.rules,
+    model:
+      typeof parsed.model === "string" && parsed.model.trim()
+        ? parsed.model
+        : DEFAULT_SETTINGS.model,
+    appToken:
+      typeof parsed.appToken === "string"
+        ? parsed.appToken
+        : DEFAULT_SETTINGS.appToken,
+    autoTranslate:
+      typeof parsed.autoTranslate === "boolean"
+        ? parsed.autoTranslate
+        : DEFAULT_SETTINGS.autoTranslate,
+    ttsProvider: migrated.ttsProvider,
+    edgeVoice: migrated.edgeVoice,
+    elevenLabsVoiceId:
+      typeof parsed.elevenLabsVoiceId === "string"
+        ? parsed.elevenLabsVoiceId
+        : DEFAULT_SETTINGS.elevenLabsVoiceId,
+    updatedAt: typeof parsed.updatedAt === "number" ? parsed.updatedAt : 0,
+  };
+}
+
 export function loadSettings(storage?: Pick<Storage, "getItem">): Settings {
   const store = storage ?? resolveStorage();
   if (!store) return { ...DEFAULT_SETTINGS };
   try {
     const raw = store.getItem(SETTINGS_KEY);
     if (!raw) return { ...DEFAULT_SETTINGS };
-    const parsed = JSON.parse(raw) as Partial<Settings>;
-    return {
-      targetLanguage:
-        typeof parsed.targetLanguage === "string"
-          ? parsed.targetLanguage
-          : DEFAULT_SETTINGS.targetLanguage,
-      rules:
-        typeof parsed.rules === "string"
-          ? parsed.rules
-          : DEFAULT_SETTINGS.rules,
-      model:
-        typeof parsed.model === "string" && parsed.model.trim()
-          ? parsed.model
-          : DEFAULT_SETTINGS.model,
-      appToken:
-        typeof parsed.appToken === "string"
-          ? parsed.appToken
-          : DEFAULT_SETTINGS.appToken,
-      autoTranslate:
-        typeof parsed.autoTranslate === "boolean"
-          ? parsed.autoTranslate
-          : DEFAULT_SETTINGS.autoTranslate,
-      voice: parseVoice(parsed.voice),
-      updatedAt: typeof parsed.updatedAt === "number" ? parsed.updatedAt : 0,
-    };
+    const parsed = JSON.parse(raw) as Partial<Settings> & { voice?: unknown };
+    return settingsFromPartial(parsed);
   } catch {
     return { ...DEFAULT_SETTINGS };
   }
@@ -114,7 +166,9 @@ const SYNCED_FIELDS = [
   "rules",
   "model",
   "autoTranslate",
-  "voice",
+  "ttsProvider",
+  "edgeVoice",
+  "elevenLabsVoiceId",
 ] as const;
 
 export function applyRemoteSettings(
@@ -130,22 +184,52 @@ export function applyRemoteSettings(
     return null;
   }
   if (parsed === null || typeof parsed !== "object") return null;
-  const next: Settings = { ...current, updatedAt: remote.updatedAt };
+
+  // Remote may still send legacy `voice` alone.
+  const fromRemote = settingsFromPartial({
+    ...current,
+    ...parsed,
+  } as Partial<Settings> & { voice?: unknown });
+  const next: Settings = { ...fromRemote, updatedAt: remote.updatedAt };
+
   for (const field of SYNCED_FIELDS) {
     const value = parsed[field];
     if (field === "autoTranslate") {
       if (typeof value === "boolean") next.autoTranslate = value;
-    } else if (field === "voice") {
+    } else if (field === "ttsProvider") {
       if (
         typeof value === "string" &&
-        VOICE_SETTINGS.has(value as VoiceSetting)
+        TTS_PROVIDERS.has(value as TtsProvider)
       ) {
-        next.voice = value as VoiceSetting;
+        next.ttsProvider = value as TtsProvider;
       }
+    } else if (field === "edgeVoice") {
+      if (
+        typeof value === "string" &&
+        EDGE_VOICES.has(value as EdgeVoiceSetting)
+      ) {
+        next.edgeVoice = value as EdgeVoiceSetting;
+      }
+    } else if (field === "elevenLabsVoiceId") {
+      if (typeof value === "string") next.elevenLabsVoiceId = value;
     } else if (typeof value === "string") {
       next[field] = value;
     }
   }
+
+  // Legacy remote voice without new fields.
+  if (
+    typeof parsed.voice === "string" &&
+    parsed.ttsProvider === undefined &&
+    (parsed.voice === "system" ||
+      parsed.voice === "elvira" ||
+      parsed.voice === "alvaro")
+  ) {
+    const migrated = migrateLegacyVoice(parsed.voice as VoiceSetting);
+    next.ttsProvider = migrated.ttsProvider;
+    next.edgeVoice = migrated.edgeVoice;
+  }
+
   storage.setItem(SETTINGS_KEY, JSON.stringify(next));
   return next;
 }

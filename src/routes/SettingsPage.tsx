@@ -3,10 +3,15 @@ import { createApi } from "../lib/api";
 import { formatDateTime } from "../lib/format";
 import { loadSettings, saveSettings } from "../lib/settings";
 import { LAST_SYNC_KEY, runSyncNow, scheduleSync } from "../lib/sync";
-import type { Settings, VoiceSetting } from "../lib/types";
+import type { EdgeVoiceSetting, Settings, TtsProvider } from "../lib/types";
 
-const VOICE_OPTIONS: { value: VoiceSetting; label: string }[] = [
+const PROVIDER_OPTIONS: { value: TtsProvider; label: string }[] = [
   { value: "system", label: "System" },
+  { value: "edge", label: "Edge" },
+  { value: "elevenlabs", label: "ElevenLabs" },
+];
+
+const EDGE_VOICE_OPTIONS: { value: EdgeVoiceSetting; label: string }[] = [
   { value: "elvira", label: "Elvira" },
   { value: "alvaro", label: "Álvaro" },
 ];
@@ -83,20 +88,54 @@ export default function SettingsPage() {
         />
       </label>
       <label>
-        Voice
+        TTS provider
         <select
-          value={settings.voice}
+          value={settings.ttsProvider}
           onChange={(event) =>
-            update({ voice: event.target.value as VoiceSetting })
+            update({ ttsProvider: event.target.value as TtsProvider })
           }
         >
-          {VOICE_OPTIONS.map((option) => (
+          {PROVIDER_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
           ))}
         </select>
       </label>
+      {settings.ttsProvider === "edge" && (
+        <label>
+          Edge voice
+          <select
+            value={settings.edgeVoice}
+            onChange={(event) =>
+              update({ edgeVoice: event.target.value as EdgeVoiceSetting })
+            }
+          >
+            {EDGE_VOICE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {settings.ttsProvider === "elevenlabs" && (
+        <>
+          <label>
+            ElevenLabs voice ID
+            <input
+              value={settings.elevenLabsVoiceId}
+              placeholder="Paste a voice id"
+              onChange={(event) =>
+                update({ elevenLabsVoiceId: event.target.value })
+              }
+            />
+          </label>
+          <p className="muted">
+            Set ELEVENLABS_API_KEY on the Worker like OPENCODE_API_KEY.
+          </p>
+        </>
+      )}
       <label>
         Translation rules (baked into the prompt)
         <textarea
@@ -145,7 +184,7 @@ export default function SettingsPage() {
         {health === "fail" && <span className="error">Not connected</span>}
       </div>
       <div className="row">
-        <button type="button" onClick={onSyncNow}>
+        <button type="button" onClick={() => void onSyncNow()}>
           Sync now
         </button>
         <span className="muted">

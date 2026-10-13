@@ -54,11 +54,13 @@ export async function listenToSentence(
     view === "translation"
       ? speechLangFor(settings.targetLanguage)
       : ORIGINAL_LANG;
-  const edgePreferred =
-    settings.voice !== "system" &&
+  const cloudPreferred =
+    settings.ttsProvider !== "system" &&
     lang === ORIGINAL_LANG &&
-    settings.appToken.trim().length > 0;
-  if (!canSpeak() && !edgePreferred) {
+    settings.appToken.trim().length > 0 &&
+    (settings.ttsProvider !== "elevenlabs" ||
+      settings.elevenLabsVoiceId.trim().length > 0);
+  if (!canSpeak() && !cloudPreferred) {
     setHint("Text-to-speech is not available in this browser.");
     return;
   }
@@ -84,7 +86,9 @@ export async function listenToSentence(
     text: sentence,
     lang,
     token: settings.appToken,
-    voice: settings.voice,
+    ttsProvider: settings.ttsProvider,
+    edgeVoice: settings.edgeVoice,
+    elevenLabsVoiceId: settings.elevenLabsVoiceId,
     handlers,
     speakSentence,
   });

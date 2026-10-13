@@ -78,7 +78,13 @@ export interface Article {
   deleted?: boolean;
 }
 
-/** Castilian Edge neural voices, or the device speechSynthesis engine. */
+/** Which TTS backend Listen uses for original Spanish. */
+export type TtsProvider = "system" | "edge" | "elevenlabs";
+
+/** Castilian Edge neural voice choice when provider is Edge. */
+export type EdgeVoiceSetting = "elvira" | "alvaro";
+
+/** @deprecated Prefer ttsProvider + edgeVoice; kept for migration typing. */
 export type VoiceSetting = "system" | "elvira" | "alvaro";
 
 export interface Settings {
@@ -87,8 +93,12 @@ export interface Settings {
   model: string;
   appToken: string;
   autoTranslate: boolean;
-  /** Preferred TTS: Edge Elvira/Álvaro, or system. */
-  voice: VoiceSetting;
+  /** System, free Edge neural, or premium ElevenLabs. */
+  ttsProvider: TtsProvider;
+  /** Used when ttsProvider === "edge". */
+  edgeVoice: EdgeVoiceSetting;
+  /** Opaque ElevenLabs voice id when ttsProvider === "elevenlabs". */
+  elevenLabsVoiceId: string;
   /** LWW clock for settings sync. */
   updatedAt?: number;
 }

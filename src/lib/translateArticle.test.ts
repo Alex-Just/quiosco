@@ -15,7 +15,9 @@ const settings: Settings = {
   model: "m",
   appToken: "t",
   autoTranslate: true,
-  voice: "elvira",
+  ttsProvider: "edge",
+  edgeVoice: "elvira",
+  elevenLabsVoiceId: "",
 };
 
 function makeArticle(overrides: Partial<Article> = {}): Article {

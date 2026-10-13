@@ -186,7 +186,9 @@ function serializeSettings(settings: Settings): string {
     rules: settings.rules,
     model: settings.model,
     autoTranslate: settings.autoTranslate,
-    voice: settings.voice,
+    ttsProvider: settings.ttsProvider,
+    edgeVoice: settings.edgeVoice,
+    elevenLabsVoiceId: settings.elevenLabsVoiceId,
   });
 }
 
