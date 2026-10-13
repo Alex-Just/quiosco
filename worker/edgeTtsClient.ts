@@ -1,6 +1,8 @@
 /**
  * Worker-native Microsoft Edge neural TTS client (unofficial read-aloud API).
- * Protocol mirrors the isomorphic edge-tts clients used on Cloudflare Workers.
+ * Uses the Cognitive Services websocket host (same token as Edge Read Aloud).
+ * The older speech.platform.bing.com host now requires a Sec-MS-GEC v2 digest;
+ * this host still accepts the v1 SHA-256 token used below.
  */
 
 const TRUSTED_CLIENT_TOKEN = "6A5AA1D4EAFF4E9FB37E23D68491D6F4";
@@ -10,8 +12,12 @@ const WINDOWS_TICKS_PER_SECOND = 10_000_000;
 const CHROMIUM_FULL_VERSION = "143.0.3650.75";
 const CHROMIUM_MAJOR = CHROMIUM_FULL_VERSION.split(".", 1)[0] ?? "143";
 const SEC_MS_GEC_VERSION = `1-${CHROMIUM_FULL_VERSION}`;
+/**
+ * Prefer the msedgeservices host; Bing readaloud now rejects the v1 GEC token.
+ * Workers outbound websockets use https:// (not wss://) with Upgrade: websocket.
+ */
 const WSS_BASE =
-  "wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1";
+  "https://api.msedgeservices.com/tts/cognitiveservices/websocket/v1";
 const OUTPUT_FORMAT = "audio-24khz-48kbitrate-mono-mp3";
 const TTS_TIMEOUT_MS = 30_000;
 
@@ -42,10 +48,6 @@ function connectId(): string {
   return crypto.randomUUID().replaceAll("-", "");
 }
 
-function dateToString(): string {
-  return new Date().toString();
-}
-
 async function generateSecMsGec(): Promise<string> {
   let ticks = Math.floor(Date.now() / 1000) + WIN_EPOCH_SECONDS;
   ticks -= ticks % CLOCK_ROUND_SECONDS;
@@ -64,30 +66,25 @@ async function generateSecMsGec(): Promise<string> {
 function buildSsml(text: string, voice: string): string {
   const cleaned = escapeXml(removeIncompatibleCharacters(text));
   return (
-    `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='es-ES'>` +
-    `<voice name='${voice}'>` +
-    `<prosody pitch='+0Hz' rate='+0%' volume='+0%'>${cleaned}</prosody>` +
+    `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" ` +
+    `xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="es-ES">` +
+    `<voice name="${voice}">` +
+    `<prosody rate="default" pitch="default" volume="default">${cleaned}</prosody>` +
     `</voice></speak>`
   );
 }
 
-function ssmlMessage(
-  requestId: string,
-  timestamp: string,
-  ssml: string,
-): string {
+function ssmlMessage(requestId: string, ssml: string): string {
   return (
     `X-RequestId:${requestId}\r\n` +
     `Content-Type:application/ssml+xml\r\n` +
-    `X-Timestamp:${timestamp}Z\r\n` +
     `Path:ssml\r\n\r\n` +
     ssml
   );
 }
 
-function configMessage(timestamp: string): string {
+function configMessage(): string {
   return (
-    `X-Timestamp:${timestamp}\r\n` +
     `Content-Type:application/json; charset=utf-8\r\n` +
     `Path:speech.config\r\n\r\n` +
     JSON.stringify({
@@ -106,30 +103,56 @@ function configMessage(timestamp: string): string {
   );
 }
 
-function parseBinaryHeaders(message: Uint8Array): {
-  path: string | null;
-  contentType: string | null;
-  body: Uint8Array;
-} {
+const AUDIO_PATH_MARKER = "Path:audio\r\n";
+
+/** Pull MP3 bytes from an Edge TTS binary websocket frame. */
+function extractAudioChunk(message: Uint8Array): Uint8Array | null {
   const first = message.at(0);
   const second = message.at(1);
-  if (first === undefined || second === undefined) {
-    return { path: null, contentType: null, body: message };
+  if (first !== undefined && second !== undefined) {
+    const headerLength = (first << 8) | second;
+    if (headerLength > 0 && headerLength + 2 <= message.length) {
+      const headerText = new TextDecoder().decode(
+        message.slice(2, 2 + headerLength),
+      );
+      if (
+        headerText.includes("Path:audio") &&
+        headerText.includes("audio/mpeg")
+      ) {
+        const body = message.slice(2 + headerLength);
+        return body.length > 0 ? body : null;
+      }
+    }
   }
-  const headerLength = (first << 8) | second;
-  const headerBytes = message.slice(2, 2 + headerLength);
-  const headerText = new TextDecoder().decode(headerBytes);
-  const headers: Record<string, string> = {};
-  for (const line of headerText.split("\r\n")) {
-    const index = line.indexOf(":");
-    if (index === -1) continue;
-    headers[line.slice(0, index)] = line.slice(index + 1).trim();
+  // Fallback used by node-edge-tts: scan for the path marker.
+  const markerBytes = new TextEncoder().encode(AUDIO_PATH_MARKER);
+  const index = indexOfBytes(message, markerBytes);
+  if (index === -1) return null;
+  const body = message.slice(index + markerBytes.length);
+  return body.length > 0 ? body : null;
+}
+
+function indexOfBytes(haystack: Uint8Array, needle: Uint8Array): number {
+  if (needle.length === 0 || needle.length > haystack.length) return -1;
+  outer: for (let i = 0; i <= haystack.length - needle.length; i += 1) {
+    for (let j = 0; j < needle.length; j += 1) {
+      if (haystack[i + j] !== needle[j]) continue outer;
+    }
+    return i;
   }
-  return {
-    path: headers.Path ?? null,
-    contentType: headers["Content-Type"] ?? null,
-    body: message.slice(2 + headerLength),
-  };
+  return -1;
+}
+
+async function messageToBytes(
+  data: unknown,
+): Promise<Uint8Array | "text" | null> {
+  if (typeof data === "string") return "text";
+  if (data instanceof ArrayBuffer) return new Uint8Array(data);
+  if (data instanceof Uint8Array) return data;
+  if (typeof Blob !== "undefined" && data instanceof Blob) {
+    return new Uint8Array(await data.arrayBuffer());
+  }
+  return null;
 }
 
 type WorkerWebSocket = {
@@ -160,7 +183,8 @@ async function openEdgeSocket(
         `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ` +
         `(KHTML, like Gecko) Chrome/${CHROMIUM_MAJOR}.0.0.0 Safari/537.36 ` +
         `Edg/${CHROMIUM_MAJOR}.0.0.0`,
-      Cookie: `muid=${connectId().toUpperCase().slice(0, 32)};`,
+      "Accept-Encoding": "gzip, deflate, br, zstd",
+      "Accept-Language": "en-US,en;q=0.9",
     },
   });
   const socket = (response as Response & { webSocket?: WorkerWebSocket })
@@ -181,14 +205,12 @@ export async function synthesizeEdgeMp3(
   const secMsGec = await generateSecMsGec();
   const requestId = connectId();
   const url =
-    `${WSS_BASE}?TrustedClientToken=${TRUSTED_CLIENT_TOKEN}` +
+    `${WSS_BASE}?Ocp-Apim-Subscription-Key=${TRUSTED_CLIENT_TOKEN}` +
     `&Sec-MS-GEC=${secMsGec}` +
-    `&Sec-MS-GEC-Version=${SEC_MS_GEC_VERSION}` +
-    `&ConnectionId=${requestId}`;
+    `&Sec-MS-GEC-Version=${SEC_MS_GEC_VERSION}`;
 
   const socket = await openEdgeSocket(url, fetchFn);
   const chunks: Uint8Array[] = [];
-  const timestamp = dateToString();
 
   const done = new Promise<Uint8Array>((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -216,26 +238,20 @@ export async function synthesizeEdgeMp3(
     };
 
     socket.addEventListener("message", (event) => {
-      const messageEvent = event as MessageEvent;
-      const data = messageEvent.data;
-      if (typeof data === "string") {
-        if (data.includes("Path:turn.end")) {
-          socket.close();
-          finish();
+      void (async () => {
+        const messageEvent = event as MessageEvent;
+        const converted = await messageToBytes(messageEvent.data);
+        if (converted === "text") {
+          if (String(messageEvent.data).includes("Path:turn.end")) {
+            socket.close();
+            finish();
+          }
+          return;
         }
-        return;
-      }
-      const bytes =
-        data instanceof ArrayBuffer
-          ? new Uint8Array(data)
-          : data instanceof Uint8Array
-            ? data
-            : null;
-      if (!bytes) return;
-      const { path, contentType, body } = parseBinaryHeaders(bytes);
-      if (path === "audio" && contentType === "audio/mpeg" && body.length > 0) {
-        chunks.push(body);
-      }
+        if (!converted) return;
+        const body = extractAudioChunk(converted);
+        if (body) chunks.push(body);
+      })();
     });
 
     socket.addEventListener("error", () => {
@@ -243,7 +259,7 @@ export async function synthesizeEdgeMp3(
     });
   });
 
-  socket.send(configMessage(timestamp));
-  socket.send(ssmlMessage(requestId, timestamp, buildSsml(text, voice)));
+  socket.send(configMessage());
+  socket.send(ssmlMessage(requestId, buildSsml(text, voice)));
   return done;
 }
