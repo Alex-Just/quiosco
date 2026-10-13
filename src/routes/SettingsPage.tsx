@@ -123,21 +123,16 @@ export default function SettingsPage() {
         </label>
       )}
       {settings.ttsProvider === "elevenlabs" && (
-        <>
-          <label>
-            ElevenLabs voice ID
-            <input
-              value={settings.elevenLabsVoiceId}
-              placeholder="Paste a voice id"
-              onChange={(event) =>
-                update({ elevenLabsVoiceId: event.target.value })
-              }
-            />
-          </label>
-          <p className="muted">
-            Store the ElevenLabs key as a Worker secret (see README).
-          </p>
-        </>
+        <label>
+          ElevenLabs voice ID
+          <input
+            value={settings.elevenLabsVoiceId}
+            placeholder="Paste a voice id"
+            onChange={(event) =>
+              update({ elevenLabsVoiceId: event.target.value })
+            }
+          />
+        </label>
       )}
       <label>
         Translation rules (baked into the prompt)
