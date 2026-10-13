@@ -66,7 +66,7 @@ function defaultSynthesize(
   };
 }
 
-/** Authenticated TTS proxy: Edge Castilian or ElevenLabs Flash v2.5. */
+/** Authenticated TTS proxy: Edge Castilian or ElevenLabs Turbo v2.5. */
 export async function handleTts(
   request: Request,
   options: HandleTtsOptions = {},

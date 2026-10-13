@@ -1,12 +1,35 @@
-/** ElevenLabs Flash v2.5 TTS via the official REST API. */
+/** ElevenLabs Turbo v2.5 TTS via the official REST API. */
 
-export const ELEVENLABS_MODEL_ID = "eleven_flash_v2_5";
+export const ELEVENLABS_MODEL_ID = "eleven_turbo_v2_5";
+export const ELEVENLABS_LANGUAGE_CODE = "es";
+export const ELEVENLABS_OUTPUT_FORMAT = "mp3_44100_128";
 const ELEVENLABS_TTS_URL = "https://api.elevenlabs.io/v1/text-to-speech";
 
 export type ElevenLabsFetch = typeof fetch;
 
+async function elevenLabsErrorDetail(response: Response): Promise<string> {
+  try {
+    const body: unknown = await response.json();
+    if (body !== null && typeof body === "object" && "detail" in body) {
+      const detail = (body as { detail: unknown }).detail;
+      if (typeof detail === "string") return detail;
+      if (detail !== null && typeof detail === "object") {
+        const record = detail as { message?: unknown; code?: unknown };
+        if (typeof record.message === "string") {
+          const code =
+            typeof record.code === "string" ? ` (${record.code})` : "";
+          return `${record.message}${code}`;
+        }
+      }
+    }
+  } catch {
+    // Ignore non-JSON error bodies.
+  }
+  return `HTTP ${response.status}`;
+}
+
 /**
- * Synthesize MP3 with ElevenLabs Flash v2.5.
+ * Synthesize MP3 with ElevenLabs Turbo v2.5 (Spanish language code).
  * Throws when the API key is missing or the upstream request fails.
  */
 export async function synthesizeElevenLabsMp3(
@@ -20,23 +43,26 @@ export async function synthesizeElevenLabsMp3(
   const id = voiceId.trim();
   if (!id) throw new Error("ElevenLabs voice id empty");
 
-  const response = await fetchFn(
-    `${ELEVENLABS_TTS_URL}/${encodeURIComponent(id)}`,
-    {
-      method: "POST",
-      headers: {
-        "xi-api-key": key,
-        "Content-Type": "application/json",
-        Accept: "audio/mpeg",
-      },
-      body: JSON.stringify({
-        text,
-        model_id: ELEVENLABS_MODEL_ID,
-      }),
+  const url =
+    `${ELEVENLABS_TTS_URL}/${encodeURIComponent(id)}` +
+    `?output_format=${encodeURIComponent(ELEVENLABS_OUTPUT_FORMAT)}`;
+
+  const response = await fetchFn(url, {
+    method: "POST",
+    headers: {
+      "xi-api-key": key,
+      "Content-Type": "application/json",
+      Accept: "audio/mpeg",
     },
-  );
+    body: JSON.stringify({
+      text,
+      model_id: ELEVENLABS_MODEL_ID,
+      language_code: ELEVENLABS_LANGUAGE_CODE,
+    }),
+  });
   if (!response.ok) {
-    throw new Error(`ElevenLabs TTS failed: ${response.status}`);
+    const detail = await elevenLabsErrorDetail(response);
+    throw new Error(`ElevenLabs TTS failed: ${response.status} — ${detail}`);
   }
   return new Uint8Array(await response.arrayBuffer());
 }
