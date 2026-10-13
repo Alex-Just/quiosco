@@ -95,7 +95,7 @@ export async function toggleZenOriginalListen(
       if (args.speechRun.current !== runId) return;
       args.setSpeaking(null);
       if (!isCancellation(reason)) {
-        args.setHint("Could not play this sentence with the system voice.");
+        args.setHint("Could not play this sentence.");
       }
     },
   };

@@ -5,6 +5,7 @@ describe("applySecurityHeaders", () => {
   it("adds the security header set", () => {
     const response = applySecurityHeaders(new Response("hi"));
     expect(response.headers.get("Content-Security-Policy")).toBe(CSP);
+    expect(CSP).toContain("media-src 'self' blob:");
     expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
     expect(response.headers.get("Referrer-Policy")).toBe("no-referrer");
     expect(response.headers.get("X-Frame-Options")).toBe("DENY");

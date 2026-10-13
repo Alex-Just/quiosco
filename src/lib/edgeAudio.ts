@@ -67,5 +67,15 @@ export async function playEdgeAudio(
     handlers.onError?.("synthesis-failed");
   };
 
-  await audio.play();
+  try {
+    await audio.play();
+  } catch (error) {
+    // play() rejection must not leave a half-bound element; speakWithVoice
+    // falls back to speechSynthesis on this throw.
+    if (current?.audio === audio) {
+      URL.revokeObjectURL(objectUrl);
+      current = null;
+    }
+    throw error;
+  }
 }

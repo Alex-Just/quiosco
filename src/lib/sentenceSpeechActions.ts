@@ -74,7 +74,7 @@ export async function listenToSentence(
       if (speechRun.current !== runId) return;
       setSpeaking(null);
       if (!isCancellation(reason)) {
-        setHint("Could not play this sentence with the system voice.");
+        setHint("Could not play this sentence.");
       }
     },
   };

@@ -12,9 +12,9 @@ async function waitForServiceWorker(page: Page) {
 
 test("html document carries CSP and nosniff", async ({ page }) => {
   const response = await page.goto("/");
-  expect(response?.headers()["content-security-policy"]).toContain(
-    "default-src 'self'",
-  );
+  const csp = response?.headers()["content-security-policy"] ?? "";
+  expect(csp).toContain("default-src 'self'");
+  expect(csp).toContain("media-src 'self' blob:");
   expect(response?.headers()["x-content-type-options"]).toBe("nosniff");
 });
 
