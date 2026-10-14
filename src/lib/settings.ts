@@ -14,6 +14,11 @@ const EDGE_VOICES = new Set<EdgeVoiceSetting>(["elvira", "alvaro"]);
 const DEFAULT_PROVIDER: TtsProvider = "edge";
 const DEFAULT_EDGE_VOICE: EdgeVoiceSetting = "elvira";
 
+/** Speech rate multiplier bounds shared by every TTS provider. */
+export const TTS_RATE_MIN = 0.5;
+export const TTS_RATE_MAX = 2;
+export const DEFAULT_TTS_RATE = 1;
+
 function parseProvider(value: unknown): TtsProvider {
   return typeof value === "string" && TTS_PROVIDERS.has(value as TtsProvider)
     ? (value as TtsProvider)
@@ -24,6 +29,14 @@ function parseEdgeVoice(value: unknown): EdgeVoiceSetting {
   return typeof value === "string" && EDGE_VOICES.has(value as EdgeVoiceSetting)
     ? (value as EdgeVoiceSetting)
     : DEFAULT_EDGE_VOICE;
+}
+
+/** Clamp any usable rate into the supported range; normal for anything else. */
+export function parseTtsRate(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return DEFAULT_TTS_RATE;
+  }
+  return Math.min(TTS_RATE_MAX, Math.max(TTS_RATE_MIN, value));
 }
 
 /** Map the legacy flat `voice` field into provider + edgeVoice. */
@@ -52,6 +65,7 @@ export const DEFAULT_SETTINGS: Settings = {
   ttsProvider: DEFAULT_PROVIDER,
   edgeVoice: DEFAULT_EDGE_VOICE,
   elevenLabsVoiceId: "",
+  ttsRate: DEFAULT_TTS_RATE,
 };
 
 /**
@@ -120,6 +134,7 @@ function settingsFromPartial(
       typeof parsed.elevenLabsVoiceId === "string"
         ? parsed.elevenLabsVoiceId
         : DEFAULT_SETTINGS.elevenLabsVoiceId,
+    ttsRate: parseTtsRate(parsed.ttsRate),
     updatedAt: typeof parsed.updatedAt === "number" ? parsed.updatedAt : 0,
   };
 }
@@ -169,6 +184,7 @@ const SYNCED_FIELDS = [
   "ttsProvider",
   "edgeVoice",
   "elevenLabsVoiceId",
+  "ttsRate",
 ] as const;
 
 export function applyRemoteSettings(
@@ -212,6 +228,8 @@ export function applyRemoteSettings(
       }
     } else if (field === "elevenLabsVoiceId") {
       if (typeof value === "string") next.elevenLabsVoiceId = value;
+    } else if (field === "ttsRate") {
+      if (typeof value === "number") next.ttsRate = parseTtsRate(value);
     } else if (typeof value === "string") {
       next[field] = value;
     }

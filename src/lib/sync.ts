@@ -189,6 +189,7 @@ function serializeSettings(settings: Settings): string {
     ttsProvider: settings.ttsProvider,
     edgeVoice: settings.edgeVoice,
     elevenLabsVoiceId: settings.elevenLabsVoiceId,
+    ttsRate: settings.ttsRate,
   });
 }
 

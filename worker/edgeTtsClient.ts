@@ -63,13 +63,20 @@ async function generateSecMsGec(): Promise<string> {
     .toUpperCase();
 }
 
-function buildSsml(text: string, voice: string): string {
+/** SSML relative rate: 1 stays "default", anything else a signed whole percent. */
+function prosodyRate(rate: number): string {
+  const percent = Math.round((rate - 1) * 100);
+  if (percent === 0) return "default";
+  return `${percent > 0 ? "+" : ""}${percent}%`;
+}
+
+export function buildSsml(text: string, voice: string, rate: number): string {
   const cleaned = escapeXml(removeIncompatibleCharacters(text));
   return (
     `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" ` +
     `xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="es-ES">` +
     `<voice name="${voice}">` +
-    `<prosody rate="default" pitch="default" volume="default">${cleaned}</prosody>` +
+    `<prosody rate="${prosodyRate(rate)}" pitch="default" volume="default">${cleaned}</prosody>` +
     `</voice></speak>`
   );
 }
@@ -200,6 +207,7 @@ async function openEdgeSocket(
 export async function synthesizeEdgeMp3(
   text: string,
   voice: string,
+  rate: number,
   fetchFn: typeof fetch = fetch,
 ): Promise<Uint8Array> {
   const secMsGec = await generateSecMsGec();
@@ -260,6 +268,6 @@ export async function synthesizeEdgeMp3(
   });
 
   socket.send(configMessage());
-  socket.send(ssmlMessage(requestId, buildSsml(text, voice)));
+  socket.send(ssmlMessage(requestId, buildSsml(text, voice, rate)));
   return done;
 }

@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
 import { createApi } from "../lib/api";
 import { formatDateTime } from "../lib/format";
-import { loadSettings, saveSettings } from "../lib/settings";
+import {
+  loadSettings,
+  saveSettings,
+  TTS_RATE_MAX,
+  TTS_RATE_MIN,
+} from "../lib/settings";
 import { LAST_SYNC_KEY, runSyncNow, scheduleSync } from "../lib/sync";
 import type { EdgeVoiceSetting, Settings, TtsProvider } from "../lib/types";
 
@@ -134,6 +139,18 @@ export default function SettingsPage() {
           />
         </label>
       )}
+      <label>
+        Speech rate
+        <input
+          type="range"
+          min={TTS_RATE_MIN}
+          max={TTS_RATE_MAX}
+          step={0.1}
+          value={settings.ttsRate}
+          onChange={(event) => update({ ttsRate: Number(event.target.value) })}
+        />
+        <span className="muted">{settings.ttsRate.toFixed(1)}×</span>
+      </label>
       <label>
         Translation rules (baked into the prompt)
         <textarea

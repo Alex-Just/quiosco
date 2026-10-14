@@ -1,5 +1,11 @@
-import { describe, expect, it } from "vitest";
-import { isCancellation, ORIGINAL_LANG, speechLangFor } from "./speech";
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  isCancellation,
+  ORIGINAL_LANG,
+  speakSentence,
+  speechLangFor,
+} from "./speech";
 
 describe("speechLangFor", () => {
   it("maps the common target languages to BCP-47 codes", () => {
@@ -32,5 +38,43 @@ describe("isCancellation", () => {
     expect(isCancellation("voice-unavailable")).toBe(false);
     expect(isCancellation("synthesis-failed")).toBe(false);
     expect(isCancellation("not-allowed")).toBe(false);
+  });
+});
+
+describe("speakSentence", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  /** jsdom ships neither speechSynthesis nor the utterance constructor. */
+  function stubSynthesis(): { lang: string; rate: number }[] {
+    const spoken: { lang: string; rate: number }[] = [];
+    class FakeUtterance {
+      lang = "";
+      rate = 1;
+      onend: (() => void) | null = null;
+      onerror: ((event: { error: string }) => void) | null = null;
+      constructor(public text: string) {}
+    }
+    vi.stubGlobal("SpeechSynthesisUtterance", FakeUtterance);
+    vi.stubGlobal("speechSynthesis", {
+      cancel: vi.fn(),
+      speak: (utterance: { lang: string; rate: number }) =>
+        spoken.push(utterance),
+    });
+    return spoken;
+  }
+
+  it("sets the requested rate on the system utterance", () => {
+    const spoken = stubSynthesis();
+    expect(speakSentence("Hola.", ORIGINAL_LANG, {}, 1.5)).toBe(true);
+    expect(spoken[0]?.lang).toBe(ORIGINAL_LANG);
+    expect(spoken[0]?.rate).toBe(1.5);
+  });
+
+  it("leaves the rate at the browser default when it is unusable", () => {
+    const spoken = stubSynthesis();
+    speakSentence("Hola.", ORIGINAL_LANG, {}, Number.NaN);
+    expect(spoken[0]?.rate).toBe(1);
   });
 });

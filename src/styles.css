@@ -734,10 +734,10 @@ button.danger {
   font-size: 0.85rem;
 }
 
-.settings input:not([type="checkbox"]),
+.settings input:not([type="checkbox"]):not([type="range"]),
 .settings select,
 .settings textarea,
-.add input:not([type="checkbox"]),
+.add input:not([type="checkbox"]):not([type="range"]),
 .add select,
 .add textarea {
   box-sizing: border-box;
@@ -750,6 +750,14 @@ button.danger {
   color: var(--fg);
   font: inherit;
   font-size: 1rem;
+}
+
+.settings input[type="range"],
+.add input[type="range"] {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  accent-color: var(--accent);
 }
 
 .settings select,

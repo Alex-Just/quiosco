@@ -46,12 +46,14 @@ describe("toggleZenOriginalListen", () => {
       speakSentence,
       stopSpeaking,
       originalLang: "es-ES",
+      ttsRate: 1.5,
     });
 
     expect(speakSentence).toHaveBeenCalledWith(
       "Hola mundo suficientemente largo.",
       "es-ES",
       expect.any(Object),
+      1.5,
     );
     expect(setSpeaking).toHaveBeenCalledWith({
       paragraph: 0,

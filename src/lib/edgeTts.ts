@@ -14,6 +14,7 @@ export type FetchTtsAudio = (
   text: string,
   provider: "edge" | "elevenlabs",
   voice: string,
+  rate: number,
   token: string,
   signal?: AbortSignal,
 ) => Promise<Blob>;
@@ -23,6 +24,7 @@ export async function fetchTtsAudio(
   text: string,
   provider: "edge" | "elevenlabs",
   voice: string,
+  rate: number,
   token: string,
   signal?: AbortSignal,
   fetchFn: typeof fetch = fetch,
@@ -36,7 +38,7 @@ export async function fetchTtsAudio(
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ text, provider, voice }),
+    body: JSON.stringify({ text, provider, voice, rate }),
     signal: combined,
   });
   if (!response.ok) {
@@ -53,7 +55,7 @@ export async function fetchEdgeTtsAudio(
   signal?: AbortSignal,
   fetchFn: typeof fetch = fetch,
 ): Promise<Blob> {
-  return fetchTtsAudio(text, "edge", edgeVoice, token, signal, fetchFn);
+  return fetchTtsAudio(text, "edge", edgeVoice, 1, token, signal, fetchFn);
 }
 
 /** @deprecated Use edgeVoiceToEdgeName. */

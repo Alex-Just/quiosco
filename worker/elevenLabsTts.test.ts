@@ -1,10 +1,18 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, type Mock, vi } from "vitest";
 import {
   ELEVENLABS_LANGUAGE_CODE,
   ELEVENLABS_MODEL_ID,
   ELEVENLABS_OUTPUT_FORMAT,
+  ELEVENLABS_SPEED_MAX,
+  ELEVENLABS_SPEED_MIN,
   synthesizeElevenLabsMp3,
 } from "./elevenLabsTts";
+
+/** Body of the single request the fetch mock received. */
+function requestBody(fetchFn: Mock): Record<string, unknown> {
+  const init = (fetchFn.mock.calls[0] as [string, RequestInit])[1];
+  return JSON.parse(String(init.body)) as Record<string, unknown>;
+}
 
 describe("synthesizeElevenLabsMp3", () => {
   it("POSTs Turbo v2.5 with Spanish language_code and output_format", async () => {
@@ -13,6 +21,7 @@ describe("synthesizeElevenLabsMp3", () => {
       "Hola.",
       "voice-xyz",
       "secret",
+      1,
       fetchFn,
     );
     expect(audio).toEqual(new Uint8Array([1, 2]));
@@ -49,13 +58,23 @@ describe("synthesizeElevenLabsMp3", () => {
         ),
     );
     await expect(
-      synthesizeElevenLabsMp3("Hola.", "voice-xyz", "secret", fetchFn),
+      synthesizeElevenLabsMp3("Hola.", "voice-xyz", "secret", 1, fetchFn),
     ).rejects.toThrow(/402.*library voices/i);
   });
 
   it("throws when the API key is missing", async () => {
     await expect(
-      synthesizeElevenLabsMp3("Hola.", "voice-xyz", "  "),
+      synthesizeElevenLabsMp3("Hola.", "voice-xyz", "  ", 1),
     ).rejects.toThrow(/missing/i);
+  });
+
+  it("sends speed only when it differs from normal, clamped to the Turbo range", async () => {
+    const faster = vi.fn(async () => new Response(new Uint8Array([1])));
+    await synthesizeElevenLabsMp3("Hola.", "voice-xyz", "secret", 1.6, faster);
+    expect(requestBody(faster).speed).toBe(ELEVENLABS_SPEED_MAX);
+
+    const slower = vi.fn(async () => new Response(new Uint8Array([1])));
+    await synthesizeElevenLabsMp3("Hola.", "voice-xyz", "secret", 0.5, slower);
+    expect(requestBody(slower).speed).toBe(ELEVENLABS_SPEED_MIN);
   });
 });

@@ -99,6 +99,8 @@ export interface Settings {
   edgeVoice: EdgeVoiceSetting;
   /** Opaque ElevenLabs voice id when ttsProvider === "elevenlabs". */
   elevenLabsVoiceId: string;
+  /** Speech rate multiplier shared by every provider; 1 is normal. */
+  ttsRate: number;
   /** LWW clock for settings sync. */
   updatedAt?: number;
 }

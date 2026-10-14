@@ -58,12 +58,15 @@ export function speakSentence(
   text: string,
   lang: string,
   handlers: SpeakHandlers = {},
+  rate = 1,
 ): boolean {
   if (!canSpeak()) return false;
   const synth = window.speechSynthesis;
   synth.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
   if (lang) utterance.lang = lang;
+  // Multiplier (1 = normal). Engines clamp values they cannot honor.
+  if (Number.isFinite(rate)) utterance.rate = rate;
   utterance.onend = () => handlers.onEnd?.();
   utterance.onerror = (event) => handlers.onError?.(event.error);
   synth.speak(utterance);

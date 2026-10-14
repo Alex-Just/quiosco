@@ -31,6 +31,7 @@ const settings: Settings = {
   ttsProvider: "edge",
   edgeVoice: "elvira",
   elevenLabsVoiceId: "",
+  ttsRate: 1,
   updatedAt: 10,
 };
 
@@ -244,6 +245,7 @@ describe("syncNow", () => {
       ...settings,
       ttsProvider: "elevenlabs" as const,
       elevenLabsVoiceId: "vid",
+      ttsRate: 1.5,
       updatedAt: 5,
     };
     storage.setItem(SETTINGS_KEY, JSON.stringify(dirty));
@@ -258,6 +260,7 @@ describe("syncNow", () => {
     const data = JSON.parse(seen[0]?.settings?.data ?? "{}");
     expect(data.ttsProvider).toBe("elevenlabs");
     expect(data.elevenLabsVoiceId).toBe("vid");
+    expect(data.ttsRate).toBe(1.5);
     store.close();
   });
 

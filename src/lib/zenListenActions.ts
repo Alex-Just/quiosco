@@ -1,4 +1,4 @@
-import { loadSettings } from "./settings";
+import { DEFAULT_TTS_RATE, loadSettings } from "./settings";
 import { speakWithVoice } from "./speakWithVoice";
 import {
   canSpeak as defaultCanSpeak,
@@ -28,6 +28,7 @@ export type ToggleZenOriginalListenArgs = {
     text: string,
     lang: string,
     handlers?: SpeakHandlers,
+    rate?: number,
   ) => boolean;
   speakWithVoiceFn?: typeof speakWithVoice;
   stopSpeaking?: () => void;
@@ -35,6 +36,7 @@ export type ToggleZenOriginalListenArgs = {
   ttsProvider?: TtsProvider;
   edgeVoice?: EdgeVoiceSetting;
   elevenLabsVoiceId?: string;
+  ttsRate?: number;
   token?: string;
 };
 
@@ -69,12 +71,14 @@ export async function toggleZenOriginalListen(
     args.ttsProvider === undefined ||
     args.edgeVoice === undefined ||
     args.elevenLabsVoiceId === undefined ||
+    args.ttsRate === undefined ||
     args.token === undefined;
   const settings = needsSettings ? loadSettings() : null;
   const ttsProvider = args.ttsProvider ?? settings?.ttsProvider ?? "system";
   const edgeVoice = args.edgeVoice ?? settings?.edgeVoice ?? "elvira";
   const elevenLabsVoiceId =
     args.elevenLabsVoiceId ?? settings?.elevenLabsVoiceId ?? "";
+  const ttsRate = args.ttsRate ?? settings?.ttsRate ?? DEFAULT_TTS_RATE;
   const token = args.token ?? settings?.appToken ?? "";
   const cloudPreferred =
     ttsProvider !== "system" &&
@@ -108,7 +112,7 @@ export async function toggleZenOriginalListen(
 
   let started = false;
   if (args.speakSentence) {
-    started = args.speakSentence(text, originalLang, handlers);
+    started = args.speakSentence(text, originalLang, handlers, ttsRate);
   } else {
     const speak = args.speakWithVoiceFn ?? speakWithVoice;
     started = await speak({
@@ -118,6 +122,7 @@ export async function toggleZenOriginalListen(
       ttsProvider,
       edgeVoice,
       elevenLabsVoiceId,
+      rate: ttsRate,
       handlers,
       speakSentence: defaultSpeakSentence,
     });

@@ -13,7 +13,7 @@ describe("edgeVoiceToEdgeName", () => {
 });
 
 describe("fetchTtsAudio", () => {
-  it("POSTs provider, text, and voice with the app token", async () => {
+  it("POSTs provider, text, voice, and rate with the app token", async () => {
     const fetchFn = vi.fn(async () => {
       return new Response(new Uint8Array([9, 9]), {
         status: 200,
@@ -24,6 +24,7 @@ describe("fetchTtsAudio", () => {
       "Hola.",
       "elevenlabs",
       "voice-xyz",
+      1.2,
       "tok",
       undefined,
       fetchFn,
@@ -35,6 +36,7 @@ describe("fetchTtsAudio", () => {
       text: "Hola.",
       provider: "elevenlabs",
       voice: "voice-xyz",
+      rate: 1.2,
     });
   });
 
@@ -48,6 +50,7 @@ describe("fetchTtsAudio", () => {
         "Hola.",
         "edge",
         EDGE_VOICE_ELVIRA,
+        1,
         "tok",
         undefined,
         fetchFn,

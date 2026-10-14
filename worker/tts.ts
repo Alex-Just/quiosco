@@ -9,6 +9,11 @@ export const EDGE_VOICE_ALVARO = "es-ES-AlvaroNeural";
 /** One Zen page / sentence unit; reject whole-book dumps. */
 export const MAX_TTS_TEXT_CHARS = 4000;
 
+/** Clamp for the client's speech rate multiplier (1 = normal). */
+export const TTS_RATE_MIN = 0.5;
+export const TTS_RATE_MAX = 2;
+const DEFAULT_TTS_RATE = 1;
+
 const ALLOWED_EDGE_VOICES = new Set([EDGE_VOICE_ELVIRA, EDGE_VOICE_ALVARO]);
 
 export type TtsProvider = "edge" | "elevenlabs";
@@ -17,6 +22,7 @@ export type TtsSynthesize = (
   text: string,
   provider: TtsProvider,
   voice: string,
+  rate: number,
 ) => Promise<Uint8Array>;
 
 export type HandleTtsOptions = {
@@ -28,7 +34,15 @@ type TtsPayload = {
   text: string;
   provider: TtsProvider;
   voice: string;
+  rate: number;
 };
+
+/** Omitted rate means legacy client → normal. Non-numeric rates are invalid. */
+function parseRate(value: unknown): number | null {
+  if (value === undefined) return DEFAULT_TTS_RATE;
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  return Math.min(TTS_RATE_MAX, Math.max(TTS_RATE_MIN, value));
+}
 
 async function readPayload(request: Request): Promise<TtsPayload | Response> {
   let data: unknown;
@@ -54,15 +68,24 @@ async function readPayload(request: Request): Promise<TtsPayload | Response> {
   if (provider !== "edge" && provider !== "elevenlabs") {
     return jsonResponse({ error: "unsupported provider" }, 400);
   }
-  return { text: body.text, provider, voice: body.voice };
+  const rate = parseRate(body.rate);
+  if (rate === null) {
+    return jsonResponse({ error: "invalid rate" }, 400);
+  }
+  return { text: body.text, provider, voice: body.voice, rate };
 }
 
 function defaultSynthesize(
   env: Pick<Env, "ELEVENLABS_API_KEY"> | undefined,
 ): TtsSynthesize {
-  return async (text, provider, voice) => {
-    if (provider === "edge") return synthesizeEdgeMp3(text, voice);
-    return synthesizeElevenLabsMp3(text, voice, env?.ELEVENLABS_API_KEY ?? "");
+  return async (text, provider, voice, rate) => {
+    if (provider === "edge") return synthesizeEdgeMp3(text, voice, rate);
+    return synthesizeElevenLabsMp3(
+      text,
+      voice,
+      env?.ELEVENLABS_API_KEY ?? "",
+      rate,
+    );
   };
 }
 
@@ -88,7 +111,12 @@ export async function handleTts(
 
   const synthesize = options.synthesize ?? defaultSynthesize(options.env);
   try {
-    const audio = await synthesize(text, payload.provider, payload.voice);
+    const audio = await synthesize(
+      text,
+      payload.provider,
+      payload.voice,
+      payload.rate,
+    );
     const body = Uint8Array.from(audio);
     return new Response(body, {
       status: 200,

@@ -31,6 +31,7 @@ test("settings TTS provider offers System, Edge, and ElevenLabs", async ({
     "ElevenLabs",
   ]);
   await expect(page.getByLabel("Edge voice")).toHaveValue("elvira");
+  await expect(page.getByLabel("Speech rate")).toBeVisible();
   await provider.selectOption("elevenlabs");
   await expect(page.getByLabel("ElevenLabs voice ID")).toBeVisible();
 });

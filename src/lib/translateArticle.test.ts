@@ -18,6 +18,7 @@ const settings: Settings = {
   ttsProvider: "edge",
   edgeVoice: "elvira",
   elevenLabsVoiceId: "",
+  ttsRate: 1,
 };
 
 function makeArticle(overrides: Partial<Article> = {}): Article {

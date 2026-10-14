@@ -83,7 +83,69 @@ describe("handleTts", () => {
       "Hola mundo.",
       "edge",
       EDGE_VOICE_ELVIRA,
+      1,
     );
+  });
+
+  it("passes the requested rate through to synthesis", async () => {
+    const synthesize = vi.fn(async () => new Uint8Array([1]));
+    const response = await handleTts(
+      new Request("https://app.example/api/tts", {
+        method: "POST",
+        body: JSON.stringify({
+          text: "Hola.",
+          provider: "edge",
+          voice: EDGE_VOICE_ELVIRA,
+          rate: 1.5,
+        }),
+      }),
+      { synthesize },
+    );
+    expect(response.status).toBe(200);
+    expect(synthesize).toHaveBeenCalledWith(
+      "Hola.",
+      "edge",
+      EDGE_VOICE_ELVIRA,
+      1.5,
+    );
+  });
+
+  it("clamps a rate outside the supported range", async () => {
+    const synthesize = vi.fn(async () => new Uint8Array([1]));
+    const response = await handleTts(
+      new Request("https://app.example/api/tts", {
+        method: "POST",
+        body: JSON.stringify({
+          text: "Hola.",
+          provider: "edge",
+          voice: EDGE_VOICE_ELVIRA,
+          rate: 9,
+        }),
+      }),
+      { synthesize },
+    );
+    expect(response.status).toBe(200);
+    expect(synthesize).toHaveBeenCalledWith(
+      "Hola.",
+      "edge",
+      EDGE_VOICE_ELVIRA,
+      2,
+    );
+  });
+
+  it("rejects a non-numeric rate", async () => {
+    const response = await handleTts(
+      new Request("https://app.example/api/tts", {
+        method: "POST",
+        body: JSON.stringify({
+          text: "Hola.",
+          provider: "edge",
+          voice: EDGE_VOICE_ELVIRA,
+          rate: "fast",
+        }),
+      }),
+    );
+    expect(response.status).toBe(400);
   });
 
   it("returns audio/mpeg for ElevenLabs when synthesis succeeds", async () => {
@@ -100,7 +162,12 @@ describe("handleTts", () => {
       { synthesize, env: { ELEVENLABS_API_KEY: "key" } },
     );
     expect(response.status).toBe(200);
-    expect(synthesize).toHaveBeenCalledWith("Hola.", "elevenlabs", "voice-xyz");
+    expect(synthesize).toHaveBeenCalledWith(
+      "Hola.",
+      "elevenlabs",
+      "voice-xyz",
+      1,
+    );
   });
 
   it("maps missing ElevenLabs key to 502", async () => {
@@ -128,6 +195,11 @@ describe("handleTts", () => {
       { synthesize },
     );
     expect(response.status).toBe(200);
-    expect(synthesize).toHaveBeenCalledWith("Hola.", "edge", EDGE_VOICE_ELVIRA);
+    expect(synthesize).toHaveBeenCalledWith(
+      "Hola.",
+      "edge",
+      EDGE_VOICE_ELVIRA,
+      1,
+    );
   });
 });

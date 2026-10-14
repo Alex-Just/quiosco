@@ -54,6 +54,7 @@ describe("settings without browser storage", () => {
         ttsProvider: "system",
         edgeVoice: "elvira",
         elevenLabsVoiceId: "",
+        ttsRate: 1,
         token: "",
       });
       expect(speakSentence).toHaveBeenCalled();

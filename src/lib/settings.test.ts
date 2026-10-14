@@ -37,6 +37,28 @@ describe("settings", () => {
     expect(loadSettings().ttsProvider).toBe("edge");
   });
 
+  it("defaults the speech rate to normal and clamps stored values", () => {
+    expect(DEFAULT_SETTINGS.ttsRate).toBe(1);
+    localStorage.clear();
+    localStorage.setItem(
+      "quiosco.settings.v1",
+      JSON.stringify({ ttsRate: 1.5 }),
+    );
+    expect(loadSettings().ttsRate).toBe(1.5);
+    localStorage.setItem("quiosco.settings.v1", JSON.stringify({ ttsRate: 9 }));
+    expect(loadSettings().ttsRate).toBe(2);
+    localStorage.setItem(
+      "quiosco.settings.v1",
+      JSON.stringify({ ttsRate: 0.1 }),
+    );
+    expect(loadSettings().ttsRate).toBe(0.5);
+    localStorage.setItem(
+      "quiosco.settings.v1",
+      JSON.stringify({ ttsRate: "fast" }),
+    );
+    expect(loadSettings().ttsRate).toBe(1);
+  });
+
   it("returns defaults when no browser storage exists", () => {
     expect(loadSettings({ getItem: () => null })).toEqual(DEFAULT_SETTINGS);
   });
@@ -117,10 +139,12 @@ describe("settings", () => {
       data: JSON.stringify({
         ttsProvider: "elevenlabs",
         elevenLabsVoiceId: "voice-abc",
+        ttsRate: 1.5,
       }),
     });
     expect(applied?.ttsProvider).toBe("elevenlabs");
     expect(applied?.elevenLabsVoiceId).toBe("voice-abc");
+    expect(applied?.ttsRate).toBe(1.5);
     expect(loadSettings().appToken).toBe("t");
   });
 

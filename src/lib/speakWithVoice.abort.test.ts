@@ -18,6 +18,7 @@ describe("speakWithVoice abort", () => {
         _text: string,
         _provider: "edge" | "elevenlabs",
         _voice: string,
+        _rate: number,
         _token: string,
         signal?: AbortSignal,
       ) =>
@@ -36,6 +37,7 @@ describe("speakWithVoice abort", () => {
       ttsProvider: "elevenlabs",
       edgeVoice: "elvira",
       elevenLabsVoiceId: "voice-xyz",
+      rate: 1,
       speakSentence,
       fetchTtsAudio: fetchTts,
       playEdgeAudio: playEdge,

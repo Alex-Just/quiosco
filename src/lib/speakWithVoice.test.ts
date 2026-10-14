@@ -9,6 +9,7 @@ const base = {
   token: "tok",
   edgeVoice: "elvira" as const,
   elevenLabsVoiceId: "",
+  rate: 1.25,
 };
 
 describe("speakWithVoice", () => {
@@ -27,7 +28,12 @@ describe("speakWithVoice", () => {
       fetchTtsAudio: fetchTts,
       playEdgeAudio: vi.fn(),
     });
-    expect(speakSentence).toHaveBeenCalled();
+    expect(speakSentence).toHaveBeenCalledWith(
+      "Hola.",
+      "es-ES",
+      expect.any(Object),
+      1.25,
+    );
     expect(fetchTts).not.toHaveBeenCalled();
   });
 
@@ -42,7 +48,12 @@ describe("speakWithVoice", () => {
       fetchTtsAudio: fetchTts,
       playEdgeAudio: vi.fn(),
     });
-    expect(speakSentence).toHaveBeenCalled();
+    expect(speakSentence).toHaveBeenCalledWith(
+      "Hola.",
+      "es-ES",
+      expect.any(Object),
+      1.25,
+    );
     expect(fetchTts).not.toHaveBeenCalled();
   });
 
@@ -63,6 +74,7 @@ describe("speakWithVoice", () => {
       "Hola.",
       "edge",
       "es-ES-ElviraNeural",
+      1.25,
       "tok",
       expect.any(AbortSignal),
     );
@@ -86,6 +98,7 @@ describe("speakWithVoice", () => {
       "Hola.",
       "elevenlabs",
       "voice-xyz",
+      1.25,
       "tok",
       expect.any(AbortSignal),
     );
@@ -104,6 +117,11 @@ describe("speakWithVoice", () => {
       playEdgeAudio: vi.fn(),
     });
     expect(started).toBe(true);
-    expect(speakSentence).toHaveBeenCalled();
+    expect(speakSentence).toHaveBeenCalledWith(
+      "Hola.",
+      "es-ES",
+      expect.any(Object),
+      1.25,
+    );
   });
 });

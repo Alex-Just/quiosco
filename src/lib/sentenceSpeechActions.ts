@@ -89,6 +89,7 @@ export async function listenToSentence(
     ttsProvider: settings.ttsProvider,
     edgeVoice: settings.edgeVoice,
     elevenLabsVoiceId: settings.elevenLabsVoiceId,
+    rate: settings.ttsRate,
     handlers,
     speakSentence,
   });

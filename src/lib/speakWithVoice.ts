@@ -23,6 +23,8 @@ export type SpeakWithVoiceArgs = {
   ttsProvider: TtsProvider;
   edgeVoice: EdgeVoiceSetting;
   elevenLabsVoiceId: string;
+  /** Speech rate multiplier; 1 is normal. */
+  rate: number;
   handlers?: SpeakHandlers;
   speakSentence?: (
     text: string,
@@ -53,7 +55,7 @@ export async function speakWithVoice(
   const handlers = args.handlers ?? {};
 
   if (args.lang !== ORIGINAL_LANG || args.token.trim().length === 0) {
-    return speakSentence(args.text, args.lang, handlers);
+    return speakSentence(args.text, args.lang, handlers, args.rate);
   }
 
   let provider: "edge" | "elevenlabs" | null = null;
@@ -70,7 +72,7 @@ export async function speakWithVoice(
   }
 
   if (!provider) {
-    return speakSentence(args.text, args.lang, handlers);
+    return speakSentence(args.text, args.lang, handlers, args.rate);
   }
 
   stopEdgeAudio();
@@ -82,6 +84,7 @@ export async function speakWithVoice(
       args.text,
       provider,
       voice,
+      args.rate,
       args.token,
       controller.signal,
     );
@@ -91,6 +94,6 @@ export async function speakWithVoice(
     return true;
   } catch (error) {
     if (isAbortError(error) || controller.signal.aborted) return false;
-    return speakSentence(args.text, args.lang, handlers);
+    return speakSentence(args.text, args.lang, handlers, args.rate);
   }
 }
