@@ -1,9 +1,9 @@
 import { stopEdgeAudio } from "./edgeAudio";
 
 // Thin wrapper over the Web Speech API. On Android Chrome (including the
-// installed PWA) speechSynthesis is backed by the device's TTS engines.
-// Voice lists can load asynchronously; we set `lang`, and when the OS marks a
-// matching voice as default we bind that one so Preferred engine is respected.
+// installed PWA) speechSynthesis uses the OS Preferred TTS engine. We set
+// `lang` only and do not pin utterance.voice — binding a named voice (e.g.
+// Google español) forces that engine and ignores Preferred engine.
 // stopSpeaking also clears Edge HTMLAudioElement playback from speakWithVoice.
 export const ORIGINAL_LANG = "es-ES";
 
@@ -54,35 +54,6 @@ export interface SpeakHandlers {
   onError?: (reason: string) => void;
 }
 
-type SpeechVoiceLike = Pick<SpeechSynthesisVoice, "name" | "lang" | "default">;
-
-function voiceMatchesLang(voiceLang: string, want: string): boolean {
-  if (!want) return false;
-  const voice = voiceLang.toLowerCase();
-  const need = want.toLowerCase();
-  if (voice === need) return true;
-  const needPrimary = need.split("-")[0] ?? need;
-  return voice.startsWith(`${needPrimary}-`) || voice === needPrimary;
-}
-
-/**
- * Prefer the OS-default voice for `lang` when Chrome lists one.
- * Returns null otherwise so utterance.lang alone lets Preferred engine choose.
- * Do not pin Google (or any other engine) by name — that ignores the user's
- * system TTS setting.
- */
-export function pickSpeechVoice(
-  lang: string,
-  voices: readonly SpeechVoiceLike[],
-): SpeechVoiceLike | null {
-  if (!lang || voices.length === 0) return null;
-  return (
-    voices.find(
-      (voice) => voice.default && voiceMatchesLang(voice.lang, lang),
-    ) ?? null
-  );
-}
-
 export function speakSentence(
   text: string,
   lang: string,
@@ -93,14 +64,6 @@ export function speakSentence(
   synth.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
   if (lang) utterance.lang = lang;
-  const voices = synth.getVoices();
-  const preferred = pickSpeechVoice(lang, voices);
-  if (preferred) {
-    const live = voices.find(
-      (voice) => voice.name === preferred.name && voice.lang === preferred.lang,
-    );
-    if (live) utterance.voice = live;
-  }
   utterance.onend = () => handlers.onEnd?.();
   utterance.onerror = (event) => handlers.onError?.(event.error);
   synth.speak(utterance);
