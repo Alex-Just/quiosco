@@ -2,14 +2,10 @@ import { stopEdgeAudio } from "./edgeAudio";
 
 // Thin wrapper over the Web Speech API. On Android Chrome (including the
 // installed PWA) speechSynthesis is backed by the device's TTS engines.
-// Voice lists can load asynchronously; we still set `lang`, and when Castilian
-// Google voices are already listed we bind one explicitly.
+// Voice lists can load asynchronously; we set `lang`, and when the OS marks a
+// matching voice as default we bind that one so Preferred engine is respected.
 // stopSpeaking also clears Edge HTMLAudioElement playback from speakWithVoice.
 export const ORIGINAL_LANG = "es-ES";
-
-/** Android Chrome Castilian network voice (better than many device defaults). */
-export const GOOGLE_ES_VOICE_NAME = "Google español";
-const GOOGLE_VOICE_NAME_MARKER = "Google";
 
 const LANGUAGE_CODES: Record<string, string> = {
   english: "en-US",
@@ -58,27 +54,32 @@ export interface SpeakHandlers {
   onError?: (reason: string) => void;
 }
 
-type SpeechVoiceLike = Pick<SpeechSynthesisVoice, "name" | "lang">;
+type SpeechVoiceLike = Pick<SpeechSynthesisVoice, "name" | "lang" | "default">;
 
-function isCastilianLang(lang: string): boolean {
-  return lang === ORIGINAL_LANG || lang.toLowerCase().startsWith("es-es");
+function voiceMatchesLang(voiceLang: string, want: string): boolean {
+  if (!want) return false;
+  const voice = voiceLang.toLowerCase();
+  const need = want.toLowerCase();
+  if (voice === need) return true;
+  const needPrimary = need.split("-")[0] ?? need;
+  return voice.startsWith(`${needPrimary}-`) || voice === needPrimary;
 }
 
 /**
- * Prefer Android's "Google español" (es-ES) when speaking Castilian.
- * Returns null when no matching voice is listed yet.
+ * Prefer the OS-default voice for `lang` when Chrome lists one.
+ * Returns null otherwise so utterance.lang alone lets Preferred engine choose.
+ * Do not pin Google (or any other engine) by name — that ignores the user's
+ * system TTS setting.
  */
 export function pickSpeechVoice(
   lang: string,
   voices: readonly SpeechVoiceLike[],
 ): SpeechVoiceLike | null {
-  if (!isCastilianLang(lang) || voices.length === 0) return null;
-  const castilian = voices.filter((voice) => isCastilianLang(voice.lang));
-  const exact = castilian.find((voice) => voice.name === GOOGLE_ES_VOICE_NAME);
-  if (exact) return exact;
+  if (!lang || voices.length === 0) return null;
   return (
-    castilian.find((voice) => voice.name.includes(GOOGLE_VOICE_NAME_MARKER)) ??
-    null
+    voices.find(
+      (voice) => voice.default && voiceMatchesLang(voice.lang, lang),
+    ) ?? null
   );
 }
 

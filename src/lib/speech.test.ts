@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  GOOGLE_ES_VOICE_NAME,
   isCancellation,
   ORIGINAL_LANG,
   pickSpeechVoice,
@@ -29,35 +28,32 @@ describe("speechLangFor", () => {
 });
 
 describe("pickSpeechVoice", () => {
-  const voices = [
-    { name: "Spanish Spain", lang: "es-ES" },
-    { name: GOOGLE_ES_VOICE_NAME, lang: "es-ES" },
-    { name: "Google US English", lang: "en-US" },
-  ];
-
-  it("prefers Google español for Castilian", () => {
-    expect(pickSpeechVoice(ORIGINAL_LANG, voices)?.name).toBe(
-      GOOGLE_ES_VOICE_NAME,
-    );
-  });
-
-  it("falls back to any Google es-ES voice when the exact name is missing", () => {
-    const withoutExact = [
-      { name: "Spanish Spain", lang: "es-ES" },
-      { name: "Google español de España", lang: "es-ES" },
+  it("prefers the default voice for the requested language", () => {
+    const voices = [
+      { name: "Google español", lang: "es-ES", default: false },
+      { name: "RHVoice Spanish", lang: "es-ES", default: true },
+      { name: "Google US English", lang: "en-US", default: true },
     ];
-    expect(pickSpeechVoice("es-ES", withoutExact)?.name).toBe(
-      "Google español de España",
+    expect(pickSpeechVoice(ORIGINAL_LANG, voices)?.name).toBe(
+      "RHVoice Spanish",
     );
   });
 
-  it("returns null when no Castilian Google voice is listed", () => {
-    expect(
-      pickSpeechVoice(ORIGINAL_LANG, [
-        { name: "Spanish Spain", lang: "es-ES" },
-      ]),
-    ).toBeNull();
+  it("returns null when no default matches so the OS engine can choose", () => {
+    const voices = [
+      { name: "Google español", lang: "es-ES", default: false },
+      { name: "Spanish Spain", lang: "es-ES", default: false },
+    ];
+    expect(pickSpeechVoice(ORIGINAL_LANG, voices)).toBeNull();
     expect(pickSpeechVoice("en-US", voices)).toBeNull();
+  });
+
+  it("does not force a Google voice over another engine default", () => {
+    const voices = [
+      { name: "Google español", lang: "es-ES", default: false },
+      { name: "Tetsy es-ES", lang: "es-ES", default: true },
+    ];
+    expect(pickSpeechVoice("es-ES", voices)?.name).toBe("Tetsy es-ES");
   });
 });
 
