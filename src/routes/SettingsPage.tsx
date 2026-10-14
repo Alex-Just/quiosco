@@ -151,6 +151,14 @@ export default function SettingsPage() {
         />
         <span className="muted">{settings.ttsRate.toFixed(1)}×</span>
       </label>
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={settings.ttsRandom}
+          onChange={(event) => update({ ttsRandom: event.target.checked })}
+        />
+        Random TTS provider and voice each play
+      </label>
       <label>
         Translation rules (baked into the prompt)
         <textarea

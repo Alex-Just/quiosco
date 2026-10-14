@@ -101,6 +101,8 @@ export interface Settings {
   elevenLabsVoiceId: string;
   /** Speech rate multiplier shared by every provider; 1 is normal. */
   ttsRate: number;
+  /** When true, each Listen picks a random provider and voice. */
+  ttsRandom: boolean;
   /** LWW clock for settings sync. */
   updatedAt?: number;
 }

@@ -105,6 +105,33 @@ describe("speakWithVoice", () => {
     expect(speakSentence).not.toHaveBeenCalled();
   });
 
+  it("picks a random provider when ttsRandom is on", async () => {
+    const speakSentence = vi.fn(() => true);
+    const blob = new Blob([new Uint8Array([1])], { type: "audio/mpeg" });
+    const fetchTts = vi.fn(async () => blob);
+    const playEdge = vi.fn(async () => undefined);
+    // listTtsChoices with token + no ElevenLabs: [system, edge/elvira, edge/alvaro]
+    // random → 0.5 → index 1 → edge/elvira
+    await speakWithVoice({
+      ...base,
+      ttsProvider: "system",
+      ttsRandom: true,
+      random: () => 0.5,
+      speakSentence,
+      fetchTtsAudio: fetchTts,
+      playEdgeAudio: playEdge,
+    });
+    expect(fetchTts).toHaveBeenCalledWith(
+      "Hola.",
+      "edge",
+      "es-ES-ElviraNeural",
+      1.25,
+      "tok",
+      expect.any(AbortSignal),
+    );
+    expect(speakSentence).not.toHaveBeenCalled();
+  });
+
   it("falls back to system when cloud TTS fails", async () => {
     const speakSentence = vi.fn(() => true);
     const started = await speakWithVoice({

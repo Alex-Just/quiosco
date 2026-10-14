@@ -59,6 +59,17 @@ describe("settings", () => {
     expect(loadSettings().ttsRate).toBe(1);
   });
 
+  it("defaults ttsRandom to off and loads a stored true", () => {
+    expect(DEFAULT_SETTINGS.ttsRandom).toBe(false);
+    localStorage.clear();
+    expect(loadSettings().ttsRandom).toBe(false);
+    localStorage.setItem(
+      "quiosco.settings.v1",
+      JSON.stringify({ ttsRandom: true }),
+    );
+    expect(loadSettings().ttsRandom).toBe(true);
+  });
+
   it("returns defaults when no browser storage exists", () => {
     expect(loadSettings({ getItem: () => null })).toEqual(DEFAULT_SETTINGS);
   });
@@ -140,11 +151,13 @@ describe("settings", () => {
         ttsProvider: "elevenlabs",
         elevenLabsVoiceId: "voice-abc",
         ttsRate: 1.5,
+        ttsRandom: true,
       }),
     });
     expect(applied?.ttsProvider).toBe("elevenlabs");
     expect(applied?.elevenLabsVoiceId).toBe("voice-abc");
     expect(applied?.ttsRate).toBe(1.5);
+    expect(applied?.ttsRandom).toBe(true);
     expect(loadSettings().appToken).toBe("t");
   });
 

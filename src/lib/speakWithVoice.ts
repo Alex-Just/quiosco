@@ -9,6 +9,7 @@ import {
   type FetchTtsAudio,
   fetchTtsAudio,
 } from "./edgeTts";
+import { pickRandomTtsChoice } from "./randomTts";
 import {
   speakSentence as defaultSpeakSentence,
   ORIGINAL_LANG,
@@ -25,6 +26,10 @@ export type SpeakWithVoiceArgs = {
   elevenLabsVoiceId: string;
   /** Speech rate multiplier; 1 is normal. */
   rate: number;
+  /** When true, pick a random provider and voice for this play. */
+  ttsRandom?: boolean;
+  /** Test seam for random TTS; returns [0, 1). */
+  random?: () => number;
   handlers?: SpeakHandlers;
   speakSentence?: (
     text: string,
@@ -58,17 +63,31 @@ export async function speakWithVoice(
     return speakSentence(args.text, args.lang, handlers, args.rate);
   }
 
+  const choice = args.ttsRandom
+    ? pickRandomTtsChoice(
+        {
+          token: args.token,
+          elevenLabsVoiceId: args.elevenLabsVoiceId,
+        },
+        args.random,
+      )
+    : {
+        ttsProvider: args.ttsProvider,
+        edgeVoice: args.edgeVoice,
+        elevenLabsVoiceId: args.elevenLabsVoiceId,
+      };
+
   let provider: "edge" | "elevenlabs" | null = null;
   let voice = "";
-  if (args.ttsProvider === "edge") {
+  if (choice.ttsProvider === "edge") {
     provider = "edge";
-    voice = edgeVoiceToEdgeName(args.edgeVoice);
+    voice = edgeVoiceToEdgeName(choice.edgeVoice);
   } else if (
-    args.ttsProvider === "elevenlabs" &&
-    args.elevenLabsVoiceId.trim().length > 0
+    choice.ttsProvider === "elevenlabs" &&
+    choice.elevenLabsVoiceId.trim().length > 0
   ) {
     provider = "elevenlabs";
-    voice = args.elevenLabsVoiceId.trim();
+    voice = choice.elevenLabsVoiceId.trim();
   }
 
   if (!provider) {

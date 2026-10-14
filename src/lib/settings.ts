@@ -66,6 +66,7 @@ export const DEFAULT_SETTINGS: Settings = {
   edgeVoice: DEFAULT_EDGE_VOICE,
   elevenLabsVoiceId: "",
   ttsRate: DEFAULT_TTS_RATE,
+  ttsRandom: false,
 };
 
 /**
@@ -135,6 +136,10 @@ function settingsFromPartial(
         ? parsed.elevenLabsVoiceId
         : DEFAULT_SETTINGS.elevenLabsVoiceId,
     ttsRate: parseTtsRate(parsed.ttsRate),
+    ttsRandom:
+      typeof parsed.ttsRandom === "boolean"
+        ? parsed.ttsRandom
+        : DEFAULT_SETTINGS.ttsRandom,
     updatedAt: typeof parsed.updatedAt === "number" ? parsed.updatedAt : 0,
   };
 }
@@ -185,6 +190,7 @@ const SYNCED_FIELDS = [
   "edgeVoice",
   "elevenLabsVoiceId",
   "ttsRate",
+  "ttsRandom",
 ] as const;
 
 export function applyRemoteSettings(
@@ -230,6 +236,8 @@ export function applyRemoteSettings(
       if (typeof value === "string") next.elevenLabsVoiceId = value;
     } else if (field === "ttsRate") {
       if (typeof value === "number") next.ttsRate = parseTtsRate(value);
+    } else if (field === "ttsRandom") {
+      if (typeof value === "boolean") next.ttsRandom = value;
     } else if (typeof value === "string") {
       next[field] = value;
     }

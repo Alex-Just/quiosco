@@ -55,11 +55,12 @@ export async function listenToSentence(
       ? speechLangFor(settings.targetLanguage)
       : ORIGINAL_LANG;
   const cloudPreferred =
-    settings.ttsProvider !== "system" &&
     lang === ORIGINAL_LANG &&
     settings.appToken.trim().length > 0 &&
-    (settings.ttsProvider !== "elevenlabs" ||
-      settings.elevenLabsVoiceId.trim().length > 0);
+    (settings.ttsRandom ||
+      (settings.ttsProvider !== "system" &&
+        (settings.ttsProvider !== "elevenlabs" ||
+          settings.elevenLabsVoiceId.trim().length > 0)));
   if (!canSpeak() && !cloudPreferred) {
     setHint("Text-to-speech is not available in this browser.");
     return;
@@ -90,6 +91,7 @@ export async function listenToSentence(
     edgeVoice: settings.edgeVoice,
     elevenLabsVoiceId: settings.elevenLabsVoiceId,
     rate: settings.ttsRate,
+    ttsRandom: settings.ttsRandom,
     handlers,
     speakSentence,
   });
