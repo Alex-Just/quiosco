@@ -32,6 +32,7 @@ import { useZenSwipe } from "../lib/useZenSwipe";
 import { loadZenAutoListen, saveZenAutoListen } from "../lib/zenAutoListen";
 import { copyZenPageOriginal } from "../lib/zenCopyActions";
 import { clampZenIndex } from "../lib/zenMode";
+import { pairSourceWithTranslation } from "../lib/zenTranslationDisplay";
 
 const COPY_RESET_MS = 1500;
 
@@ -178,7 +179,10 @@ export default function BookReader({
   const currentUnit = zenUnit == null ? null : (units[zenUnit] ?? null);
   const displayedText =
     translationMode && zenUnit != null
-      ? (translation.translations.get(zenUnit) ?? currentUnit?.text)
+      ? pairSourceWithTranslation(
+          currentUnit?.text ?? "",
+          translation.translations.get(zenUnit) ?? currentUnit?.text ?? "",
+        )
       : undefined;
   const statusText = translationMode
     ? translationStatusText(

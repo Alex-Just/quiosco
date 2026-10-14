@@ -10,11 +10,11 @@ import {
   nextWindow,
   type WindowPlan,
 } from "./bookWindow";
-import { repairFlagMarkers } from "./flagLines";
 import { parseNumberedTranslations } from "./numberedTranslations";
 import { buildBookUserMessage } from "./prompt";
 import type { ArticleStore } from "./store";
 import type { SentenceCacheEntry } from "./types";
+import { pairSourceWithTranslation } from "./zenTranslationDisplay";
 
 export interface BookTranslationDeps {
   store: Pick<ArticleStore, "getSentences" | "putSentences">;
@@ -170,7 +170,7 @@ export async function translateWindow(args: {
     entries.push({
       key,
       source: unit.text,
-      translation: repairFlagMarkers(translation),
+      translation: pairSourceWithTranslation(unit.text, translation),
       targetLanguage,
       rulesHash: rulesHashValue,
       model,
