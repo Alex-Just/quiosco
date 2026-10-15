@@ -4,6 +4,7 @@ import type { Env } from "./env";
 import { handleFetchRung } from "./fetchRung";
 import { applySecurityHeaders, jsonResponse } from "./headers";
 import { handleSync } from "./sync";
+import { handleThread } from "./thread";
 import { handleTranslate } from "./translate";
 import { handleTts } from "./tts";
 
@@ -59,6 +60,8 @@ async function handleApi(
     response = jsonResponse({ ok: true });
   } else if (url.pathname === "/api/fetch" && request.method === "GET") {
     response = await handleFetchRung(request, env);
+  } else if (url.pathname === "/api/thread" && request.method === "GET") {
+    response = await handleThread(request);
   } else if (url.pathname === "/api/translate" && request.method === "POST") {
     response = await handleTranslate(request, env);
   } else if (url.pathname === "/api/tts" && request.method === "POST") {

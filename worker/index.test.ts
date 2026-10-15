@@ -124,4 +124,47 @@ describe("router", () => {
     expect(response.headers.get("Content-Security-Policy")).toBeTruthy();
     expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
   });
+
+  it("routes GET /api/thread to the thread handler", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              code: 200,
+              thread: [
+                {
+                  id: "12345678901234567890",
+                  text: "hola",
+                  author: { id: "a", name: "N", screen_name: "n" },
+                  media: {},
+                },
+              ],
+            }),
+            { headers: { "content-type": "application/json" } },
+          ),
+      ),
+    );
+    try {
+      const response = await handleRequest(
+        authed(
+          `/api/thread?url=${encodeURIComponent("https://x.com/n/status/12345678901234567890")}`,
+        ),
+        makeEnv(),
+      );
+      expect(response.status).toBe(200);
+      expect((await response.json()).text).toBe("hola");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("rejects POST on /api/thread", async () => {
+    const response = await handleRequest(
+      authed("/api/thread", { method: "POST" }),
+      makeEnv(),
+    );
+    expect(response.status).toBe(404);
+  });
 });
