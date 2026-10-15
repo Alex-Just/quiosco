@@ -2,6 +2,7 @@ import type { ApiClient } from "./api";
 import { climbLadder } from "./ladder";
 import { suggestCleanup } from "./needsCleanup";
 import { deriveTitle } from "./share";
+import { parseTweetStatusUrl } from "./tweetUrl";
 import type { Via } from "./types";
 import { normalizeUrl } from "./url";
 
@@ -10,6 +11,7 @@ export interface PreprocessResult {
   title: string;
   via: Via;
   needsCleanup: boolean;
+  partial?: boolean;
 }
 
 export async function preprocessUrlArticle(
@@ -22,6 +24,23 @@ export async function preprocessUrlArticle(
 ): Promise<PreprocessResult> {
   const canonical = normalizeUrl(targetUrl);
   if (!canonical) throw new Error("invalid url");
+
+  if (parseTweetStatusUrl(canonical)) {
+    options.onDetail?.("Fetching thread…");
+    const thread = await api.fetchThread(canonical);
+    return {
+      text: thread.text,
+      title: deriveTitle({
+        extractedTitle: thread.title,
+        sharedTitle: options.sharedTitle ?? "",
+        text: thread.text,
+        url: canonical,
+      }),
+      via: "twitter",
+      needsCleanup: false,
+      partial: thread.partial,
+    };
+  }
 
   options.onDetail?.("Fetching article…");
   const result = await climbLadder(canonical, async (rung, url) => {
