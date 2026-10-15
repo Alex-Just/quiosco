@@ -34,6 +34,7 @@ export interface PrefillHandlers {
   setError: (message: string | null) => void;
   setPreprocessing: (busy: boolean) => void;
   setFetchDetail: (detail: string | null) => void;
+  setFetchWarning: (message: string | null) => void;
 }
 
 export async function loadEditPrefill(
@@ -107,6 +108,9 @@ function livePreprocessApply(
     },
     setFetchDetail: (detail) => {
       if (live()) handlers.setFetchDetail(detail);
+    },
+    setFetchWarning: (message) => {
+      if (live()) handlers.setFetchWarning(message);
     },
   };
 }

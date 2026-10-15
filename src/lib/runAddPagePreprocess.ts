@@ -9,6 +9,9 @@ import { loadSettings } from "./settings";
 import type { Via } from "./types";
 import { normalizeUrl } from "./url";
 
+export const PARTIAL_THREAD_WARNING =
+  "Thread may be incomplete — FxTwitter was unavailable, showing posts up to the one you shared.";
+
 export interface PreprocessApplyState {
   setText: (text: string) => void;
   setTitle: (value: string | ((current: string) => string)) => void;
@@ -17,6 +20,7 @@ export interface PreprocessApplyState {
   setError: (message: string | null) => void;
   setPreprocessing: (busy: boolean) => void;
   setFetchDetail: (detail: string | null) => void;
+  setFetchWarning: (message: string | null) => void;
 }
 
 export interface RunPreprocessOptions {
@@ -40,6 +44,7 @@ export async function runAddPagePreprocess(
   }
   apply.setPreprocessing(true);
   apply.setError(null);
+  apply.setFetchWarning(null);
   apply.setCleanup(false);
   apply.setFetchDetail("Fetching article…");
   try {
@@ -54,6 +59,7 @@ export async function runAddPagePreprocess(
       apply.setCleanup(result.needsCleanup);
     }
     apply.setFetchedVia(result.via);
+    apply.setFetchWarning(result.partial ? PARTIAL_THREAD_WARNING : null);
   } catch (preprocessError) {
     apply.setError(preprocessErrorMessage(preprocessError));
     apply.setFetchedVia(null);

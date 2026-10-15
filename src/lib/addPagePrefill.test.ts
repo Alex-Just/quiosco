@@ -25,6 +25,7 @@ describe("applySharePrefillFields", () => {
         setError: vi.fn(),
         setPreprocessing: vi.fn(),
         setFetchDetail: vi.fn(),
+        setFetchWarning: vi.fn(),
       },
     );
     expect(setTitle).toHaveBeenCalledWith("");
@@ -53,6 +54,7 @@ describe("applySharePrefillFields", () => {
         setError: vi.fn(),
         setPreprocessing: vi.fn(),
         setFetchDetail: vi.fn(),
+        setFetchWarning: vi.fn(),
       },
     );
     expect(setTitle).toHaveBeenCalledWith("Un titular");

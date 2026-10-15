@@ -39,6 +39,7 @@ export default function AddPage() {
   const [error, setError] = useState<string | null>(null);
   const [cleanup, setCleanup] = useState(true);
   const [fetchDetail, setFetchDetail] = useState<string | null>(null);
+  const [fetchWarning, setFetchWarning] = useState<string | null>(null);
   const [preprocessing, setPreprocessing] = useState(false);
   const [fetchedVia, setFetchedVia] = useState<Via | null>(null);
   // The prefill read is async; never overwrite what the user typed meanwhile.
@@ -56,6 +57,7 @@ export default function AddPage() {
     setError,
     setPreprocessing,
     setFetchDetail,
+    setFetchWarning,
     setFetchedVia,
   });
 
@@ -82,6 +84,7 @@ export default function AddPage() {
     setError,
     setPreprocessing,
     setFetchDetail,
+    setFetchWarning,
   };
 
   async function onTryAgain() {
@@ -98,6 +101,7 @@ export default function AddPage() {
     setBusy(true);
     setError(null);
     setFetchDetail(null);
+    setFetchWarning(null);
     try {
       const result = await saveAddPageArticle({
         store,
@@ -140,6 +144,7 @@ export default function AddPage() {
     } finally {
       setBusy(false);
       setFetchDetail(null);
+      setFetchWarning(null);
     }
   }
 
@@ -249,6 +254,7 @@ export default function AddPage() {
             <p className="muted">{fetchDetail ?? "Preparing…"}</p>
           )}
           {error && <p className="error">{error}</p>}
+          {fetchWarning && <p className="muted">{fetchWarning}</p>}
           <div className="row form-actions">
             <button
               type="button"

@@ -22,6 +22,7 @@ export function useAddPagePrefill(options: {
   setError: (message: string | null) => void;
   setPreprocessing: (busy: boolean) => void;
   setFetchDetail: (detail: string | null) => void;
+  setFetchWarning: (message: string | null) => void;
   setFetchedVia: (via: Via | null) => void;
 }): void {
   const {
@@ -36,6 +37,7 @@ export function useAddPagePrefill(options: {
     setError,
     setPreprocessing,
     setFetchDetail,
+    setFetchWarning,
     setFetchedVia,
   } = options;
 
@@ -51,6 +53,7 @@ export function useAddPagePrefill(options: {
       setError,
       setPreprocessing,
       setFetchDetail,
+      setFetchWarning,
       setFetchedVia,
     };
     void (async () => {
@@ -88,6 +91,7 @@ export function useAddPagePrefill(options: {
     setError,
     setPreprocessing,
     setFetchDetail,
+    setFetchWarning,
     setFetchedVia,
   ]);
 }
