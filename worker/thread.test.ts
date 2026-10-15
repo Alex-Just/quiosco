@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest";
-import { parseTweetStatusUrl } from "./thread";
+import { describe, expect, it, vi } from "vitest";
+import {
+  assembleThread,
+  handleThread,
+  mediaCountOf,
+  parseTweetStatusUrl,
+} from "./thread";
 
 describe("parseTweetStatusUrl", () => {
   const id = "2110631479294431539";
@@ -41,5 +46,147 @@ describe("parseTweetStatusUrl", () => {
       "",
     ];
     for (const url of rejected) expect(parseTweetStatusUrl(url)).toBeNull();
+  });
+});
+
+const fxPost = (
+  id: string,
+  text: string,
+  authorId = "a1",
+  media: unknown = {},
+) => ({
+  id,
+  text,
+  author: { id: authorId, name: "Autor", screen_name: "autor" },
+  media,
+});
+
+const fxResponse = (thread: unknown[]) =>
+  new Response(JSON.stringify({ code: 200, thread }), {
+    headers: { "content-type": "application/json" },
+  });
+
+const threadRequest = (rawUrl: string) =>
+  new Request(
+    `https://app.example/api/thread?url=${encodeURIComponent(rawUrl)}`,
+  );
+
+describe("mediaCountOf", () => {
+  it("counts both observed media shapes", () => {
+    expect(mediaCountOf({})).toBe(0);
+    expect(mediaCountOf([])).toBe(0);
+    expect(mediaCountOf({ all: [1, 2] })).toBe(2);
+    expect(mediaCountOf([1])).toBe(1);
+  });
+});
+
+describe("assembleThread", () => {
+  it("joins posts in order with media markers as their own paragraphs", () => {
+    const posts = [
+      {
+        id: "1",
+        text: " Uno ",
+        authorId: "a",
+        authorName: "N",
+        authorHandle: "n",
+        mediaCount: 0,
+      },
+      {
+        id: "2",
+        text: "",
+        authorId: "a",
+        authorName: "N",
+        authorHandle: "n",
+        mediaCount: 2,
+      },
+      {
+        id: "3",
+        text: "Dos",
+        authorId: "a",
+        authorName: "N",
+        authorHandle: "n",
+        mediaCount: 0,
+      },
+    ];
+    const result = assembleThread(posts);
+    expect(result.text).toBe("Uno\n\n[📷 2]\n\nDos");
+    expect(result.title).toBe("Uno");
+    expect(result.author).toBe("N (@n)");
+    expect(result.tweetCount).toBe(3);
+  });
+});
+
+describe("handleThread", () => {
+  const id = "2110631479294431539";
+
+  it("fetches the FxTwitter thread and returns the assembled article", async () => {
+    const fetchImpl = vi.fn(async () =>
+      fxResponse([
+        fxPost(id, "Pedro Baños ha dedicado un video."),
+        fxPost("2", "Segundo post."),
+      ]),
+    );
+    const response = await handleThread(
+      threadRequest(`https://x.com/RusiaSeMueve/status/${id}`),
+      fetchImpl as unknown as typeof fetch,
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      title: "Pedro Baños ha dedicado un video.",
+      author: "Autor (@autor)",
+      text: "Pedro Baños ha dedicado un video.\n\nSegundo post.",
+      tweetCount: 2,
+      partial: false,
+      source: "fxtwitter",
+    });
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe(`https://api.fxtwitter.com/2/thread/${id}`);
+    expect((init.headers as Record<string, string>)["User-Agent"]).toBe(
+      "quiosco/1.0",
+    );
+  });
+
+  it("anchors on the shared post's author when the chain mixes authors", async () => {
+    const replyId = "2110632189494775819";
+    const fetchImpl = vi.fn(async () =>
+      fxResponse([
+        fxPost(id, "Pedro Baños ha dedicado un video.", "a1"),
+        fxPost(replyId, "@RusiaSeMueve ¡Gracias, Ric!", "a2"),
+      ]),
+    );
+    const response = await handleThread(
+      threadRequest(`https://x.com/marcmarginedas/status/${replyId}`),
+      fetchImpl as unknown as typeof fetch,
+    );
+    expect(await response.json()).toMatchObject({
+      title: "@RusiaSeMueve ¡Gracias, Ric!",
+      text: "@RusiaSeMueve ¡Gracias, Ric!",
+      tweetCount: 1,
+    });
+  });
+
+  it("falls back (for now, errors) when FxTwitter returns an empty thread", async () => {
+    const fetchImpl = vi.fn(async (input: unknown) => {
+      if (String(input).includes("fxtwitter")) return fxResponse([]);
+      throw new Error("offline");
+    });
+    const response = await handleThread(
+      threadRequest(`https://x.com/u/status/${id}`),
+      fetchImpl as unknown as typeof fetch,
+    );
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({ error: "upstream" });
+  });
+
+  it("rejects URLs that are not posts", async () => {
+    const response = await handleThread(
+      threadRequest("https://x.com/RusiaSeMueve"),
+      vi.fn() as unknown as typeof fetch,
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "invalid-url" });
   });
 });
