@@ -219,4 +219,75 @@ describe("createApi", () => {
     expect(url).toBe("/api/sync");
     expect(JSON.parse(String(init.body))).toEqual(payload);
   });
+
+  it("fetchThread calls /api/thread and parses the response", async () => {
+    const body = {
+      title: "Hilo",
+      author: "Autor (@autor)",
+      text: "Uno\n\nDos",
+      tweetCount: 2,
+      partial: false,
+      source: "fxtwitter",
+    };
+    const fetchFn = vi.fn(
+      async () =>
+        new Response(JSON.stringify(body), {
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    const api = createApi({
+      token: "secret",
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    await expect(
+      api.fetchThread("https://x.com/u/status/12345678901234567890"),
+    ).resolves.toEqual(body);
+    const [url, init] = fetchFn.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe(
+      "/api/thread?url=https%3A%2F%2Fx.com%2Fu%2Fstatus%2F12345678901234567890",
+    );
+    expect((init.headers as Record<string, string>).Authorization).toBe(
+      "Bearer secret",
+    );
+  });
+
+  it("fetchThread maps thread errors to friendly messages", async () => {
+    const make = (status: number) =>
+      createApi({
+        token: "t",
+        fetchFn: (async () =>
+          new Response("", { status })) as unknown as typeof fetch,
+      });
+    await expect(
+      make(404).fetchThread("https://x.com/u/status/1"),
+    ).rejects.toThrow("That post could not be found");
+    await expect(
+      make(400).fetchThread("https://x.com/u/status/1"),
+    ).rejects.toThrow("That doesn't look like a link to a post.");
+    await expect(
+      make(502).fetchThread("https://x.com/u/status/1"),
+    ).rejects.toThrow("Could not fetch the thread right now. Try again.");
+    await expect(
+      make(401).fetchThread("https://x.com/u/status/1"),
+    ).rejects.toBeInstanceOf(AuthError);
+  });
+
+  it("fetchThread rejects a malformed body", async () => {
+    const fetchFn = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ nope: true }), {
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    const api = createApi({
+      token: "t",
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    await expect(api.fetchThread("https://x.com/u/status/1")).rejects.toThrow(
+      "Could not fetch the thread right now. Try again.",
+    );
+  });
 });
