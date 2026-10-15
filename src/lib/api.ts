@@ -104,7 +104,12 @@ export function createApi(options: {
           throw new Error(threadErrorMessage(error.status));
         throw error;
       }
-      const data = (await response.json()) as Partial<ThreadResponse>;
+      let data: Partial<ThreadResponse>;
+      try {
+        data = (await response.json()) as Partial<ThreadResponse>;
+      } catch {
+        throw new Error(THREAD_FETCH_FAILED);
+      }
       if (typeof data.text !== "string" || typeof data.title !== "string")
         throw new Error(THREAD_FETCH_FAILED);
       return {

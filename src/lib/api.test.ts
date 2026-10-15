@@ -290,4 +290,20 @@ describe("createApi", () => {
       "Could not fetch the thread right now. Try again.",
     );
   });
+
+  it("fetchThread rejects a non-JSON body with the friendly message", async () => {
+    const fetchFn = vi.fn(
+      async () =>
+        new Response("<html>nope</html>", {
+          headers: { "content-type": "text/html" },
+        }),
+    );
+    const api = createApi({
+      token: "t",
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    await expect(api.fetchThread("https://x.com/u/status/1")).rejects.toThrow(
+      "Could not fetch the thread right now. Try again.",
+    );
+  });
 });

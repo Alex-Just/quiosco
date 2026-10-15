@@ -58,4 +58,22 @@ describe("runAddPagePreprocess thread warnings", () => {
     });
     expect(state.setFetchWarning).toHaveBeenLastCalledWith(null);
   });
+
+  it("clears the warning at the start even when the fetch fails", async () => {
+    const state = apply();
+    const api = {
+      fetchThread: vi.fn(async () => {
+        throw new Error("nope");
+      }),
+    } as unknown as ApiClient;
+    await runAddPagePreprocess({
+      targetUrl: url,
+      sharedTitle: "",
+      edited: { current: false },
+      apply: state,
+      api,
+    });
+    expect(state.setFetchWarning).toHaveBeenLastCalledWith(null);
+    expect(state.setError).toHaveBeenCalled();
+  });
 });
