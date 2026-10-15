@@ -185,7 +185,16 @@ export async function walkThreadUp(
   let currentId: string | undefined = sharedId;
   while (currentId && !seen.has(currentId) && chain.length < MAX_WALK_HOPS) {
     seen.add(currentId);
-    const post = await fetchSyndicatedPost(currentId, fetchImpl);
+    let post: SyndicatedPost;
+    try {
+      post = await fetchSyndicatedPost(currentId, fetchImpl);
+    } catch (error) {
+      // A missing or failing ancestor ends the walk: keep the posts already
+      // collected and return them as a partial thread. The shared post
+      // itself failing is a real error for the caller.
+      if (chain.length === 0) throw error;
+      break;
+    }
     chain.push(post);
     currentId =
       typeof post.parent?.id_str === "string" ? post.parent.id_str : undefined;

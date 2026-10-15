@@ -170,7 +170,7 @@ describe("handleThread", () => {
     });
   });
 
-  it("falls back (for now, errors) when FxTwitter returns an empty thread", async () => {
+  it("falls back on an empty FxTwitter thread and reports upstream when both sources fail", async () => {
     const fetchImpl = vi.fn(async (input: unknown) => {
       if (String(input).includes("fxtwitter")) return fxResponse([]);
       throw new Error("offline");
@@ -181,6 +181,11 @@ describe("handleThread", () => {
     );
     expect(response.status).toBe(502);
     expect(await response.json()).toEqual({ error: "upstream" });
+    expect(
+      fetchImpl.mock.calls.some(([input]) =>
+        String(input).includes("cdn.syndication.twimg.com"),
+      ),
+    ).toBe(true);
   });
 
   it("rejects URLs that are not posts", async () => {
@@ -190,6 +195,20 @@ describe("handleThread", () => {
     );
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: "invalid-url" });
+  });
+
+  it("dedupes repeated ids from FxTwitter", async () => {
+    const fetchImpl = vi.fn(async () =>
+      fxResponse([fxPost(id, "Uno."), fxPost(id, "Uno.")]),
+    );
+    const response = await handleThread(
+      threadRequest(`https://x.com/u/status/${id}`),
+      fetchImpl as unknown as typeof fetch,
+    );
+    expect(await response.json()).toMatchObject({
+      text: "Uno.",
+      tweetCount: 1,
+    });
   });
 });
 
@@ -336,5 +355,125 @@ describe("handleThread fallback", () => {
       offline as unknown as typeof fetch,
     );
     expect(bothOffline.status).toBe(502);
+  });
+
+  it("keeps the posts collected so far when a parent fetch fails mid-walk", async () => {
+    const fetchImpl = vi.fn(async (input: unknown) => {
+      const url = String(input);
+      if (url.includes("fxtwitter")) return new Response("", { status: 500 });
+      if (url.includes(`id=${id}&`))
+        return new Response(
+          JSON.stringify(
+            syndicated(
+              id,
+              "El post compartido.",
+              "u1",
+              syndicated("1", "Padre.", "u1"),
+            ),
+          ),
+          { headers: { "content-type": "application/json" } },
+        );
+      return new Response("", { status: 404 });
+    });
+    const response = await handleThread(
+      threadRequest(`https://x.com/u/status/${id}`),
+      fetchImpl as unknown as typeof fetch,
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      text: "El post compartido.",
+      tweetCount: 1,
+      partial: true,
+      source: "syndication",
+    });
+  });
+
+  it("stops at the hop cap on a long chain of unique posts", async () => {
+    let hop = 0;
+    const fetchImpl = vi.fn(async (input: unknown) => {
+      const url = String(input);
+      if (url.includes("fxtwitter")) return new Response("", { status: 500 });
+      hop += 1;
+      return new Response(
+        JSON.stringify(
+          syndicated(
+            `p${hop}`,
+            `post ${hop}`,
+            "u1",
+            syndicated(`p${hop + 1}`, `post ${hop + 1}`, "u1"),
+          ),
+        ),
+        { headers: { "content-type": "application/json" } },
+      );
+    });
+    const response = await handleThread(
+      threadRequest(`https://x.com/u/status/${id}`),
+      fetchImpl as unknown as typeof fetch,
+    );
+    expect(response.status).toBe(200);
+    const syndicationCalls = fetchImpl.mock.calls.filter(([input]) =>
+      String(input).includes("syndication"),
+    );
+    expect(syndicationCalls.length).toBe(MAX_WALK_HOPS);
+  });
+
+  it("errors instead of returning an empty article when every post has no text", async () => {
+    const fetchImpl = vi.fn(async (input: unknown) => {
+      const url = String(input);
+      if (url.includes("fxtwitter")) return fxResponse([fxPost(id, "", "a1")]);
+      return new Response(JSON.stringify(syndicated(id, "", "u1")), {
+        headers: { "content-type": "application/json" },
+      });
+    });
+    const response = await handleThread(
+      threadRequest(`https://x.com/u/status/${id}`),
+      fetchImpl as unknown as typeof fetch,
+    );
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({ error: "upstream" });
+  });
+
+  it("maps a 404 from FxTwitter's HTTP status alone", async () => {
+    const fetchImpl = vi.fn(async (input: unknown) => {
+      if (String(input).includes("fxtwitter"))
+        return new Response("", { status: 404 });
+      throw new Error("offline");
+    });
+    const response = await handleThread(
+      threadRequest(`https://x.com/u/status/${id}`),
+      fetchImpl as unknown as typeof fetch,
+    );
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: "not-found" });
+  });
+
+  it("maps a 404 from FxTwitter's body code alone", async () => {
+    const fetchImpl = vi.fn(async (input: unknown) => {
+      if (String(input).includes("fxtwitter"))
+        return new Response(JSON.stringify({ code: 404 }), {
+          headers: { "content-type": "application/json" },
+        });
+      throw new Error("offline");
+    });
+    const response = await handleThread(
+      threadRequest(`https://x.com/u/status/${id}`),
+      fetchImpl as unknown as typeof fetch,
+    );
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: "not-found" });
+  });
+
+  it("maps a 404 from the syndication source alone", async () => {
+    const fetchImpl = vi.fn(async (input: unknown) =>
+      String(input).includes("fxtwitter")
+        ? new Response("", { status: 500 })
+        : new Response("", { status: 404 }),
+    );
+    const response = await handleThread(
+      threadRequest(`https://x.com/u/status/${id}`),
+      fetchImpl as unknown as typeof fetch,
+    );
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: "not-found" });
   });
 });
