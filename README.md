@@ -184,8 +184,9 @@ printed.
   IP-literal hosts, and validates every redirect hop.
 - Privacy: article text is sent to Zen for translation. Only the article URL is
   sent to jina.ai / web.archive.org / archive.ph, and only when earlier rungs
-  fail. The Googlebot rung uses user-agent spoofing, kept for personal reading
-  only.
+  fail; for X/Twitter post links, the post id is sent to api.fxtwitter.com
+  (and, if that fails, cdn.syndication.twimg.com). The Googlebot rung uses
+  user-agent spoofing, kept for personal reading only.
 - Personal use: read privately, never redistribute. Hard paywalls are not
   defeated; the manual text path is for content you already have access to.
 
