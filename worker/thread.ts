@@ -146,6 +146,64 @@ export async function fetchFxThread(
   return posts;
 }
 
+export const MAX_WALK_HOPS = 25;
+
+export function syndicationToken(id: string): string {
+  return ((Number(id) / 1e15) * Math.PI).toString(36).replace(/(0+|\.)/g, "");
+}
+
+export interface SyndicatedPost {
+  id_str?: unknown;
+  text?: unknown;
+  user?: { id_str?: unknown; name?: unknown; screen_name?: unknown };
+  parent?: { id_str?: unknown };
+  mediaDetails?: unknown;
+}
+
+export async function fetchSyndicatedPost(
+  id: string,
+  fetchImpl: typeof fetch,
+): Promise<SyndicatedPost> {
+  const url = `https://cdn.syndication.twimg.com/tweet-result?id=${id}&token=${syndicationToken(id)}&lang=en`;
+  const response = await fetchImpl(url, {
+    headers: { "User-Agent": QUIOSCO_UA },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
+  if (response.status === 404)
+    throw new ThreadError("post not found", { notFound: true });
+  if (!response.ok)
+    throw new ThreadError(`syndication status ${response.status}`);
+  return (await response.json()) as SyndicatedPost;
+}
+
+export async function walkThreadUp(
+  sharedId: string,
+  fetchImpl: typeof fetch,
+): Promise<ThreadPost[]> {
+  const seen = new Set<string>();
+  const chain: SyndicatedPost[] = [];
+  let currentId: string | undefined = sharedId;
+  while (currentId && !seen.has(currentId) && chain.length < MAX_WALK_HOPS) {
+    seen.add(currentId);
+    const post = await fetchSyndicatedPost(currentId, fetchImpl);
+    chain.push(post);
+    currentId =
+      typeof post.parent?.id_str === "string" ? post.parent.id_str : undefined;
+  }
+  const anchorUserId = chain[0]?.user?.id_str;
+  const kept = chain.filter(
+    (post) => !anchorUserId || post.user?.id_str === anchorUserId,
+  );
+  return kept.reverse().map((post) => ({
+    id: String(post.id_str ?? ""),
+    text: typeof post.text === "string" ? post.text : "",
+    authorId: String(post.user?.id_str ?? ""),
+    authorName: String(post.user?.name ?? ""),
+    authorHandle: String(post.user?.screen_name ?? ""),
+    mediaCount: Array.isArray(post.mediaDetails) ? post.mediaDetails.length : 0,
+  }));
+}
+
 function buildResult(
   posts: ThreadPost[],
   source: ThreadResult["source"],
@@ -163,10 +221,21 @@ export async function handleThread(
   const raw = new URL(request.url).searchParams.get("url") ?? "";
   const id = parseTweetStatusUrl(raw);
   if (!id) return jsonResponse({ error: "invalid-url" }, 400);
+  let sawNotFound = false;
   try {
     const posts = await fetchFxThread(id, fetchImpl);
     return jsonResponse(buildResult(posts, "fxtwitter", false));
-  } catch {
-    return jsonResponse({ error: "upstream" }, 502);
+  } catch (error) {
+    if (error instanceof ThreadError && error.notFound) sawNotFound = true;
   }
+  try {
+    const posts = await walkThreadUp(id, fetchImpl);
+    return jsonResponse(buildResult(posts, "syndication", true));
+  } catch (error) {
+    if (error instanceof ThreadError && error.notFound) sawNotFound = true;
+  }
+  return jsonResponse(
+    { error: sawNotFound ? "not-found" : "upstream" },
+    sawNotFound ? 404 : 502,
+  );
 }
