@@ -13,7 +13,7 @@ export interface ScrollPosition {
 export type ArticleStatus = "unread" | "read" | "archived";
 export type TranslationStatus = "pending" | "running" | "done" | "error";
 export type Rung = "direct" | "googlebot" | "jina" | "wayback" | "archive_ph";
-export type Via = Rung | "manual";
+export type Via = Rung | "manual" | "twitter";
 
 /** Absent on legacy rows, which are regular articles. */
 export type ArticleKind = "article" | "book";
@@ -120,6 +120,15 @@ export interface RungResponse {
   kind: "html" | "markdown";
   via: Rung;
   finalUrl: string | null;
+}
+
+export interface ThreadResponse {
+  title: string;
+  author: string;
+  text: string;
+  tweetCount: number;
+  partial: boolean;
+  source: "fxtwitter" | "syndication";
 }
 
 export interface TranslateRequest {
