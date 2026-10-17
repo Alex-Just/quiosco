@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { TtsChoice } from "./randomTts";
 import { speakWithVoice } from "./speakWithVoice";
 import { ORIGINAL_LANG, stopSpeaking } from "./speech";
 
@@ -105,18 +106,20 @@ describe("speakWithVoice", () => {
     expect(speakSentence).not.toHaveBeenCalled();
   });
 
-  it("picks a random provider when ttsRandom is on", async () => {
+  it("uses the injected tts picker when ttsRandom is on", async () => {
     const speakSentence = vi.fn(() => true);
     const blob = new Blob([new Uint8Array([1])], { type: "audio/mpeg" });
     const fetchTts = vi.fn(async () => blob);
     const playEdge = vi.fn(async () => undefined);
-    // listTtsChoices with token + no ElevenLabs: [system, edge/elvira, edge/alvaro]
-    // random → 0.5 → index 1 → edge/elvira
     await speakWithVoice({
       ...base,
       ttsProvider: "system",
       ttsRandom: true,
-      random: () => 0.5,
+      pickTtsChoice: (): TtsChoice => ({
+        ttsProvider: "edge",
+        edgeVoice: "elvira",
+        elevenLabsVoiceId: "",
+      }),
       speakSentence,
       fetchTtsAudio: fetchTts,
       playEdgeAudio: playEdge,
@@ -130,6 +133,34 @@ describe("speakWithVoice", () => {
       expect.any(AbortSignal),
     );
     expect(speakSentence).not.toHaveBeenCalled();
+  });
+
+  it("deals from the shared shuffle bag across plays when ttsRandom is on", async () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.99);
+    const blob = new Blob([new Uint8Array([1])], { type: "audio/mpeg" });
+    const fetchTts = vi.fn(async () => blob);
+    const playEdge = vi.fn(async () => undefined);
+    // With the deterministic shuffle, the first deal is system, the second
+    // is Edge Elvira (listTtsChoices: [system, edge/elvira, edge/alvaro]).
+    const args = {
+      ...base,
+      ttsProvider: "system" as const,
+      ttsRandom: true,
+      speakSentence: vi.fn(() => true),
+      fetchTtsAudio: fetchTts,
+      playEdgeAudio: playEdge,
+    };
+    await speakWithVoice(args);
+    await speakWithVoice(args);
+    expect(fetchTts).toHaveBeenCalledTimes(1);
+    expect(fetchTts).toHaveBeenCalledWith(
+      "Hola.",
+      "edge",
+      "es-ES-ElviraNeural",
+      1.25,
+      "tok",
+      expect.any(AbortSignal),
+    );
   });
 
   it("falls back to system when cloud TTS fails", async () => {

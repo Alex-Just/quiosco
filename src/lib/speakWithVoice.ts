@@ -9,7 +9,11 @@ import {
   type FetchTtsAudio,
   fetchTtsAudio,
 } from "./edgeTts";
-import { pickRandomTtsChoice } from "./randomTts";
+import {
+  pickNextTtsChoice,
+  type TtsChoice,
+  type TtsChoiceRequest,
+} from "./randomTts";
 import {
   speakSentence as defaultSpeakSentence,
   ORIGINAL_LANG,
@@ -28,8 +32,8 @@ export type SpeakWithVoiceArgs = {
   rate: number;
   /** When true, pick a random provider and voice for this play. */
   ttsRandom?: boolean;
-  /** Test seam for random TTS; returns [0, 1). */
-  random?: () => number;
+  /** Test seam for the session shuffle bag; returns the next pair to play. */
+  pickTtsChoice?: (input: TtsChoiceRequest) => TtsChoice;
   handlers?: SpeakHandlers;
   speakSentence?: (
     text: string,
@@ -64,13 +68,10 @@ export async function speakWithVoice(
   }
 
   const choice = args.ttsRandom
-    ? pickRandomTtsChoice(
-        {
-          token: args.token,
-          elevenLabsVoiceId: args.elevenLabsVoiceId,
-        },
-        args.random,
-      )
+    ? (args.pickTtsChoice ?? pickNextTtsChoice)({
+        token: args.token,
+        elevenLabsVoiceId: args.elevenLabsVoiceId,
+      })
     : {
         ttsProvider: args.ttsProvider,
         edgeVoice: args.edgeVoice,
