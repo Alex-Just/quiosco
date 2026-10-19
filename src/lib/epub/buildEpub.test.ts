@@ -85,6 +85,9 @@ describe("buildEpub", () => {
     expect(chapter).not.toContain("<h1>");
     expect(chapter).toContain('<p class="s">María &amp; &lt;yo&gt;</p>');
     expect(chapter).toContain('<p class="s">Привет</p>');
+    expect(chapter).toContain(
+      '<p class="s">Primera línea<br/><br/>Segunda línea</p>',
+    );
   });
 
   it("round-trips through the parser with specials and non-Latin text", async () => {

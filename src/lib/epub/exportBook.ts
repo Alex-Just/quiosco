@@ -11,6 +11,7 @@ import {
   unitsByParagraph,
 } from "../bookText";
 import { readCachedTranslations } from "../bookTranslation";
+import { spaceFlagLines } from "../flagLines";
 import {
   type BookTranslationMaterial,
   createSentenceKeyMemo,
@@ -29,13 +30,23 @@ const DEFAULT_READ_BATCH_UNITS = 500;
 /** Flag emoji are regional indicators; e-reader fonts often lack the glyphs. */
 const LANGUAGE_FLAGS = /[\u{1F1E6}-\u{1F1FF}]{1,2}\uFE0F?/gu;
 
-/** Drop flag markers and line padding: the EPUB carries text only. */
+/** Drop flag markers and leave one blank line between stanzas, as Zen does. */
 function withoutLanguageFlags(block: string): string {
-  return block
+  const lines = spaceFlagLines(block)
     .split("\n")
-    .map((line) => line.replace(LANGUAGE_FLAGS, "").trim())
-    .filter((line) => line !== "")
-    .join("\n");
+    .map((line) => line.replace(LANGUAGE_FLAGS, "").trim());
+  const cleaned: string[] = [];
+  for (const line of lines) {
+    if (line === "") {
+      if (cleaned.length > 0 && cleaned[cleaned.length - 1] !== "") {
+        cleaned.push("");
+      }
+    } else {
+      cleaned.push(line);
+    }
+  }
+  while (cleaned.at(-1) === "") cleaned.pop();
+  return cleaned.join("\n");
 }
 
 /**

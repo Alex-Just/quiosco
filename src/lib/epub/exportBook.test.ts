@@ -81,7 +81,7 @@ describe("assembleExportChapters", () => {
     });
 
     expect(chapters).toEqual([
-      { title: "Uno", paragraphs: ["Hola.\nHello.", "Adiós."] },
+      { title: "Uno", paragraphs: ["Hola.\n\nHello.", "Adiós."] },
     ]);
   });
 
@@ -94,7 +94,7 @@ describe("assembleExportChapters", () => {
     });
 
     const block = chapters[0]?.paragraphs[0] ?? "";
-    expect(block).toBe("Hola.\nПривет.");
+    expect(block).toBe("Hola.\n\nПривет.");
     expect(block).not.toMatch(/[\u{1F1E6}-\u{1F1FF}]/u);
   });
 
@@ -106,7 +106,7 @@ describe("assembleExportChapters", () => {
       translations: new Map([[1, "🇬🇧 Hello."]]),
     });
 
-    expect(chapters[0]?.paragraphs[0]).toBe("Hola.\nHello.");
+    expect(chapters[0]?.paragraphs[0]).toBe("Hola.\n\nHello.");
   });
 
   it("never re-renders title units and renders skipped units from source", () => {
@@ -130,7 +130,7 @@ describe("assembleExportChapters", () => {
     expect(chapters).toEqual([
       {
         title: "Uno",
-        paragraphs: ["***", "Hola.\nHello.", "Adiós."],
+        paragraphs: ["***", "Hola.\n\nHello.", "Adiós."],
       },
     ]);
   });

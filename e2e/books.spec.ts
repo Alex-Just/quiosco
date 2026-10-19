@@ -801,6 +801,7 @@ test("exports an EPUB of the cached translations", async ({ page }) => {
   // No flag emoji: the device's fonts render them as tofu boxes.
   expect(chapter1).not.toMatch(/[\u{1F1E6}-\u{1F1FF}]/u);
   expect(chapter1).toContain("Primer capítulo");
+  expect(chapter1).toContain("<br/><br/>ES-trad: Primer capítulo");
   expect(chapter1).toContain("ES-trad: Primer capítulo");
   // The tail sits beyond anything the prefetch cached: its text stays source.
   const chapter5 = strFromU8(zip["OEBPS/chapter-5.xhtml"] ?? new Uint8Array());
