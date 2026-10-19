@@ -900,6 +900,45 @@ test("cancels a whole-book translation", async ({ page }) => {
   expect(downloads).toBe(0);
 });
 
+test("shows the whole-book run in the regular reading view", async ({
+  page,
+}) => {
+  await importBook(page);
+  await setAppToken(page);
+  await page.goto("/");
+  await page.getByRole("link", { name: /Libro de prueba/ }).click();
+  const { count, release } = await mockGatedTranslateRoute(page);
+
+  // Leave Zen: the regular view must still surface the long paid run.
+  await page.getByRole("button", { name: "More book actions" }).click();
+  const sheet = page.getByRole("dialog", { name: "Book actions" });
+  await sheet.getByRole("button", { name: "Exit Zen mode" }).click();
+  await expect(page.locator("#book-chapter-0 h2")).toBeVisible();
+
+  await page.getByRole("button", { name: "More book actions" }).click();
+  await sheet
+    .getByRole("button", { name: "Fully translate, then export" })
+    .click();
+  await expect(page.locator("article")).toHaveAttribute(
+    "data-finish-status",
+    "working",
+  );
+  await expect(page.getByText(/Translating whole book/)).toBeVisible();
+  await expect.poll(() => count()).toBe(1);
+
+  // The same view can cancel it and sees the status clear.
+  await page.getByRole("button", { name: "More book actions" }).click();
+  await sheet
+    .getByRole("button", { name: "Cancel whole-book translation" })
+    .click();
+  await expect(page.locator("article")).not.toHaveAttribute(
+    "data-finish-status",
+    /.+/,
+  );
+  await expect(page.getByText(/Translating whole book/)).toHaveCount(0);
+  release();
+});
+
 test("Zen text can be selected word by word", async ({ page }) => {
   await importBook(page);
   await page.goto("/");

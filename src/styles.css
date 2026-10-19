@@ -610,7 +610,8 @@ button.danger {
   flex: 1;
 }
 
-.zen-status {
+.zen-status,
+.read-status {
   margin: 20px 0 0;
   text-align: center;
   font-size: 0.85rem;

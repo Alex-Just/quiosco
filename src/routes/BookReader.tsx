@@ -402,13 +402,16 @@ export default function BookReader({
           </>
         )
       ) : (
-        <BookText
-          chapters={chapters}
-          paragraphs={paragraphs}
-          chapterStarts={chapterStarts}
-          isSpeaking={isSpeaking}
-          onOpenMenu={setMenu}
-        />
+        <>
+          {statusText && <p className="muted read-status">{statusText}</p>}
+          <BookText
+            chapters={chapters}
+            paragraphs={paragraphs}
+            chapterStarts={chapterStarts}
+            isSpeaking={isSpeaking}
+            onOpenMenu={setMenu}
+          />
+        </>
       )}
       {moreOpen && (
         <ArticleActionsSheet
