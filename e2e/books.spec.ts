@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
-import { strToU8, zipSync } from "fflate";
+import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 
 // fflate only encodes DOS timestamps; pin a fixed date so the fixture bytes
 // are deterministic.
@@ -221,6 +221,66 @@ function requestedSentences(body: unknown): string[] {
     const match = /^(\d+)\.\s+(.+)$/.exec(line);
     return match?.[2] ? [match[2]] : [];
   });
+}
+
+/** The bilingual block reply the mocked translate route returns per window. */
+function translateReply(sentences: string[]): string {
+  return sentences
+    .map(
+      (sentence, index) =>
+        `${index + 1}\n🇪🇸 ${sentence}\n🇬🇧 ES-trad: ${sentence}`,
+    )
+    .join("\n\n");
+}
+
+/** Mock /api/translate; returns the list of requested sentences. */
+async function mockTranslateRoute(page: Page): Promise<string[]> {
+  const requests: string[] = [];
+  await page.route("**/api/translate**", async (route) => {
+    const sentences = requestedSentences(route.request().postDataJSON());
+    requests.push(...sentences);
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ text: translateReply(sentences) }),
+    });
+  });
+  return requests;
+}
+
+/** Gated /api/translate mock: the first request waits until release(). */
+async function mockGatedTranslateRoute(page: Page): Promise<{
+  requests: string[];
+  count: () => number;
+  release: () => void;
+}> {
+  const requests: string[] = [];
+  let calls = 0;
+  let release: () => void = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let held = false;
+  await page.route("**/api/translate**", async (route) => {
+    calls += 1;
+    const sentences = requestedSentences(route.request().postDataJSON());
+    requests.push(...sentences);
+    if (!held) {
+      held = true;
+      await gate;
+    }
+    try {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ text: translateReply(sentences) }),
+      });
+    } catch {
+      // Cancelling the run aborts the in-flight request: the reply has
+      // nowhere to go, and Playwright may refuse the late fulfill.
+    }
+  });
+  return { requests, count: () => calls, release };
 }
 
 /** Move the Zen pane to the last screen via the chapter sheet. */
@@ -540,6 +600,12 @@ test("translates the Zen sentence from the cache and pauses on failure", async (
   const toggle = sheet.getByRole("button", { name: "Translation mode" });
   await expect(toggle).toBeDisabled();
   await expect(
+    sheet.getByRole("button", { name: "Export EPUB" }),
+  ).toBeEnabled();
+  await expect(
+    sheet.getByRole("button", { name: "Fully translate, then export" }),
+  ).toBeDisabled();
+  await expect(
     sheet.getByText("Set the app token in Settings to translate."),
   ).toBeVisible();
   await page.locator(".sheet-backdrop").click({ position: { x: 4, y: 4 } });
@@ -684,6 +750,154 @@ test("translates the Zen sentence from the cache and pauses on failure", async (
     "data-translation-status",
     /.+/,
   );
+});
+
+test("exports an EPUB of the cached translations", async ({ page }) => {
+  await importBook(page);
+  await setAppToken(page);
+  await page.goto("/");
+  await page.getByRole("link", { name: /Libro de prueba/ }).click();
+  await expect(page.locator(".zen-pane .para")).toContainText("Capítulo uno");
+  const requests = await mockTranslateRoute(page);
+
+  // Warm the cache by reading in translated Zen until the prefetch settles.
+  await page.getByRole("button", { name: "More book actions" }).click();
+  await page
+    .getByRole("dialog", { name: "Book actions" })
+    .getByRole("button", { name: "Translation mode" })
+    .click();
+  await expect(page.locator(".zen-pane .para")).toContainText("ES-trad:");
+  await expect(page.locator("article")).toHaveAttribute(
+    "data-translation-status",
+    "idle",
+  );
+  expect(requests.length).toBeGreaterThan(0);
+
+  // Export straight from the menu: the file lands as a download.
+  await page.getByRole("button", { name: "More book actions" }).click();
+  const sheet = page.getByRole("dialog", { name: "Book actions" });
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    sheet.getByRole("button", { name: "Export EPUB" }).click(),
+  ]);
+  expect(download.suggestedFilename()).toBe("Libro de prueba-bilingual.epub");
+  await expect(page.getByText("EPUB ready — check Downloads.")).toBeVisible();
+
+  const path = await download.path();
+  if (!path) throw new Error("download has no path");
+  const zip = unzipSync(await readFile(path));
+  expect(strFromU8(zip.mimetype ?? new Uint8Array())).toBe(
+    "application/epub+zip",
+  );
+  const opf = strFromU8(zip["OEBPS/content.opf"] ?? new Uint8Array());
+  expect(opf).toContain("<dc:title>Libro de prueba</dc:title>");
+  const chapter1 = strFromU8(zip["OEBPS/chapter-1.xhtml"] ?? new Uint8Array());
+  expect(chapter1).toContain("<h1>Capítulo uno</h1>");
+  expect(chapter1).toContain("🇪🇸 Primer capítulo");
+  expect(chapter1).toContain("ES-trad: Primer capítulo");
+  // The tail sits beyond anything the prefetch cached: its text stays source.
+  const chapter5 = strFromU8(zip["OEBPS/chapter-5.xhtml"] ?? new Uint8Array());
+  expect(chapter5).toContain("Párrafo final fuera del alcance");
+  expect(chapter5).not.toContain("ES-trad:");
+});
+
+test("fully translates the book, then downloads it, and a finished book makes no further requests", async ({
+  page,
+}) => {
+  await importBook(page);
+  await setAppToken(page);
+  await page.goto("/");
+  await page.getByRole("link", { name: /Libro de prueba/ }).click();
+  const { count, release } = await mockGatedTranslateRoute(page);
+
+  // Start the finish run; its first request is held, so it stays working.
+  await page.getByRole("button", { name: "More book actions" }).click();
+  const sheet = page.getByRole("dialog", { name: "Book actions" });
+  await sheet
+    .getByRole("button", { name: "Fully translate, then export" })
+    .click();
+  await expect(page.locator("article")).toHaveAttribute(
+    "data-finish-status",
+    "working",
+  );
+  await expect(page.getByText(/Translating whole book/)).toBeVisible();
+
+  // While it runs the slot offers cancel instead of the finish action.
+  await page.getByRole("button", { name: "More book actions" }).click();
+  await expect(
+    sheet.getByRole("button", { name: "Cancel whole-book translation" }),
+  ).toBeVisible();
+  await expect(
+    sheet.getByRole("button", { name: "Fully translate, then export" }),
+  ).toHaveCount(0);
+  await page.locator(".sheet-backdrop").click({ position: { x: 4, y: 4 } });
+  await expect(sheet).toHaveCount(0);
+
+  // Releasing the first window lets the run cover the book; the export follows.
+  const downloadPromise = page.waitForEvent("download", { timeout: 60_000 });
+  release();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe("Libro de prueba-bilingual.epub");
+  const path = await download.path();
+  if (!path) throw new Error("download has no path");
+  const zip = unzipSync(await readFile(path));
+  const chapter5 = strFromU8(zip["OEBPS/chapter-5.xhtml"] ?? new Uint8Array());
+  expect(chapter5).toContain("ES-trad:");
+
+  // The finished book re-exports straight from the cache: no new requests.
+  const settled = count();
+  const secondDownloadPromise = page.waitForEvent("download", {
+    timeout: 60_000,
+  });
+  await page.getByRole("button", { name: "More book actions" }).click();
+  await sheet
+    .getByRole("button", { name: "Fully translate, then export" })
+    .click();
+  const secondDownload = await secondDownloadPromise;
+  expect(secondDownload.suggestedFilename()).toBe(
+    "Libro de prueba-bilingual.epub",
+  );
+  await expect.poll(() => count()).toBe(settled);
+});
+
+test("cancels a whole-book translation", async ({ page }) => {
+  await importBook(page);
+  await setAppToken(page);
+  await page.goto("/");
+  await page.getByRole("link", { name: /Libro de prueba/ }).click();
+  const { count, release } = await mockGatedTranslateRoute(page);
+  let downloads = 0;
+  page.on("download", () => {
+    downloads += 1;
+  });
+
+  await page.getByRole("button", { name: "More book actions" }).click();
+  const sheet = page.getByRole("dialog", { name: "Book actions" });
+  await sheet
+    .getByRole("button", { name: "Fully translate, then export" })
+    .click();
+  await expect(page.locator("article")).toHaveAttribute(
+    "data-finish-status",
+    "working",
+  );
+  await expect.poll(() => count()).toBe(1);
+
+  // Cancel from the same slot: the run stops and the status clears.
+  await page.getByRole("button", { name: "More book actions" }).click();
+  await sheet
+    .getByRole("button", { name: "Cancel whole-book translation" })
+    .click();
+  await expect(page.locator("article")).not.toHaveAttribute(
+    "data-finish-status",
+    /.+/,
+  );
+  await expect(page.getByText(/Translating whole book/)).toHaveCount(0);
+
+  // The aborted request never leads anywhere: no further request, no file.
+  release();
+  await page.waitForTimeout(1500);
+  expect(count()).toBe(1);
+  expect(downloads).toBe(0);
 });
 
 test("Zen text can be selected word by word", async ({ page }) => {

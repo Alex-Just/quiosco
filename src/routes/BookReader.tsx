@@ -13,6 +13,7 @@ import {
   makeToggleArchive,
   makeToggleRead,
 } from "../lib/articleActionHandlers";
+import type { BookFinishProgress } from "../lib/bookFinish";
 import {
   bookChapterStarts,
   bookFlatParagraphs,
@@ -25,6 +26,7 @@ import { loadSettings } from "../lib/settings";
 import type { ArticleStore } from "../lib/store";
 import type { Article } from "../lib/types";
 import { useArticleScroll } from "../lib/useArticleScroll";
+import { type BookExportUiStatus, useBookExport } from "../lib/useBookExport";
 import { useBookTranslation } from "../lib/useBookTranslation";
 import { useSentenceSpeech } from "../lib/useSentenceSpeech";
 import { useZenPosition } from "../lib/useZenPosition";
@@ -83,6 +85,21 @@ function translationStatusText(
   complete: boolean,
 ): string | null {
   if (status === "working") return complete ? null : "Translating…";
+  if (status === "paused") return "Translation paused";
+  if (status === "quota") return "Daily translation budget reached.";
+  if (status === "auth") return "Check the app token in Settings.";
+  return null;
+}
+
+/** The finish run and the export own the status line while either is active. */
+function finishStatusText(
+  status: BookExportUiStatus,
+  progress: BookFinishProgress | null,
+): string | null {
+  if (status === "exporting") return "Preparing EPUB…";
+  if (status === "working") {
+    return `Translating whole book — ${progress?.done ?? 0} / ${progress?.total ?? 0}`;
+  }
   if (status === "paused") return "Translation paused";
   if (status === "quota") return "Daily translation budget reached.";
   if (status === "auth") return "Check the app token in Settings.";
@@ -165,12 +182,22 @@ export default function BookReader({
     stopSpeechForViewChange,
   } = useSentenceSpeech(translationMode ? "translation" : "original");
 
+  const bookExport = useBookExport({
+    store,
+    article,
+    settings,
+    units,
+    onExported: () => setHint("EPUB ready — check Downloads."),
+    onExportFailed: () => setHint("EPUB export failed."),
+  });
+
   const translation = useBookTranslation({
     store,
     article,
     settings,
     anchorUnit: zenUnit,
-    enabled: translationMode,
+    // One translation job per book: a finish run suspends the prefetch.
+    enabled: translationMode && bookExport.uiStatus !== "working",
     units,
     paragraphUnits,
   });
@@ -184,13 +211,20 @@ export default function BookReader({
           translation.translations.get(zenUnit) ?? currentUnit?.text ?? "",
         )
       : undefined;
-  const statusText = translationMode
-    ? translationStatusText(
-        translation.status,
-        zenUnit == null ||
-          paragraphComplete(units, [zenUnit], translation.translations),
-      )
-    : null;
+  // The finish run owns the status line while it is active (running, paused,
+  // quota, auth) or while the export assembles; otherwise the translation
+  // mode's own status shows.
+  const finishActive =
+    bookExport.uiStatus !== "idle" && bookExport.uiStatus !== "done";
+  const statusText = finishActive
+    ? finishStatusText(bookExport.uiStatus, bookExport.progress)
+    : translationMode
+      ? translationStatusText(
+          translation.status,
+          zenUnit == null ||
+            paragraphComplete(units, [zenUnit], translation.translations),
+        )
+      : null;
   const zenListenText = currentUnit?.text ?? "";
 
   const onToggleZen = () => {
@@ -314,6 +348,9 @@ export default function BookReader({
     <article
       className={zenMode ? "article article-zen" : "article"}
       data-translation-status={translationMode ? translation.status : undefined}
+      data-finish-status={
+        bookExport.uiStatus === "idle" ? undefined : bookExport.uiStatus
+      }
     >
       {zenMode ? (
         zenUnit != null && (
@@ -388,6 +425,14 @@ export default function BookReader({
             zenMode ? onToggleTranslationMode : undefined
           }
           translationHint={canTranslate ? null : MISSING_TOKEN_HINT}
+          onExportEpub={() => bookExport.exportNow()}
+          onFinishExport={() => bookExport.startFinish()}
+          onCancelFinish={() => bookExport.cancelFinish()}
+          finishRunning={bookExport.uiStatus === "working"}
+          exporting={bookExport.uiStatus === "exporting"}
+          // In Zen the translation entry's hint already explains both
+          // disabled items; in regular mode this entry carries it.
+          finishExportHint={canTranslate || zenMode ? null : MISSING_TOKEN_HINT}
           onClose={() => setMoreOpen(false)}
           onToggleRead={toggleRead}
           onToggleArchive={toggleArchive}

@@ -18,6 +18,16 @@ type ArticleActionsSheetProps = {
   onToggleTranslationMode?: () => void;
   /** Why the translation entry cannot be used (missing app token). */
   translationHint?: string | null;
+  /** Books only: export the EPUB from the cache as it is now. */
+  onExportEpub?: () => void;
+  /** Books only: start the whole-book finish run; the export follows it. */
+  onFinishExport?: () => void;
+  /** Books only: shown while a finish run can be cancelled. */
+  onCancelFinish?: () => void;
+  finishRunning?: boolean;
+  /** Why the finish entry cannot be used (missing app token). */
+  finishExportHint?: string | null;
+  exporting?: boolean;
   onClose: () => void;
   onToggleRead: () => void;
   onToggleArchive: () => void;
@@ -39,6 +49,12 @@ export function ArticleActionsSheet({
   translationMode,
   onToggleTranslationMode,
   translationHint,
+  onExportEpub,
+  onFinishExport,
+  onCancelFinish,
+  finishRunning,
+  finishExportHint,
+  exporting,
   onClose,
   onToggleRead,
   onToggleArchive,
@@ -115,6 +131,42 @@ export function ArticleActionsSheet({
               )}
             </>
           )}
+          {isBook && onExportEpub && (
+            <button
+              type="button"
+              disabled={exporting}
+              onClick={() => runAndClose(onExportEpub)}
+            >
+              Export EPUB
+            </button>
+          )}
+          {isBook &&
+            onFinishExport &&
+            (finishRunning && onCancelFinish ? (
+              <button type="button" onClick={() => runAndClose(onCancelFinish)}>
+                Cancel whole-book translation
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  // translationHint disables it too: in Zen the existing hint
+                  // explains both disabled entries, and the finish entry
+                  // renders no second hint of its own.
+                  disabled={
+                    finishExportHint != null ||
+                    translationHint != null ||
+                    exporting
+                  }
+                  onClick={() => runAndClose(onFinishExport)}
+                >
+                  Fully translate, then export
+                </button>
+                {finishExportHint != null && (
+                  <p className="sheet-hint muted">{finishExportHint}</p>
+                )}
+              </>
+            ))}
           {zenAvailable && (
             <button type="button" onClick={() => runAndClose(onToggleZen)}>
               {zenMode ? "Exit Zen mode" : "Zen mode"}
