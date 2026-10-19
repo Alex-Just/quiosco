@@ -83,10 +83,10 @@ describe("buildEpub", () => {
 
     const chapter = strFromU8(zip["OEBPS/chapter-1.xhtml"] ?? new Uint8Array());
     expect(chapter).not.toContain("<h1>");
-    expect(chapter).toContain('<p class="s">María &amp; &lt;yo&gt;</p>');
-    expect(chapter).toContain('<p class="s">Привет</p>');
+    expect(chapter).toContain('<p class="s"><br/>María &amp; &lt;yo&gt;</p>');
+    expect(chapter).toContain('<p class="s"><br/>Привет</p>');
     expect(chapter).toContain(
-      '<p class="s">Primera línea<br/><br/>Segunda línea</p>',
+      '<p class="s"><br/>Primera línea<br/><br/>Segunda línea</p>',
     );
   });
 

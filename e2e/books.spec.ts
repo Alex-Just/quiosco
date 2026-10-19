@@ -800,6 +800,8 @@ test("exports an EPUB of the cached translations", async ({ page }) => {
   expect(nav).toContain("Capítulo uno");
   // No flag emoji: the device's fonts render them as tofu boxes.
   expect(chapter1).not.toMatch(/[\u{1F1E6}-\u{1F1FF}]/u);
+  // Every page opens with a blank line, then the source stanza.
+  expect(chapter1).toContain('<p class="s"><br/>Primer capítulo');
   expect(chapter1).toContain("Primer capítulo");
   expect(chapter1).toContain("<br/><br/>ES-trad: Primer capítulo");
   expect(chapter1).toContain("ES-trad: Primer capítulo");

@@ -60,7 +60,8 @@ function paragraphXml(block: string): string {
     lines.pop();
   }
   if (lines.length === 0) return "";
-  return `    <p class="s">${lines.map(escapeXml).join("<br/>")}</p>`;
+  // The leading break opens every page with one blank line.
+  return `    <p class="s"><br/>${lines.map(escapeXml).join("<br/>")}</p>`;
 }
 
 function chapterXml(label: string, chapter: EpubChapterInput): string {
