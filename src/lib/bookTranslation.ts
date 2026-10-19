@@ -12,6 +12,7 @@ import {
 } from "./bookWindow";
 import { parseNumberedTranslations } from "./numberedTranslations";
 import { buildBookUserMessage } from "./prompt";
+import { normalizeSentence } from "./sentenceKey";
 import type { ArticleStore } from "./store";
 import type { SentenceCacheEntry } from "./types";
 import { pairSourceWithTranslation } from "./zenTranslationDisplay";
@@ -94,8 +95,12 @@ export async function readCachedTranslations(args: {
     for (const unitIndex of indices) {
       const unit = units[unitIndex];
       if (unit === undefined) continue;
+      // Keys hash the normalized source (layout whitespace and markers
+      // dropped), so verification compares that same form: exact equality
+      // would reject a sentence whose key is identical just because the
+      // book wraps it differently.
       if (
-        entry.source === unit.text &&
+        normalizeSentence(entry.source) === normalizeSentence(unit.text) &&
         entry.targetLanguage === targetLanguage &&
         entry.rulesHash === rulesHashValue
       ) {

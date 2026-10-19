@@ -76,6 +76,10 @@ export function startBookFinish(args: {
 
   async function run(): Promise<void> {
     let scanFrom = 0;
+    // Frontier of the last accepted pass. If the next scan finds the frontier
+    // unmoved, the cache write was lost or a key cannot verify: stop instead
+    // of paying for the same window on every pass.
+    let translatedFrontier = -1;
     for (;;) {
       // Scan forward from the last frontier in batches, merging verified
       // cache hits; the first non-skipped uncached unit is where work resumes.
@@ -128,6 +132,10 @@ export function startBookFinish(args: {
         stop("done");
         return;
       }
+      if (found <= translatedFrontier) {
+        stop("paused");
+        return;
+      }
 
       done = found;
       notify();
@@ -173,6 +181,7 @@ export function startBookFinish(args: {
         stop("paused");
         return;
       }
+      translatedFrontier = found;
       scanFrom = plan.start;
     }
   }

@@ -156,10 +156,11 @@ function startSession(args: {
   units: readonly BookSentenceUnit[];
   limits?: BookWindowLimits;
   scanBatchUnits?: number;
+  keyFor?: (unitIndex: number) => Promise<string>;
 }): BookFinishSession {
   const session = startBookFinish({
     ...args,
-    keyFor: keyForText(args.units),
+    keyFor: args.keyFor ?? keyForText(args.units),
     model: "m",
     system: "s",
     targetLanguage: "English",
@@ -326,6 +327,43 @@ describe("startBookFinish", () => {
     expect(requests).toHaveLength(1);
     expect(requests[0]).toEqual(["A", "A"]);
     expect(session.progress()).toEqual({ done: 2, total: 2 });
+  });
+
+  it("finishes a book whose duplicates differ only in layout whitespace", async () => {
+    const { deps, requests } = memoryDeps();
+    const units = unitsOf("Hello  world.", "Hello world.");
+    const session = startSession({
+      deps,
+      units,
+      limits: sessionLimits,
+      keyFor: async (unitIndex) =>
+        `k:${(units[unitIndex]?.text ?? "").replace(/\s+/g, " ").trim()}`,
+    });
+
+    await vi.waitFor(() => expect(session.status()).toBe("done"));
+
+    expect(requests).toHaveLength(1);
+    expect(session.progress()).toEqual({ done: 2, total: 2 });
+  });
+
+  it("pauses when an accepted window cannot advance the frontier", async () => {
+    const { deps, requests } = memoryDeps();
+    // The reply is accepted, but the cache write never lands: without a guard
+    // the run would re-request the same window forever.
+    deps.store.putSentences = async () => undefined;
+    deps.store.getSentences = async () => {
+      await sleep(0);
+      return [];
+    };
+    const units = unitsOf("s0", "s1");
+    const session = startSession({ deps, units, limits: sessionLimits });
+
+    await vi.waitFor(() => expect(session.status()).toBe("paused"));
+
+    expect(requests).toHaveLength(1);
+    await sleep(20);
+    expect(requests).toHaveLength(1);
+    expect(session.progress()).toEqual({ done: 0, total: 2 });
   });
 
   it("finishes an empty book immediately", async () => {

@@ -11,6 +11,7 @@ import {
   translateWindow,
 } from "./bookTranslation";
 import type { BookWindowLimits, WindowPlan } from "./bookWindow";
+import { normalizeSentence } from "./sentenceKey";
 import type { SentenceCacheEntry } from "./types";
 
 function u(text: string): BookSentenceUnit {
@@ -265,6 +266,46 @@ describe("readCachedTranslations", () => {
       "k:Mundo.",
       "k:Reglas.",
     ]);
+  });
+
+  it("accepts an entry whose source matches after normalization", async () => {
+    const units = [u("Hello  world."), u("Line\nbreak.")];
+    const { deps, map } = memoryDeps();
+    // Keys hash the normalized source, so cached entries cannot carry layout
+    // whitespace; both variants must still verify against it.
+    map.set(
+      "k:Hello world.",
+      cacheEntry({
+        key: "k:Hello world.",
+        source: "Hello world.",
+        translation: "T: Hello world.",
+      }),
+    );
+    map.set(
+      "k:Line break.",
+      cacheEntry({
+        key: "k:Line break.",
+        source: "Line break.",
+        translation: "T: Line break.",
+      }),
+    );
+
+    const translations = await readCachedTranslations({
+      store: deps.store,
+      units,
+      unitIndices: [0, 1],
+      keyFor: async (unitIndex) =>
+        `k:${normalizeSentence(units[unitIndex]?.text ?? "")}`,
+      targetLanguage: "English",
+      rulesHashValue: "r1",
+    });
+
+    expect(translations).toEqual(
+      new Map([
+        [0, "T: Hello world."],
+        [1, "T: Line break."],
+      ]),
+    );
   });
 
   it("surfaces store failures", async () => {

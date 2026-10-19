@@ -205,6 +205,24 @@ describe("exportBookEpub", () => {
     expect((chapter.match(/🇬🇧 T: Hola\./g) ?? []).length).toBe(2);
   });
 
+  it("shares one cache entry across whitespace variants", async () => {
+    const article = bookArticle(undefined, "Hello  world.\n\nHello world.");
+    const { store } = fakeStore([
+      await entryFor("Hello world.", "🇬🇧 T: Hello world."),
+    ]);
+
+    const result = await exportBookEpub({
+      store,
+      article,
+      settings: MATERIAL,
+      uuid: "test-uuid",
+      now: new Date("2026-10-19T12:00:00Z"),
+    });
+
+    const chapter = chapterXhtml(result.bytes);
+    expect((chapter.match(/🇬🇧 T: Hello world\./g) ?? []).length).toBe(2);
+  });
+
   it("builds the file from source text when nothing is cached", async () => {
     const article = bookArticle([{ title: "Uno", text: "Hola. Adiós." }]);
     const { store } = fakeStore([]);
