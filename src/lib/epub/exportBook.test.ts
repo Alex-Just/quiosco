@@ -81,8 +81,21 @@ describe("assembleExportChapters", () => {
     });
 
     expect(chapters).toEqual([
-      { title: "Uno", paragraphs: ["🇪🇸 Hola.\n🇬🇧 Hello.", "Adiós."] },
+      { title: "Uno", paragraphs: ["Hola.\nHello.", "Adiós."] },
     ]);
+  });
+
+  it("drops language flags that e-readers render as tofu boxes", () => {
+    const article = bookArticle([{ title: "Uno", text: "Hola." }]);
+    const chapters = assembleExportChapters({
+      article,
+      units: unitsOf(article),
+      translations: new Map([[1, "🇪🇸 Hola.\n🇷🇺 Привет."]]),
+    });
+
+    const block = chapters[0]?.paragraphs[0] ?? "";
+    expect(block).toBe("Hola.\nПривет.");
+    expect(block).not.toMatch(/[\u{1F1E6}-\u{1F1FF}]/u);
   });
 
   it("restores the source stanza of a translation-only cached block", () => {
@@ -93,7 +106,7 @@ describe("assembleExportChapters", () => {
       translations: new Map([[1, "🇬🇧 Hello."]]),
     });
 
-    expect(chapters[0]?.paragraphs[0]).toBe("🇪🇸 Hola.\n🇬🇧 Hello.");
+    expect(chapters[0]?.paragraphs[0]).toBe("Hola.\nHello.");
   });
 
   it("never re-renders title units and renders skipped units from source", () => {
@@ -117,7 +130,7 @@ describe("assembleExportChapters", () => {
     expect(chapters).toEqual([
       {
         title: "Uno",
-        paragraphs: ["***", "🇪🇸 Hola.\n🇬🇧 Hello.", "Adiós."],
+        paragraphs: ["***", "Hola.\nHello.", "Adiós."],
       },
     ]);
   });
@@ -160,7 +173,7 @@ describe("exportBookEpub", () => {
     expect(opf).toContain("2026-10-19T12:00:00.000Z");
     expect(opf).toContain("<dc:language>es</dc:language>");
     const chapter = chapterXhtml(result.bytes);
-    expect(chapter).toContain("🇬🇧 T: Hola."); // cached
+    expect(chapter).toContain("T: Hola."); // cached
     expect(chapter).toContain("Adiós."); // source fallback
     expect(chapter).not.toContain("T: Adiós.");
     // reads arrived in batches of two units, then the remainder
@@ -202,7 +215,7 @@ describe("exportBookEpub", () => {
     });
 
     const chapter = chapterXhtml(result.bytes);
-    expect((chapter.match(/🇬🇧 T: Hola\./g) ?? []).length).toBe(2);
+    expect((chapter.match(/T: Hola\./g) ?? []).length).toBe(2);
   });
 
   it("shares one cache entry across whitespace variants", async () => {
@@ -220,7 +233,7 @@ describe("exportBookEpub", () => {
     });
 
     const chapter = chapterXhtml(result.bytes);
-    expect((chapter.match(/🇬🇧 T: Hello world\./g) ?? []).length).toBe(2);
+    expect((chapter.match(/T: Hello world\./g) ?? []).length).toBe(2);
   });
 
   it("builds the file from source text when nothing is cached", async () => {
@@ -236,7 +249,7 @@ describe("exportBookEpub", () => {
     });
 
     const chapter = chapterXhtml(result.bytes);
-    expect(chapter).toContain("<h1>Uno</h1>");
+    expect(chapter).not.toContain("<h1>"); // chapter labels live in the TOC
     expect(chapter).toContain("Hola.");
     expect(chapter).toContain("Adiós.");
     expect(chapter).not.toContain('<p class="s">Uno</p>'); // no title in body

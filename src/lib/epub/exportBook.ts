@@ -26,6 +26,18 @@ import {
 
 const DEFAULT_READ_BATCH_UNITS = 500;
 
+/** Flag emoji are regional indicators; e-reader fonts often lack the glyphs. */
+const LANGUAGE_FLAGS = /[\u{1F1E6}-\u{1F1FF}]{1,2}\uFE0F?/gu;
+
+/** Drop flag markers and line padding: the EPUB carries text only. */
+function withoutLanguageFlags(block: string): string {
+  return block
+    .split("\n")
+    .map((line) => line.replace(LANGUAGE_FLAGS, "").trim())
+    .filter((line) => line !== "")
+    .join("\n");
+}
+
 /**
  * Chapter display blocks for the writer. The paragraph at each chapter start
  * is the title (never re-rendered into the body); every other paragraph
@@ -44,9 +56,11 @@ export function assembleExportChapters(args: {
 
   const displayBlocks = (paragraphIndex: number): string[] =>
     (byParagraph.get(paragraphIndex) ?? []).map((unitIndex) =>
-      pairSourceWithTranslation(
-        units[unitIndex]?.text ?? "",
-        translations.get(unitIndex) ?? "",
+      withoutLanguageFlags(
+        pairSourceWithTranslation(
+          units[unitIndex]?.text ?? "",
+          translations.get(unitIndex) ?? "",
+        ),
       ),
     );
 

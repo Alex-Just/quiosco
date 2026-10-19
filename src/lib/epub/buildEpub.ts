@@ -48,8 +48,8 @@ const CONTAINER_XML = `<?xml version="1.0" encoding="UTF-8"?>
 `;
 
 const STYLE_CSS = `body { line-height: 1.4; }
-p { margin: 0 0 1em; }
-h1 { font-size: 1.25em; margin: 0 0 1em; }
+p { margin: 0; }
+p.s + p.s { page-break-before: always; break-before: page; }
 `;
 
 /** One `<p class="s">` per display block; lines join with `<br/>`. */
@@ -64,9 +64,6 @@ function paragraphXml(block: string): string {
 }
 
 function chapterXml(label: string, chapter: EpubChapterInput): string {
-  const heading = chapter.title.trim()
-    ? `    <h1>${escapeXml(chapter.title.trim())}</h1>\n`
-    : "";
   const body = chapter.paragraphs
     .map(paragraphXml)
     .filter((paragraph) => paragraph !== "")
@@ -76,7 +73,7 @@ function chapterXml(label: string, chapter: EpubChapterInput): string {
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head><title>${escapeXml(label)}</title><link rel="stylesheet" type="text/css" href="style.css"/></head>
   <body>
-${heading}${body}
+${body}
   </body>
 </html>
 `;

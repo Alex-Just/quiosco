@@ -75,6 +75,18 @@ describe("buildEpub", () => {
     expect(opf).toContain(`<meta property="dcterms:modified">${MODIFIED}`);
   });
 
+  it("starts each sentence pair on a new page without a chapter heading", () => {
+    const zip = unzipSync(sampleBytes());
+    const css = strFromU8(zip["OEBPS/style.css"] ?? new Uint8Array());
+    expect(css).toContain("p.s + p.s");
+    expect(css).toContain("page-break-before: always");
+
+    const chapter = strFromU8(zip["OEBPS/chapter-1.xhtml"] ?? new Uint8Array());
+    expect(chapter).not.toContain("<h1>");
+    expect(chapter).toContain('<p class="s">María &amp; &lt;yo&gt;</p>');
+    expect(chapter).toContain('<p class="s">Привет</p>');
+  });
+
   it("round-trips through the parser with specials and non-Latin text", async () => {
     const parsed = await parseEpub(sampleBytes());
 

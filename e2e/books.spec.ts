@@ -792,8 +792,15 @@ test("exports an EPUB of the cached translations", async ({ page }) => {
   const opf = strFromU8(zip["OEBPS/content.opf"] ?? new Uint8Array());
   expect(opf).toContain("<dc:title>Libro de prueba</dc:title>");
   const chapter1 = strFromU8(zip["OEBPS/chapter-1.xhtml"] ?? new Uint8Array());
-  expect(chapter1).toContain("<h1>Capítulo uno</h1>");
-  expect(chapter1).toContain("🇪🇸 Primer capítulo");
+  const css = strFromU8(zip["OEBPS/style.css"] ?? new Uint8Array());
+  const nav = strFromU8(zip["OEBPS/nav.xhtml"] ?? new Uint8Array());
+  // One sentence pair per page; chapter labels live in the TOC only.
+  expect(css).toContain("page-break-before: always");
+  expect(chapter1).not.toContain("<h1>");
+  expect(nav).toContain("Capítulo uno");
+  // No flag emoji: the device's fonts render them as tofu boxes.
+  expect(chapter1).not.toMatch(/[\u{1F1E6}-\u{1F1FF}]/u);
+  expect(chapter1).toContain("Primer capítulo");
   expect(chapter1).toContain("ES-trad: Primer capítulo");
   // The tail sits beyond anything the prefetch cached: its text stays source.
   const chapter5 = strFromU8(zip["OEBPS/chapter-5.xhtml"] ?? new Uint8Array());
