@@ -39,6 +39,17 @@ Every translated sentence is cached permanently, keyed by content — the cache
 is shared across books, so a sentence is never translated twice. The importer
 adds a single runtime dependency: `fflate` (EPUB unzip).
 
+## Diagnostics (local log + optional Sentry)
+
+The app keeps a short on-device log (TTS picks, settings TTS changes, warnings).
+Open **Settings → Diagnostics** to **Copy**, **Share**, or **Clear** it.
+
+Optional: create a free [Sentry](https://sentry.io) project, set
+`VITE_SENTRY_DSN` in the Vite env for the client build (for example a
+`.env.local` with `VITE_SENTRY_DSN=…`), and redeploy. With no DSN the app
+still runs; only the local log is used. Do not put Worker secrets in Vite
+env files.
+
 ## Development
 
 ```bash

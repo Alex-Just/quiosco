@@ -2,8 +2,11 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { shouldReloadOnControllerChange } from "./lib/pwa";
+import { initClientSentry } from "./lib/sentry";
 import { isTranslationRunning } from "./lib/translateArticle";
 import "./styles.css";
+
+initClientSentry();
 
 if (navigator.storage?.persist) {
   void navigator.storage.persist();
