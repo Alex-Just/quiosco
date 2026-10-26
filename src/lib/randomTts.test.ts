@@ -107,12 +107,39 @@ describe("createTtsPicker", () => {
   it("stops dealing a provider after markUnavailable", () => {
     const input = { token: "tok", elevenLabsVoiceId: "v" };
     const picker = createTtsPicker(sequence([0.99]));
-    picker.markUnavailable("elevenlabs");
+    picker.markUnavailable({
+      ttsProvider: "elevenlabs",
+      edgeVoice: "elvira",
+      elevenLabsVoiceId: "v",
+    });
     const picks = Array.from({ length: 6 }, () => picker.pick(input));
     expect(
       picks.filter((choice) => choice.ttsProvider === "elevenlabs"),
     ).toEqual([]);
     expect(picks.some((choice) => choice.ttsProvider === "edge")).toBe(true);
+  });
+
+  it("keeps sibling Edge voices after one Edge voice fails", () => {
+    const input = { token: "tok", elevenLabsVoiceId: "" };
+    const picker = createTtsPicker(sequence([0.99]));
+    picker.markUnavailable({
+      ttsProvider: "edge",
+      edgeVoice: "elvira",
+      elevenLabsVoiceId: "",
+    });
+    const picks = Array.from({ length: 6 }, () => picker.pick(input));
+    expect(
+      picks.filter(
+        (choice) =>
+          choice.edgeVoice === "elvira" && choice.ttsProvider === "edge",
+      ),
+    ).toEqual([]);
+    expect(
+      picks.some(
+        (choice) =>
+          choice.ttsProvider === "edge" && choice.edgeVoice === "alvaro",
+      ),
+    ).toBe(true);
   });
 });
 

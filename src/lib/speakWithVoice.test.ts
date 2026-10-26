@@ -221,7 +221,11 @@ describe("speakWithVoice", () => {
       playEdgeAudio: playEdge,
     });
     expect(started).toBe(true);
-    expect(markUnavailable).toHaveBeenCalledWith("elevenlabs");
+    expect(markUnavailable).toHaveBeenCalledWith({
+      ttsProvider: "elevenlabs",
+      edgeVoice: "elvira",
+      elevenLabsVoiceId: "voice-1",
+    });
     expect(fetchTts).toHaveBeenCalledWith(
       "Hola.",
       "elevenlabs",

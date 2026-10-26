@@ -8,9 +8,6 @@ export type TtsChoice = {
   elevenLabsVoiceId: string;
 };
 
-/** Cloud providers that can be marked unavailable for a page session. */
-export type SkipableTtsProvider = Exclude<ConcreteTtsProvider, "system">;
-
 /** Inputs that decide which TTS choices are available. */
 export type TtsChoiceRequest = {
   token: string;
@@ -25,42 +22,43 @@ const SYSTEM_CHOICE: TtsChoice = {
   elevenLabsVoiceId: "",
 };
 
+/** Stable identity of one playable voice for bag bookkeeping. */
+export function choiceKey(choice: TtsChoice): string {
+  return `${choice.ttsProvider}|${choice.edgeVoice}|${choice.elevenLabsVoiceId}`;
+}
+
 /**
  * Playable TTS choices for one Listen. System is always available. Edge and
  * ElevenLabs need a token; ElevenLabs also needs a configured voice id.
- * `unavailable` drops cloud providers that failed earlier in this session.
+ * `unavailable` drops individual cloud voices that failed earlier in this
+ * session (not the whole provider).
  */
 export function listTtsChoices(
   input: TtsChoiceRequest,
-  unavailable: ReadonlySet<SkipableTtsProvider> = new Set(),
+  unavailable: ReadonlySet<string> = new Set(),
 ): TtsChoice[] {
   const choices: TtsChoice[] = [SYSTEM_CHOICE];
   if (!input.token.trim()) return choices;
 
-  if (!unavailable.has("edge")) {
-    for (const edgeVoice of EDGE_VOICES) {
-      choices.push({
-        ttsProvider: "edge",
-        edgeVoice,
-        elevenLabsVoiceId: "",
-      });
-    }
+  for (const edgeVoice of EDGE_VOICES) {
+    const choice: TtsChoice = {
+      ttsProvider: "edge",
+      edgeVoice,
+      elevenLabsVoiceId: "",
+    };
+    if (!unavailable.has(choiceKey(choice))) choices.push(choice);
   }
 
   const elevenId = input.elevenLabsVoiceId.trim();
-  if (elevenId && !unavailable.has("elevenlabs")) {
-    choices.push({
+  if (elevenId) {
+    const choice: TtsChoice = {
       ttsProvider: "elevenlabs",
       edgeVoice: "elvira",
       elevenLabsVoiceId: elevenId,
-    });
+    };
+    if (!unavailable.has(choiceKey(choice))) choices.push(choice);
   }
   return choices;
-}
-
-/** Stable identity of one playable voice for bag bookkeeping. */
-function choiceKey(choice: TtsChoice): string {
-  return `${choice.ttsProvider}|${choice.edgeVoice}|${choice.elevenLabsVoiceId}`;
 }
 
 /** Fisher-Yates copy; `random` returns [0, 1) like Math.random. */
@@ -81,8 +79,8 @@ function shuffled<T>(items: readonly T[], random: () => number): T[] {
 export type TtsPicker = {
   /** Deal the next (provider, voice) pair for this Listen. */
   pick(input: TtsChoiceRequest): TtsChoice;
-  /** Stop offering this cloud provider for the rest of the page session. */
-  markUnavailable(provider: SkipableTtsProvider): void;
+  /** Stop offering this exact cloud voice for the rest of the page session. */
+  markUnavailable(choice: TtsChoice): void;
 };
 
 /**
@@ -96,7 +94,7 @@ export function createTtsPicker(random?: () => number): TtsPicker {
   let signature: string | null = null;
   let bag: TtsChoice[] = [];
   let lastKey: string | null = null;
-  const unavailable = new Set<SkipableTtsProvider>();
+  const unavailable = new Set<string>();
   return {
     pick(input: TtsChoiceRequest): TtsChoice {
       const choices = listTtsChoices(input, unavailable);
@@ -122,9 +120,11 @@ export function createTtsPicker(random?: () => number): TtsPicker {
       lastKey = choiceKey(choice);
       return choice;
     },
-    markUnavailable(provider: SkipableTtsProvider): void {
-      if (unavailable.has(provider)) return;
-      unavailable.add(provider);
+    markUnavailable(choice: TtsChoice): void {
+      if (choice.ttsProvider === "system") return;
+      const key = choiceKey(choice);
+      if (unavailable.has(key)) return;
+      unavailable.add(key);
       signature = null;
       bag = [];
     },
@@ -138,10 +138,13 @@ export function pickNextTtsChoice(input: TtsChoiceRequest): TtsChoice {
   return sessionPicker.pick(input);
 }
 
-/** Stop offering a cloud provider after it fails during Random play. */
-export function markTtsProviderUnavailable(
-  provider: SkipableTtsProvider,
-): void {
-  log.warn("tts", "provider marked unavailable", { provider });
-  sessionPicker.markUnavailable(provider);
+/** Stop offering one cloud voice after it fails during Random play. */
+export function markTtsChoiceUnavailable(choice: TtsChoice): void {
+  if (choice.ttsProvider === "system") return;
+  log.warn("tts", "voice marked unavailable", {
+    provider: choice.ttsProvider,
+    edgeVoice: choice.edgeVoice,
+    hasElevenLabsId: choice.elevenLabsVoiceId.trim().length > 0,
+  });
+  sessionPicker.markUnavailable(choice);
 }

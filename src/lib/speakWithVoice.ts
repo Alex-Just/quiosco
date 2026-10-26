@@ -11,9 +11,8 @@ import {
 } from "./edgeTts";
 import { log } from "./log";
 import {
-  markTtsProviderUnavailable,
+  markTtsChoiceUnavailable,
   pickNextTtsChoice,
-  type SkipableTtsProvider,
   type TtsChoice,
   type TtsChoiceRequest,
 } from "./randomTts";
@@ -22,7 +21,11 @@ import {
   ORIGINAL_LANG,
   type SpeakHandlers,
 } from "./speech";
-import type { EdgeVoiceSetting, TtsProvider } from "./types";
+import type {
+  ConcreteTtsProvider,
+  EdgeVoiceSetting,
+  TtsProvider,
+} from "./types";
 
 /** Cap random retries so a broken cloud stack cannot loop forever. */
 const MAX_RANDOM_TTS_ATTEMPTS = 6;
@@ -38,8 +41,8 @@ export type SpeakWithVoiceArgs = {
   rate: number;
   /** Test seam for the session shuffle bag; returns the next pair to play. */
   pickTtsChoice?: (input: TtsChoiceRequest) => TtsChoice;
-  /** Test seam: record a failed cloud provider for the session bag. */
-  markTtsUnavailable?: (provider: SkipableTtsProvider) => void;
+  /** Test seam: record a failed cloud voice for the session bag. */
+  markTtsUnavailable?: (choice: TtsChoice) => void;
   handlers?: SpeakHandlers;
   speakSentence?: (
     text: string,
@@ -60,7 +63,7 @@ function isAbortError(error: unknown): boolean {
 
 function cloudTarget(
   choice: TtsChoice,
-): { provider: SkipableTtsProvider; voice: string } | null {
+): { provider: Exclude<ConcreteTtsProvider, "system">; voice: string } | null {
   if (choice.ttsProvider === "edge") {
     return {
       provider: "edge",
@@ -83,7 +86,7 @@ function cloudTarget(
  * Prefer configured cloud TTS for es-ES; otherwise (or on failure) use
  * speechSynthesis. Stop/abort returns false without falling back to system.
  * Random mode retries the next bag voice after a cloud failure and skips
- * that provider for the rest of the page session.
+ * that voice for the rest of the page session.
  */
 export async function speakWithVoice(
   args: SpeakWithVoiceArgs,
@@ -92,7 +95,7 @@ export async function speakWithVoice(
   const fetchAudio = args.fetchTtsAudio ?? fetchTtsAudio;
   const playEdge = args.playEdgeAudio ?? playEdgeAudio;
   const handlers = args.handlers ?? {};
-  const markUnavailable = args.markTtsUnavailable ?? markTtsProviderUnavailable;
+  const markUnavailable = args.markTtsUnavailable ?? markTtsChoiceUnavailable;
 
   if (args.lang !== ORIGINAL_LANG || args.token.trim().length === 0) {
     log.info("tts", "using system speech", {
@@ -171,7 +174,7 @@ export async function speakWithVoice(
         status,
       });
       if (random) {
-        markUnavailable(target.provider);
+        markUnavailable(choice);
         continue;
       }
       log.info("tts", "fallback to system speech", {
