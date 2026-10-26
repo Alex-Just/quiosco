@@ -44,13 +44,17 @@ adds a single runtime dependency: `fflate` (EPUB unzip).
 The app keeps a short on-device log (TTS picks, settings TTS changes, warnings).
 Open **Settings → Diagnostics** to **Copy**, **Share**, or **Clear** it.
 
-Optional: create a free [Sentry](https://sentry.io) project, set
-`VITE_SENTRY_DSN` in the Vite env for the client build (for example a
-`.env.local` with `VITE_SENTRY_DSN=…`). For CI deploy to `main`, also set the
-same value as a GitHub Actions repository secret named `VITE_SENTRY_DSN` —
-the deploy job passes it into `pnpm build`. With no DSN the app still runs;
-only the local log is used. Do not put Worker secrets in Vite env files, and
-do not use `wrangler secret` for this DSN (it is a public client value).
+Optional client Sentry: create a free [Sentry](https://sentry.io) React
+project, set `VITE_SENTRY_DSN` in the Vite env (for example `.env.local`).
+For CI deploy to `main`, set the same value as a GitHub Actions repository
+secret named `VITE_SENTRY_DSN` — the deploy job passes it into `pnpm build`.
+With no DSN the app still runs; only the local log is used. Do not put this
+client DSN in `wrangler secret` (it is a public browser value).
+
+Optional Worker Sentry: create a separate Cloudflare Workers project in
+Sentry, then set `SENTRY_DSN` via `pnpm exec wrangler secret put SENTRY_DSN`
+(and optionally in `.dev.vars` for local). The Worker uses
+`@sentry/cloudflare` and reports only when that secret is present.
 
 ## Development
 
@@ -124,6 +128,8 @@ hook.
    Recommended: `pnpm exec wrangler secret put JINA_API_KEY` (free key from
    jina.ai) — Cloudflare's shared egress IPs are rate-limited on the reader's
    anonymous tier, so the `jina` fallback rung returns 429 without it.
+   Optional Worker Sentry: `pnpm exec wrangler secret put SENTRY_DSN` with the
+   DSN from a dedicated Workers project (not the React `VITE_SENTRY_DSN`).
 5. **Deploy**: `pnpm deploy` (or push to `main` — CI deploys after checks pass).
 6. **Verify**: `GET /` returns the CSP header; `GET /api/health` returns 401
    without the token.

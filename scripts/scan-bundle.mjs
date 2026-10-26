@@ -1,7 +1,12 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-const FORBIDDEN = ["OPENCODE_API_KEY", "APP_TOKEN", "ELEVENLABS_API_KEY"];
+const FORBIDDEN = [
+  "OPENCODE_API_KEY",
+  "APP_TOKEN",
+  "ELEVENLABS_API_KEY",
+  "SENTRY_DSN",
+];
 
 function* walk(dir) {
   for (const entry of readdirSync(dir)) {

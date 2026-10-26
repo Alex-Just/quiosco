@@ -4,3 +4,6 @@ OPENCODE_API_KEY=your-zen-key-here
 # Optional: required only when Settings → TTS provider is ElevenLabs.
 ELEVENLABS_API_KEY=your-elevenlabs-key-here
 JINA_API_KEY=jina_api_key
+# Optional: Worker Sentry DSN (separate from Vite VITE_SENTRY_DSN).
+# Production: pnpm exec wrangler secret put SENTRY_DSN
+# SENTRY_DSN=https://…@….ingest.sentry.io/…

@@ -1,18 +1,20 @@
+import * as Sentry from "@sentry/cloudflare";
 import { extractBearer, originAllowed, tokensMatch } from "./auth";
 import { handleDecide } from "./decide";
 import type { Env } from "./env";
 import { handleFetchRung } from "./fetchRung";
 import { applySecurityHeaders, jsonResponse } from "./headers";
+import { workerSentryOptions } from "./sentry";
 import { handleSync } from "./sync";
 import { handleThread } from "./thread";
 import { handleTranslate } from "./translate";
 import { handleTts } from "./tts";
 
-export default {
+export default Sentry.withSentry((env: Env) => workerSentryOptions(env), {
   fetch(request: Request, env: Env): Promise<Response> {
     return handleRequest(request, env);
   },
-};
+});
 
 export async function handleRequest(
   request: Request,

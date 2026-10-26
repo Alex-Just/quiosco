@@ -27,6 +27,11 @@ export interface Env {
   /** Optional; required only when Settings TTS provider is ElevenLabs. */
   ELEVENLABS_API_KEY?: string;
   APP_TOKEN: string;
+  /**
+   * Optional Worker Sentry DSN (`wrangler secret put SENTRY_DSN`). Separate
+   * from the Vite client `VITE_SENTRY_DSN`.
+   */
+  SENTRY_DSN?: string;
   JINA_API_KEY?: string;
   BUDGET: KVNamespaceLike;
   DB: D1Like;
