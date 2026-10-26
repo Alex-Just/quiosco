@@ -45,6 +45,24 @@ describe("paragraphizePlainBody", () => {
       paragraphizePlainBody("—¡Vaya! —dijo el chico. —Lo sé. —Claro."),
     ).toBe("—¡Vaya! —dijo el chico. —Lo sé.\n\n—Claro.");
   });
+
+  // Vocento JSON-LD often concatenates HTML paragraphs into articleBody
+  // without a space after the period ("municipal.Al cierre").
+  it("splits Vocento-style bodies that omit spaces after periods", () => {
+    const glued = [
+      "El Ayuntamiento de Valencia ha recibido un total de 53 solicitudes de personas interesadas en reabrir los quioscos cerrados en la ciudad.",
+      "Al cierre del plazo el volumen de propuestas supera holgadamente el número de puestos ofertados por el consistorio.",
+      "La convocatoria se enmarca en el convenio de colaboración suscrito con la asociación profesional de vendedores de prensa.",
+      "El concurso público contempla el otorgamiento de títulos de ocupación privativa por un periodo inicial de veinte años.",
+      "El pliego fija el carácter social de la convocatoria y un baremo automático de adjudicación para colectivos vulnerables.",
+      "De hecho las bases permiten compatibilizar la venta de prensa con servicios complementarios autorizados por la ordenanza.",
+    ].join("");
+    const text = paragraphizePlainBody(glued);
+    expect(text).toContain("\n\n");
+    expect(text).toContain("quioscos cerrados");
+    expect(text).toContain("Al cierre del plazo");
+    expect(assessArticle(text).ok).toBe(true);
+  });
 });
 
 describe("extractJsonLdArticle", () => {

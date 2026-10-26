@@ -15,6 +15,16 @@ const ARTICLE_TYPES = new Set([
   "ReportageNewsArticle",
 ]);
 
+// Vocento (and similar CMS exports) join HTML paragraphs into articleBody
+// without a space after the period: "municipal.Al cierre". The shared
+// sentence splitter only breaks on punctuation + whitespace, so restore a
+// space before an uppercase letter or Spanish opening mark.
+const GLUED_SENTENCE_BOUNDARY = /([.!?…])([¿¡\p{Lu}])/gu;
+
+function unglueSentenceBoundaries(text: string): string {
+  return text.replace(GLUED_SENTENCE_BOUNDARY, "$1 $2");
+}
+
 /**
  * Turn a single-block articleBody into blank-line paragraphs so the quality
  * gate and Zen paging see real structure. Uses the shared splitter, so
@@ -25,7 +35,7 @@ export function paragraphizePlainBody(text: string): string {
   if (!trimmed) return "";
   if (/\n\s*\n/.test(trimmed)) return trimmed;
 
-  const sentences = splitSentences(trimmed);
+  const sentences = splitSentences(unglueSentenceBoundaries(trimmed));
   if (sentences.length <= 1) return trimmed;
 
   const paragraphs: string[] = [];

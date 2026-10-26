@@ -86,6 +86,31 @@ describe("extractArticle", () => {
     expect(assessArticle(article?.text ?? "").ok).toBe(true);
   });
 
+  it("prefers glued Vocento JSON-LD over a short paywalled teaser", () => {
+    const articleBody = [
+      "El Ayuntamiento de Valencia ha recibido un total de 53 solicitudes de personas interesadas en reabrir los quioscos cerrados en la ciudad.",
+      "Al cierre del plazo el volumen de propuestas supera holgadamente el número de puestos ofertados por el consistorio.",
+      "La convocatoria se enmarca en el convenio de colaboración suscrito con la asociación profesional de vendedores de prensa.",
+      "El concurso público contempla el otorgamiento de títulos de ocupación privativa por un periodo inicial de veinte años.",
+      "El pliego fija el carácter social de la convocatoria y un baremo automático de adjudicación para colectivos vulnerables.",
+      "De hecho las bases permiten compatibilizar la venta de prensa con servicios complementarios autorizados por la ordenanza.",
+    ].join("");
+    const payload = JSON.stringify({
+      "@type": "NewsArticle",
+      headline: "Quioscos en Valencia",
+      articleBody,
+    });
+    const html = `<html><head><title>Shell</title>
+<script type="application/ld+json">${payload}</script></head>
+<body><p>Teaser corto del Ayuntamiento.</p>
+<div>Suscríbete para seguir leyendo</div></body></html>`;
+    const article = extractArticle(html);
+    expect(article?.title).toBe("Quioscos en Valencia");
+    expect(article?.text).toContain("baremo automático");
+    expect(article?.text).not.toContain("Suscríbete para seguir leyendo");
+    expect(assessArticle(article?.text ?? "").ok).toBe(true);
+  });
+
   it("decodes and extracts the El País fixture", () => {
     const html = decodeHtml(fixture("elpais.html.gz"), null);
     const article = extractArticle(html);
