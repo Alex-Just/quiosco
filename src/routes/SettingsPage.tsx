@@ -63,8 +63,29 @@ export default function SettingsPage() {
   useEffect(() => {
     const reload = () => setSettings(loadSettings());
     window.addEventListener("quiosco:sync", reload);
-    void refreshLogStatus();
     return () => window.removeEventListener("quiosco:sync", reload);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const status = await getLogStatus();
+        if (cancelled) return;
+        if (status.count === 0) {
+          setLogStatus("0 events");
+          return;
+        }
+        const oldest =
+          status.oldestTs != null ? formatDateTime(status.oldestTs) : "unknown";
+        setLogStatus(`${status.count} events · oldest ${oldest}`);
+      } catch {
+        if (!cancelled) setLogStatus("Log unavailable");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function onSyncNow() {
