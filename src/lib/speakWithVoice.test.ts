@@ -207,7 +207,14 @@ describe("speakWithVoice", () => {
       ...base,
       ttsProvider: "random",
       elevenLabsVoiceId: "voice-1",
-      pickTtsChoice: () => picks[pickIndex++] ?? picks[1]!,
+      pickTtsChoice: () => {
+        const next = picks[pickIndex] ?? picks[1];
+        pickIndex += 1;
+        if (!next) {
+          throw new Error("expected a TTS pick");
+        }
+        return next;
+      },
       markTtsUnavailable: markUnavailable,
       speakSentence,
       fetchTtsAudio: fetchTts,
