@@ -14,6 +14,7 @@ const PROVIDER_OPTIONS: { value: TtsProvider; label: string }[] = [
   { value: "system", label: "System" },
   { value: "edge", label: "Edge" },
   { value: "elevenlabs", label: "ElevenLabs" },
+  { value: "random", label: "Random" },
 ];
 
 const EDGE_VOICE_OPTIONS: { value: EdgeVoiceSetting; label: string }[] = [
@@ -127,7 +128,8 @@ export default function SettingsPage() {
           </select>
         </label>
       )}
-      {settings.ttsProvider === "elevenlabs" && (
+      {(settings.ttsProvider === "elevenlabs" ||
+        settings.ttsProvider === "random") && (
         <label>
           ElevenLabs voice ID
           <input
@@ -150,14 +152,6 @@ export default function SettingsPage() {
           onChange={(event) => update({ ttsRate: Number(event.target.value) })}
         />
         <span className="muted">{settings.ttsRate.toFixed(1)}×</span>
-      </label>
-      <label className="checkbox">
-        <input
-          type="checkbox"
-          checked={settings.ttsRandom}
-          onChange={(event) => update({ ttsRandom: event.target.checked })}
-        />
-        Random TTS provider and voice each play
       </label>
       <label>
         Translation rules (baked into the prompt)

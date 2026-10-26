@@ -41,6 +41,7 @@ exclude_patterns = [
   "**/testdata/**",
   "**/vendor/**",
   "**/.wrangler/**",
+  "**/.opencode/**",
   "**/test-results/**",
   "**/playwright-report/**",
   "**/.playwright-cli/**",

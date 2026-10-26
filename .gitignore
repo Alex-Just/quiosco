@@ -10,6 +10,8 @@ playwright-report/
 .DS_Store
 .superpowers/
 docs/superpowers/
+# OpenCode local agent prompts (not app source; Qlty also skips these).
+.opencode/
 .idea/
 
 .playwright-cli/

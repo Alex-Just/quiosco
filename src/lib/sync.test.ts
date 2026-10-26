@@ -32,7 +32,6 @@ const settings: Settings = {
   edgeVoice: "elvira",
   elevenLabsVoiceId: "",
   ttsRate: 1,
-  ttsRandom: false,
   updatedAt: 10,
 };
 
@@ -244,10 +243,9 @@ describe("syncNow", () => {
     const storage = fakeStorage();
     const dirty = {
       ...settings,
-      ttsProvider: "elevenlabs" as const,
+      ttsProvider: "random" as const,
       elevenLabsVoiceId: "vid",
       ttsRate: 1.5,
-      ttsRandom: true,
       updatedAt: 5,
     };
     storage.setItem(SETTINGS_KEY, JSON.stringify(dirty));
@@ -260,10 +258,10 @@ describe("syncNow", () => {
     await syncNow(store, dirty, api, storage);
     expect(seen[0]?.settings).toBeTruthy();
     const data = JSON.parse(seen[0]?.settings?.data ?? "{}");
-    expect(data.ttsProvider).toBe("elevenlabs");
+    expect(data.ttsProvider).toBe("random");
     expect(data.elevenLabsVoiceId).toBe("vid");
     expect(data.ttsRate).toBe(1.5);
-    expect(data.ttsRandom).toBe(true);
+    expect(data.ttsRandom).toBeUndefined();
     store.close();
   });
 

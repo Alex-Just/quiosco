@@ -103,6 +103,17 @@ describe("createTtsPicker", () => {
       picks.filter((choice) => choice.ttsProvider === "elevenlabs"),
     ).toEqual([]);
   });
+
+  it("stops dealing a provider after markUnavailable", () => {
+    const input = { token: "tok", elevenLabsVoiceId: "v" };
+    const picker = createTtsPicker(sequence([0.99]));
+    picker.markUnavailable("elevenlabs");
+    const picks = Array.from({ length: 6 }, () => picker.pick(input));
+    expect(
+      picks.filter((choice) => choice.ttsProvider === "elevenlabs"),
+    ).toEqual([]);
+    expect(picks.some((choice) => choice.ttsProvider === "edge")).toBe(true);
+  });
 });
 
 describe("pickNextTtsChoice", () => {

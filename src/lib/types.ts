@@ -79,7 +79,10 @@ export interface Article {
 }
 
 /** Which TTS backend Listen uses for original Spanish. */
-export type TtsProvider = "system" | "edge" | "elevenlabs";
+export type TtsProvider = "system" | "edge" | "elevenlabs" | "random";
+
+/** A concrete backend (not the Random meta-option). */
+export type ConcreteTtsProvider = Exclude<TtsProvider, "random">;
 
 /** Castilian Edge neural voice choice when provider is Edge. */
 export type EdgeVoiceSetting = "elvira" | "alvaro";
@@ -93,16 +96,14 @@ export interface Settings {
   model: string;
   appToken: string;
   autoTranslate: boolean;
-  /** System, free Edge neural, or premium ElevenLabs. */
+  /** System, Edge, ElevenLabs, or Random across available voices. */
   ttsProvider: TtsProvider;
   /** Used when ttsProvider === "edge". */
   edgeVoice: EdgeVoiceSetting;
-  /** Opaque ElevenLabs voice id when ttsProvider === "elevenlabs". */
+  /** Opaque ElevenLabs voice id when provider is ElevenLabs or Random. */
   elevenLabsVoiceId: string;
   /** Speech rate multiplier shared by every provider; 1 is normal. */
   ttsRate: number;
-  /** When true, each Listen picks a random provider and voice. */
-  ttsRandom: boolean;
   /** LWW clock for settings sync. */
   updatedAt?: number;
 }

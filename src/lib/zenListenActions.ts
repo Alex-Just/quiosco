@@ -37,7 +37,6 @@ export type ToggleZenOriginalListenArgs = {
   edgeVoice?: EdgeVoiceSetting;
   elevenLabsVoiceId?: string;
   ttsRate?: number;
-  ttsRandom?: boolean;
   token?: string;
 };
 
@@ -73,7 +72,6 @@ export async function toggleZenOriginalListen(
     args.edgeVoice === undefined ||
     args.elevenLabsVoiceId === undefined ||
     args.ttsRate === undefined ||
-    args.ttsRandom === undefined ||
     args.token === undefined;
   const settings = needsSettings ? loadSettings() : null;
   const ttsProvider = args.ttsProvider ?? settings?.ttsProvider ?? "system";
@@ -81,11 +79,10 @@ export async function toggleZenOriginalListen(
   const elevenLabsVoiceId =
     args.elevenLabsVoiceId ?? settings?.elevenLabsVoiceId ?? "";
   const ttsRate = args.ttsRate ?? settings?.ttsRate ?? DEFAULT_TTS_RATE;
-  const ttsRandom = args.ttsRandom ?? settings?.ttsRandom ?? false;
   const token = args.token ?? settings?.appToken ?? "";
   const cloudPreferred =
     token.trim().length > 0 &&
-    (ttsRandom ||
+    (ttsProvider === "random" ||
       (ttsProvider !== "system" &&
         (ttsProvider !== "elevenlabs" || elevenLabsVoiceId.trim().length > 0)));
   if (!canSpeak() && !cloudPreferred) {
@@ -127,7 +124,6 @@ export async function toggleZenOriginalListen(
       edgeVoice,
       elevenLabsVoiceId,
       rate: ttsRate,
-      ttsRandom,
       handlers,
       speakSentence: defaultSpeakSentence,
     });

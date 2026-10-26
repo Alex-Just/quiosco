@@ -1,11 +1,14 @@
-import type { EdgeVoiceSetting, TtsProvider } from "./types";
+import type { ConcreteTtsProvider, EdgeVoiceSetting } from "./types";
 
 /** One playable (provider, voice) pair for random TTS. */
 export type TtsChoice = {
-  ttsProvider: TtsProvider;
+  ttsProvider: ConcreteTtsProvider;
   edgeVoice: EdgeVoiceSetting;
   elevenLabsVoiceId: string;
 };
+
+/** Cloud providers that can be marked unavailable for a page session. */
+export type SkipableTtsProvider = Exclude<ConcreteTtsProvider, "system">;
 
 /** Inputs that decide which TTS choices are available. */
 export type TtsChoiceRequest = {
@@ -24,21 +27,27 @@ const SYSTEM_CHOICE: TtsChoice = {
 /**
  * Playable TTS choices for one Listen. System is always available. Edge and
  * ElevenLabs need a token; ElevenLabs also needs a configured voice id.
+ * `unavailable` drops cloud providers that failed earlier in this session.
  */
-export function listTtsChoices(input: TtsChoiceRequest): TtsChoice[] {
+export function listTtsChoices(
+  input: TtsChoiceRequest,
+  unavailable: ReadonlySet<SkipableTtsProvider> = new Set(),
+): TtsChoice[] {
   const choices: TtsChoice[] = [SYSTEM_CHOICE];
   if (!input.token.trim()) return choices;
 
-  for (const edgeVoice of EDGE_VOICES) {
-    choices.push({
-      ttsProvider: "edge",
-      edgeVoice,
-      elevenLabsVoiceId: "",
-    });
+  if (!unavailable.has("edge")) {
+    for (const edgeVoice of EDGE_VOICES) {
+      choices.push({
+        ttsProvider: "edge",
+        edgeVoice,
+        elevenLabsVoiceId: "",
+      });
+    }
   }
 
   const elevenId = input.elevenLabsVoiceId.trim();
-  if (elevenId) {
+  if (elevenId && !unavailable.has("elevenlabs")) {
     choices.push({
       ttsProvider: "elevenlabs",
       edgeVoice: "elvira",
@@ -71,6 +80,8 @@ function shuffled<T>(items: readonly T[], random: () => number): T[] {
 export type TtsPicker = {
   /** Deal the next (provider, voice) pair for this Listen. */
   pick(input: TtsChoiceRequest): TtsChoice;
+  /** Stop offering this cloud provider for the rest of the page session. */
+  markUnavailable(provider: SkipableTtsProvider): void;
 };
 
 /**
@@ -84,9 +95,10 @@ export function createTtsPicker(random?: () => number): TtsPicker {
   let signature: string | null = null;
   let bag: TtsChoice[] = [];
   let lastKey: string | null = null;
+  const unavailable = new Set<SkipableTtsProvider>();
   return {
     pick(input: TtsChoiceRequest): TtsChoice {
-      const choices = listTtsChoices(input);
+      const choices = listTtsChoices(input, unavailable);
       const nextSignature = JSON.stringify(choices.map(choiceKey));
       if (nextSignature !== signature) {
         signature = nextSignature;
@@ -109,6 +121,12 @@ export function createTtsPicker(random?: () => number): TtsPicker {
       lastKey = choiceKey(choice);
       return choice;
     },
+    markUnavailable(provider: SkipableTtsProvider): void {
+      if (unavailable.has(provider)) return;
+      unavailable.add(provider);
+      signature = null;
+      bag = [];
+    },
   };
 }
 
@@ -117,4 +135,11 @@ const sessionPicker = createTtsPicker();
 /** Deal the next voice from the session's shuffle bag. */
 export function pickNextTtsChoice(input: TtsChoiceRequest): TtsChoice {
   return sessionPicker.pick(input);
+}
+
+/** Stop offering a cloud provider after it fails during Random play. */
+export function markTtsProviderUnavailable(
+  provider: SkipableTtsProvider,
+): void {
+  sessionPicker.markUnavailable(provider);
 }

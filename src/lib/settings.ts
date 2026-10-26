@@ -9,7 +9,12 @@ export const SETTINGS_KEY = "quiosco.settings.v1";
 const SETTINGS_DIRTY_KEY = "quiosco.settings.dirty";
 type SettingsStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
-const TTS_PROVIDERS = new Set<TtsProvider>(["system", "edge", "elevenlabs"]);
+const TTS_PROVIDERS = new Set<TtsProvider>([
+  "system",
+  "edge",
+  "elevenlabs",
+  "random",
+]);
 const EDGE_VOICES = new Set<EdgeVoiceSetting>(["elvira", "alvaro"]);
 const DEFAULT_PROVIDER: TtsProvider = "edge";
 const DEFAULT_EDGE_VOICE: EdgeVoiceSetting = "elvira";
@@ -66,7 +71,6 @@ export const DEFAULT_SETTINGS: Settings = {
   edgeVoice: DEFAULT_EDGE_VOICE,
   elevenLabsVoiceId: "",
   ttsRate: DEFAULT_TTS_RATE,
-  ttsRandom: false,
 };
 
 /**
@@ -97,18 +101,23 @@ const MEMORY_STORAGE = (): SettingsStorage => {
 };
 
 function settingsFromPartial(
-  parsed: Partial<Settings> & { voice?: unknown },
+  parsed: Partial<Settings> & { voice?: unknown; ttsRandom?: unknown },
 ): Settings {
   const hasNewShape =
     typeof parsed.ttsProvider === "string" ||
     typeof parsed.edgeVoice === "string" ||
-    typeof parsed.elevenLabsVoiceId === "string";
+    typeof parsed.elevenLabsVoiceId === "string" ||
+    typeof parsed.ttsRandom === "boolean";
   const migrated = hasNewShape
     ? {
         ttsProvider: parseProvider(parsed.ttsProvider),
         edgeVoice: parseEdgeVoice(parsed.edgeVoice),
       }
     : migrateLegacyVoice(parsed.voice);
+
+  // Legacy checkbox: Random TTS overrode the fixed provider dropdown.
+  const ttsProvider =
+    parsed.ttsRandom === true ? "random" : migrated.ttsProvider;
 
   return {
     targetLanguage:
@@ -129,17 +138,13 @@ function settingsFromPartial(
       typeof parsed.autoTranslate === "boolean"
         ? parsed.autoTranslate
         : DEFAULT_SETTINGS.autoTranslate,
-    ttsProvider: migrated.ttsProvider,
+    ttsProvider,
     edgeVoice: migrated.edgeVoice,
     elevenLabsVoiceId:
       typeof parsed.elevenLabsVoiceId === "string"
         ? parsed.elevenLabsVoiceId
         : DEFAULT_SETTINGS.elevenLabsVoiceId,
     ttsRate: parseTtsRate(parsed.ttsRate),
-    ttsRandom:
-      typeof parsed.ttsRandom === "boolean"
-        ? parsed.ttsRandom
-        : DEFAULT_SETTINGS.ttsRandom,
     updatedAt: typeof parsed.updatedAt === "number" ? parsed.updatedAt : 0,
   };
 }
@@ -190,7 +195,6 @@ const SYNCED_FIELDS = [
   "edgeVoice",
   "elevenLabsVoiceId",
   "ttsRate",
-  "ttsRandom",
 ] as const;
 
 export function applyRemoteSettings(
@@ -207,11 +211,11 @@ export function applyRemoteSettings(
   }
   if (parsed === null || typeof parsed !== "object") return null;
 
-  // Remote may still send legacy `voice` alone.
+  // Remote may still send legacy `voice` / `ttsRandom`.
   const fromRemote = settingsFromPartial({
     ...current,
     ...parsed,
-  } as Partial<Settings> & { voice?: unknown });
+  } as Partial<Settings> & { voice?: unknown; ttsRandom?: unknown });
   const next: Settings = { ...fromRemote, updatedAt: remote.updatedAt };
 
   for (const field of SYNCED_FIELDS) {
@@ -236,17 +240,19 @@ export function applyRemoteSettings(
       if (typeof value === "string") next.elevenLabsVoiceId = value;
     } else if (field === "ttsRate") {
       if (typeof value === "number") next.ttsRate = parseTtsRate(value);
-    } else if (field === "ttsRandom") {
-      if (typeof value === "boolean") next.ttsRandom = value;
     } else if (typeof value === "string") {
       next[field] = value;
     }
   }
 
+  // Legacy checkbox wins over a fixed remote provider.
+  if (parsed.ttsRandom === true) next.ttsProvider = "random";
+
   // Legacy remote voice without new fields.
   if (
     typeof parsed.voice === "string" &&
     parsed.ttsProvider === undefined &&
+    parsed.ttsRandom !== true &&
     (parsed.voice === "system" ||
       parsed.voice === "elvira" ||
       parsed.voice === "alvaro")

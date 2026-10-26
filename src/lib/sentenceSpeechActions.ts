@@ -57,7 +57,7 @@ export async function listenToSentence(
   const cloudPreferred =
     lang === ORIGINAL_LANG &&
     settings.appToken.trim().length > 0 &&
-    (settings.ttsRandom ||
+    (settings.ttsProvider === "random" ||
       (settings.ttsProvider !== "system" &&
         (settings.ttsProvider !== "elevenlabs" ||
           settings.elevenLabsVoiceId.trim().length > 0)));
@@ -91,7 +91,6 @@ export async function listenToSentence(
     edgeVoice: settings.edgeVoice,
     elevenLabsVoiceId: settings.elevenLabsVoiceId,
     rate: settings.ttsRate,
-    ttsRandom: settings.ttsRandom,
     handlers,
     speakSentence,
   });

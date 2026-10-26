@@ -19,7 +19,6 @@ const settings: Settings = {
   edgeVoice: "elvira",
   elevenLabsVoiceId: "",
   ttsRate: 1,
-  ttsRandom: false,
 };
 
 function makeArticle(overrides: Partial<Article> = {}): Article {

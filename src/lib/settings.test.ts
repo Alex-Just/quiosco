@@ -9,6 +9,7 @@ import {
   migrateLegacyVoice,
   saveSettings,
 } from "./settings";
+import type { Settings } from "./types";
 
 describe("settings", () => {
   it("round-trips through storage", () => {
@@ -59,15 +60,27 @@ describe("settings", () => {
     expect(loadSettings().ttsRate).toBe(1);
   });
 
-  it("defaults ttsRandom to off and loads a stored true", () => {
-    expect(DEFAULT_SETTINGS.ttsRandom).toBe(false);
+  it("migrates legacy ttsRandom true into ttsProvider random", () => {
+    expect(DEFAULT_SETTINGS.ttsProvider).toBe("edge");
     localStorage.clear();
-    expect(loadSettings().ttsRandom).toBe(false);
     localStorage.setItem(
       "quiosco.settings.v1",
-      JSON.stringify({ ttsRandom: true }),
+      JSON.stringify({ ttsProvider: "edge", ttsRandom: true }),
     );
-    expect(loadSettings().ttsRandom).toBe(true);
+    const loaded = loadSettings();
+    expect(loaded.ttsProvider).toBe("random");
+    expect(
+      (loaded as Settings & { ttsRandom?: boolean }).ttsRandom,
+    ).toBeUndefined();
+  });
+
+  it("loads a stored ttsProvider random", () => {
+    localStorage.clear();
+    localStorage.setItem(
+      "quiosco.settings.v1",
+      JSON.stringify({ ttsProvider: "random" }),
+    );
+    expect(loadSettings().ttsProvider).toBe("random");
   });
 
   it("returns defaults when no browser storage exists", () => {
@@ -151,14 +164,27 @@ describe("settings", () => {
         ttsProvider: "elevenlabs",
         elevenLabsVoiceId: "voice-abc",
         ttsRate: 1.5,
-        ttsRandom: true,
       }),
     });
     expect(applied?.ttsProvider).toBe("elevenlabs");
     expect(applied?.elevenLabsVoiceId).toBe("voice-abc");
     expect(applied?.ttsRate).toBe(1.5);
-    expect(applied?.ttsRandom).toBe(true);
     expect(loadSettings().appToken).toBe("t");
+  });
+
+  it("migrates remote legacy ttsRandom into ttsProvider random", () => {
+    localStorage.clear();
+    saveSettings({ ...DEFAULT_SETTINGS, appToken: "t" });
+    const applied = applyRemoteSettings({
+      updatedAt: Date.now() + 1000,
+      data: JSON.stringify({
+        ttsProvider: "elevenlabs",
+        elevenLabsVoiceId: "voice-abc",
+        ttsRandom: true,
+      }),
+    });
+    expect(applied?.ttsProvider).toBe("random");
+    expect(applied?.elevenLabsVoiceId).toBe("voice-abc");
   });
 
   it("migrates remote legacy voice when new fields are absent", () => {
