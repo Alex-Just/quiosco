@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { createApi } from "../lib/api";
 import { formatDateTime } from "../lib/format";
+import { clearLogs, exportLogText, getLogStatus } from "../lib/log";
 import {
   loadSettings,
   saveSettings,
@@ -39,10 +40,30 @@ export default function SettingsPage() {
   const [lastSync, setLastSync] = useState(
     () => Number(localStorage.getItem(LAST_SYNC_KEY) ?? "0") || 0,
   );
+  const [logStatus, setLogStatus] = useState("Loading log…");
+  const [logAction, setLogAction] = useState<string | null>(null);
+  const canShare =
+    typeof navigator !== "undefined" && typeof navigator.share === "function";
+
+  async function refreshLogStatus() {
+    try {
+      const status = await getLogStatus();
+      if (status.count === 0) {
+        setLogStatus("0 events");
+        return;
+      }
+      const oldest =
+        status.oldestTs != null ? formatDateTime(status.oldestTs) : "unknown";
+      setLogStatus(`${status.count} events · oldest ${oldest}`);
+    } catch {
+      setLogStatus("Log unavailable");
+    }
+  }
 
   useEffect(() => {
     const reload = () => setSettings(loadSettings());
     window.addEventListener("quiosco:sync", reload);
+    void refreshLogStatus();
     return () => window.removeEventListener("quiosco:sync", reload);
   }, []);
 
@@ -211,6 +232,67 @@ export default function SettingsPage() {
         </span>
       </div>
       {syncState && <p className="muted">{syncState}</p>}
+      <h2>Diagnostics</h2>
+      <p className="muted">{logStatus}</p>
+      <div className="row">
+        <button
+          type="button"
+          onClick={() => {
+            void (async () => {
+              const text = await exportLogText();
+              if (!text) {
+                setLogAction("Log is empty");
+                return;
+              }
+              try {
+                await navigator.clipboard.writeText(text);
+                setLogAction("Copied");
+              } catch {
+                setLogAction("Copy failed");
+              }
+              await refreshLogStatus();
+            })();
+          }}
+        >
+          Copy log
+        </button>
+        {canShare && (
+          <button
+            type="button"
+            onClick={() => {
+              void (async () => {
+                const text = await exportLogText();
+                if (!text) {
+                  setLogAction("Log is empty");
+                  return;
+                }
+                try {
+                  await navigator.share({ title: "Quiosco log", text });
+                  setLogAction("Shared");
+                } catch {
+                  setLogAction("Share cancelled");
+                }
+                await refreshLogStatus();
+              })();
+            }}
+          >
+            Share log
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            void (async () => {
+              await clearLogs();
+              setLogAction("Cleared");
+              await refreshLogStatus();
+            })();
+          }}
+        >
+          Clear log
+        </button>
+      </div>
+      {logAction && <p className="muted">{logAction}</p>}
     </section>
   );
 }

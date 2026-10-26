@@ -38,6 +38,11 @@ test("settings TTS provider offers System, Edge, ElevenLabs, and Random", async 
   await provider.selectOption("random");
   await expect(page.getByLabel("ElevenLabs voice ID")).toBeVisible();
   await expect(page.getByLabel("Edge voice")).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Diagnostics" }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Copy log" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Clear log" })).toBeVisible();
 });
 
 test("api requires the bearer token", async ({ request }) => {
