@@ -46,9 +46,11 @@ Open **Settings → Diagnostics** to **Copy**, **Share**, or **Clear** it.
 
 Optional: create a free [Sentry](https://sentry.io) project, set
 `VITE_SENTRY_DSN` in the Vite env for the client build (for example a
-`.env.local` with `VITE_SENTRY_DSN=…`), and redeploy. With no DSN the app
-still runs; only the local log is used. Do not put Worker secrets in Vite
-env files.
+`.env.local` with `VITE_SENTRY_DSN=…`). For CI deploy to `main`, also set the
+same value as a GitHub Actions repository secret named `VITE_SENTRY_DSN` —
+the deploy job passes it into `pnpm build`. With no DSN the app still runs;
+only the local log is used. Do not put Worker secrets in Vite env files, and
+do not use `wrangler secret` for this DSN (it is a public client value).
 
 ## Development
 
@@ -140,12 +142,15 @@ Every push to `main` runs the check job, then injects resource ids into
    **Edit Cloudflare Workers** template, scoped to this account.
 3. `QUIOSCO_KV_NAMESPACE_ID` — KV namespace id for `BUDGET`.
 4. `QUIOSCO_D1_DATABASE_ID` — D1 `database_id` for `quiosco`.
+5. `VITE_SENTRY_DSN` — optional; React client DSN so production builds send
+   diagnostics to Sentry (omit to keep client logging local-only).
 
 ```bash
 gh secret set CLOUDFLARE_ACCOUNT_ID
 gh secret set CLOUDFLARE_API_TOKEN
 gh secret set QUIOSCO_KV_NAMESPACE_ID
 gh secret set QUIOSCO_D1_DATABASE_ID
+gh secret set VITE_SENTRY_DSN   # optional
 ```
 
 Also enable 2FA on the Cloudflare and OpenCode accounts.

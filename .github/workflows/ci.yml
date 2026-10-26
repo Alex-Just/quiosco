@@ -46,6 +46,8 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # Baked into the Vite client bundle at build time (not a Worker secret).
+          VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
 
   smoke:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'

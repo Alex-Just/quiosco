@@ -2,6 +2,9 @@ node_modules/
 dist/
 .wrangler/
 .dev.vars
+# Vite local secrets (Sentry DSN, etc.). Never commit.
+.env.local
+.env.*.local
 # Personal Cloudflare KV/D1 ids (copy from wrangler.toml and fill in).
 wrangler.local.toml
 coverage/
