@@ -9,6 +9,7 @@ import {
   type FetchTtsAudio,
   fetchTtsAudio,
 } from "./edgeTts";
+import { log } from "./log";
 import {
   markTtsProviderUnavailable,
   pickNextTtsChoice,
@@ -94,12 +95,17 @@ export async function speakWithVoice(
   const markUnavailable = args.markTtsUnavailable ?? markTtsProviderUnavailable;
 
   if (args.lang !== ORIGINAL_LANG || args.token.trim().length === 0) {
+    log.info("tts", "using system speech", {
+      reason: args.lang !== ORIGINAL_LANG ? "non-es" : "no-token",
+      mode: args.ttsProvider,
+    });
     return speakSentence(args.text, args.lang, handlers, args.rate);
   }
 
   const pickChoice = args.pickTtsChoice ?? pickNextTtsChoice;
   const random = args.ttsProvider === "random";
   const attempts = random ? MAX_RANDOM_TTS_ATTEMPTS : 1;
+  log.info("tts", "speak start", { mode: args.ttsProvider, random });
 
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const choice: TtsChoice = random
@@ -116,8 +122,20 @@ export async function speakWithVoice(
           elevenLabsVoiceId: args.elevenLabsVoiceId,
         };
 
+    log.info("tts", "picked voice", {
+      mode: args.ttsProvider,
+      provider: choice.ttsProvider,
+      edgeVoice: choice.edgeVoice,
+      hasElevenLabsId: choice.elevenLabsVoiceId.trim().length > 0,
+      attempt,
+    });
+
     const target = cloudTarget(choice);
     if (!target) {
+      log.info("tts", "fallback to system speech", {
+        reason: "no-cloud-target",
+        provider: choice.ttsProvider,
+      });
       return speakSentence(args.text, args.lang, handlers, args.rate);
     }
 
@@ -137,17 +155,35 @@ export async function speakWithVoice(
       if (controller.signal.aborted) return false;
       releaseEdgeFetch();
       await playEdge(blob, handlers);
+      log.info("tts", "cloud play ok", {
+        provider: target.provider,
+        voice: target.voice,
+      });
       return true;
     } catch (error) {
       releaseEdgeFetch();
       if (isAbortError(error) || controller.signal.aborted) return false;
+      const status =
+        error instanceof Error ? error.message.slice(0, 120) : "unknown";
+      log.warn("tts", "cloud fetch failed", {
+        provider: target.provider,
+        voice: target.voice,
+        status,
+      });
       if (random) {
         markUnavailable(target.provider);
         continue;
       }
+      log.info("tts", "fallback to system speech", {
+        reason: "cloud-failed",
+        provider: target.provider,
+      });
       return speakSentence(args.text, args.lang, handlers, args.rate);
     }
   }
 
+  log.info("tts", "fallback to system speech", {
+    reason: "attempts-exhausted",
+  });
   return speakSentence(args.text, args.lang, handlers, args.rate);
 }

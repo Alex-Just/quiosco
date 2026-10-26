@@ -2,10 +2,10 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  LOG_MAX_BYTES,
-  LOG_MAX_EVENTS,
   createLogController,
   formatLogExport,
+  LOG_MAX_BYTES,
+  LOG_MAX_EVENTS,
   scrubLogData,
 } from "./log";
 

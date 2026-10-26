@@ -1,3 +1,4 @@
+import { log } from "./log";
 import type { ConcreteTtsProvider, EdgeVoiceSetting } from "./types";
 
 /** One playable (provider, voice) pair for random TTS. */
@@ -141,5 +142,6 @@ export function pickNextTtsChoice(input: TtsChoiceRequest): TtsChoice {
 export function markTtsProviderUnavailable(
   provider: SkipableTtsProvider,
 ): void {
+  log.warn("tts", "provider marked unavailable", { provider });
   sessionPicker.markUnavailable(provider);
 }

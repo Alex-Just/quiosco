@@ -134,8 +134,7 @@ export function createLogController(
   const now = options.now ?? Date.now;
   const isDev =
     options.isDev ??
-    (typeof import.meta !== "undefined" &&
-      Boolean(import.meta.env?.DEV));
+    (typeof import.meta !== "undefined" && Boolean(import.meta.env?.DEV));
   let sink = options.sink ?? null;
   let memory: LogEvent[] = [];
   let dbPromise: Promise<IDBPDatabase<LogsDB>> | null = null;
@@ -156,7 +155,7 @@ export function createLogController(
   }
 
   function trim(events: LogEvent[]): LogEvent[] {
-    let next = [...events];
+    const next = [...events];
     while (next.length > maxEvents) next.shift();
     let size = next.reduce((sum, event) => sum + eventBytes(event), 0);
     while (next.length > 0 && size > maxBytes) {
@@ -181,7 +180,9 @@ export function createLogController(
         const kept = trim(all);
         if (kept.length === all.length) return;
         const keepIds = new Set(
-          kept.map((entry) => entry.id).filter((id): id is number => id != null),
+          kept
+            .map((entry) => entry.id)
+            .filter((id): id is number => id != null),
         );
         const tx = db.transaction("events", "readwrite");
         for (const entry of all) {

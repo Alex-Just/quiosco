@@ -1,3 +1,4 @@
+import { log } from "./log";
 import type {
   EdgeVoiceSetting,
   Settings,
@@ -166,11 +167,18 @@ export function saveSettings(
   settings: Settings,
   storage: SettingsStorage = resolveStorage() ?? MEMORY_STORAGE(),
 ): void {
+  const previous = loadSettings(storage);
   storage.setItem(
     SETTINGS_KEY,
     JSON.stringify({ ...settings, updatedAt: Date.now() }),
   );
   storage.setItem(SETTINGS_DIRTY_KEY, "1");
+  if (previous.ttsProvider !== settings.ttsProvider) {
+    log.info("settings", "ttsProvider saved", {
+      from: previous.ttsProvider,
+      to: settings.ttsProvider,
+    });
+  }
 }
 
 export function isSettingsDirty(storage?: Pick<Storage, "getItem">): boolean {
@@ -262,6 +270,12 @@ export function applyRemoteSettings(
     next.edgeVoice = migrated.edgeVoice;
   }
 
+  if (current.ttsProvider !== next.ttsProvider) {
+    log.info("settings", "ttsProvider applied from sync", {
+      from: current.ttsProvider,
+      to: next.ttsProvider,
+    });
+  }
   storage.setItem(SETTINGS_KEY, JSON.stringify(next));
   return next;
 }
