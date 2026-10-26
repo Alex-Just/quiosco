@@ -1,23 +1,20 @@
 /**
  * Worker-native Microsoft Edge neural TTS client (unofficial read-aloud API).
- * Uses the Cognitive Services websocket host (same token as Edge Read Aloud).
- * The older speech.platform.bing.com host now requires a Sec-MS-GEC v2 digest;
- * this host still accepts the v1 SHA-256 token used below.
- */
-
-const TRUSTED_CLIENT_TOKEN = "6A5AA1D4EAFF4E9FB37E23D68491D6F4";
-const WIN_EPOCH_SECONDS = 11_644_473_600;
-const CLOCK_ROUND_SECONDS = 300;
-const WINDOWS_TICKS_PER_SECOND = 10_000_000;
-const CHROMIUM_FULL_VERSION = "143.0.3650.75";
-const CHROMIUM_MAJOR = CHROMIUM_FULL_VERSION.split(".", 1)[0] ?? "143";
-const SEC_MS_GEC_VERSION = `1-${CHROMIUM_FULL_VERSION}`;
-/**
- * Prefer the msedgeservices host; Bing readaloud now rejects the v1 GEC token.
+ * Uses Bing Read Aloud with Sec-MS-GEC v2. The msedgeservices host currently
+ * returns HTTP 200 without a websocket upgrade for this handshake.
  * Workers outbound websockets use https:// (not wss://) with Upgrade: websocket.
  */
+
+import {
+  CHROMIUM_FULL_VERSION,
+  generateSecMsGecV2,
+  SEC_MS_GEC_VERSION_V2,
+  TRUSTED_CLIENT_TOKEN,
+} from "./edgeSecMsGec";
+
+const CHROMIUM_MAJOR = CHROMIUM_FULL_VERSION.split(".", 1)[0] ?? "143";
 const WSS_BASE =
-  "https://api.msedgeservices.com/tts/cognitiveservices/websocket/v1";
+  "https://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1";
 const OUTPUT_FORMAT = "audio-24khz-48kbitrate-mono-mp3";
 const TTS_TIMEOUT_MS = 30_000;
 
@@ -46,21 +43,6 @@ function removeIncompatibleCharacters(text: string): string {
 
 function connectId(): string {
   return crypto.randomUUID().replaceAll("-", "");
-}
-
-async function generateSecMsGec(): Promise<string> {
-  let ticks = Math.floor(Date.now() / 1000) + WIN_EPOCH_SECONDS;
-  ticks -= ticks % CLOCK_ROUND_SECONDS;
-  const windowsTicks = BigInt(ticks) * BigInt(WINDOWS_TICKS_PER_SECOND);
-  const input = `${windowsTicks.toString()}${TRUSTED_CLIENT_TOKEN}`;
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(input),
-  );
-  return Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("")
-    .toUpperCase();
 }
 
 /** SSML relative rate: 1 stays "default", anything else a signed whole percent. */
@@ -210,12 +192,13 @@ export async function synthesizeEdgeMp3(
   rate: number,
   fetchFn: typeof fetch = fetch,
 ): Promise<Uint8Array> {
-  const secMsGec = await generateSecMsGec();
+  const secMsGec = await generateSecMsGecV2();
   const requestId = connectId();
   const url =
-    `${WSS_BASE}?Ocp-Apim-Subscription-Key=${TRUSTED_CLIENT_TOKEN}` +
+    `${WSS_BASE}?TrustedClientToken=${TRUSTED_CLIENT_TOKEN}` +
+    `&ConnectionId=${requestId}` +
     `&Sec-MS-GEC=${secMsGec}` +
-    `&Sec-MS-GEC-Version=${SEC_MS_GEC_VERSION}`;
+    `&Sec-MS-GEC-Version=${SEC_MS_GEC_VERSION_V2}`;
 
   const socket = await openEdgeSocket(url, fetchFn);
   const chunks: Uint8Array[] = [];

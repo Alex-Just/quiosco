@@ -122,7 +122,11 @@ export async function handleTts(
       status: 200,
       headers: { "content-type": "audio/mpeg" },
     });
-  } catch {
+  } catch (error) {
+    console.error(
+      "tts upstream failed",
+      error instanceof Error ? error.message : error,
+    );
     return jsonResponse({ error: "tts upstream failed" }, 502);
   }
 }
