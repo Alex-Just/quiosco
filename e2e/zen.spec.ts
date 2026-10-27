@@ -102,9 +102,10 @@ async function seedDoneArticle(page: Page, id: string, status = "unread") {
 test("zen opens after the first translated page while more chunks remain", async ({
   page,
 }) => {
+  const firstPage = PARAGRAPHS[0] ?? "";
   await seedArticle(page, "zen-early", {
     translationStatus: "running",
-    translationParagraphs: [PARAGRAPHS[0]!],
+    translationParagraphs: [firstPage],
     translatedChunks: 1,
     totalChunks: 3,
   });
@@ -114,7 +115,7 @@ test("zen opens after the first translated page while more chunks remain", async
     page.getByRole("progressbar", { name: "Article progress" }),
   ).toBeVisible();
   await expect(page.getByText("1/1")).toBeVisible();
-  await expect(page.getByText(PARAGRAPHS[0]!)).toBeVisible();
+  await expect(page.getByText(firstPage)).toBeVisible();
 });
 
 test("zen copy button writes the current page original to the clipboard", async ({
