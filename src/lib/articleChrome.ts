@@ -1,4 +1,4 @@
-import { bodyParagraphs } from "./articleDisplayHelpers";
+import { bodyParagraphs, joinTranslationBody } from "./articleDisplayHelpers";
 import type { Article } from "./types";
 
 /**
@@ -13,10 +13,10 @@ export function articleChromeCompact(
 }
 
 /**
- * Zen opens once the first committed translation paragraph exists, so the
- * reader can start while later chunks still stream in the background.
- * Partial text from the chunk in flight does not count.
+ * Zen opens once the streamed body has at least one paragraph. Most articles
+ * are a single chunk, so readable text lives in `partial` until the run ends;
+ * committed `translation` alone would wait for the whole article.
  */
 export function articleZenAvailable(article: Article): boolean {
-  return bodyParagraphs(article.translation ?? "").length > 0;
+  return bodyParagraphs(joinTranslationBody(article)).length > 0;
 }

@@ -40,7 +40,21 @@ describe("articleChromeCompact", () => {
 });
 
 describe("articleZenAvailable", () => {
-  it("opens Zen after the first committed translation paragraph", () => {
+  it("opens Zen from streamed partial text (single-chunk articles)", () => {
+    expect(
+      articleZenAvailable(
+        article({
+          translationStatus: "running",
+          translation: "",
+          partial: FIRST_PAGE,
+          translatedChunks: 0,
+          totalChunks: 1,
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  it("opens Zen from committed translation pages too", () => {
     expect(
       articleZenAvailable(
         article({
@@ -51,20 +65,6 @@ describe("articleZenAvailable", () => {
         }),
       ),
     ).toBe(true);
-  });
-
-  it("waits for a committed paragraph; partial alone is not enough", () => {
-    expect(
-      articleZenAvailable(
-        article({
-          translationStatus: "running",
-          translation: "",
-          partial: "Streaming first chunk…",
-          translatedChunks: 0,
-          totalChunks: 4,
-        }),
-      ),
-    ).toBe(false);
   });
 
   it("stays available when translation is done or stopped with pages", () => {
@@ -87,6 +87,7 @@ describe("articleZenAvailable", () => {
         article({
           translationStatus: "pending",
           translation: "",
+          partial: null,
           translatedChunks: 0,
           totalChunks: 0,
         }),

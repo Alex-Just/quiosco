@@ -19,6 +19,7 @@ async function seedArticle(
     status?: string;
     translationStatus?: string;
     translationParagraphs?: string[];
+    partial?: string | null;
     translatedChunks?: number;
     totalChunks?: number;
   } = {},
@@ -27,6 +28,7 @@ async function seedArticle(
     status = "unread",
     translationStatus = "done",
     translationParagraphs = PARAGRAPHS,
+    partial = null,
     translatedChunks = 1,
     totalChunks = 1,
   } = options;
@@ -38,6 +40,7 @@ async function seedArticle(
       status,
       translationStatus,
       translationParagraphs,
+      partial,
       translatedChunks,
       totalChunks,
     }) => {
@@ -49,6 +52,7 @@ async function seedArticle(
         text: paragraphs.join("\n\n"),
         via: "manual",
         translation: translationParagraphs.join("\n\n"),
+        partial,
         translationStatus,
         translatedChunks,
         totalChunks,
@@ -89,6 +93,7 @@ async function seedArticle(
       status,
       translationStatus,
       translationParagraphs,
+      partial,
       translatedChunks,
       totalChunks,
     },
@@ -99,15 +104,16 @@ async function seedDoneArticle(page: Page, id: string, status = "unread") {
   await seedArticle(page, id, { status });
 }
 
-test("zen opens after the first translated page while more chunks remain", async ({
+test("zen opens from streamed partial text before the chunk commits", async ({
   page,
 }) => {
   const firstPage = PARAGRAPHS[0] ?? "";
   await seedArticle(page, "zen-early", {
     translationStatus: "running",
-    translationParagraphs: [firstPage],
-    translatedChunks: 1,
-    totalChunks: 3,
+    translationParagraphs: [],
+    partial: firstPage,
+    translatedChunks: 0,
+    totalChunks: 1,
   });
   await page.goto("/article/zen-early");
 
