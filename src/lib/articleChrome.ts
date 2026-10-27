@@ -1,3 +1,4 @@
+import { bodyParagraphs } from "./articleDisplayHelpers";
 import type { Article } from "./types";
 
 /**
@@ -9,4 +10,13 @@ export function articleChromeCompact(
   working: boolean,
 ): boolean {
   return !working && article.translationStatus === "done";
+}
+
+/**
+ * Zen opens once the first committed translation paragraph exists, so the
+ * reader can start while later chunks still stream in the background.
+ * Partial text from the chunk in flight does not count.
+ */
+export function articleZenAvailable(article: Article): boolean {
+  return bodyParagraphs(article.translation ?? "").length > 0;
 }

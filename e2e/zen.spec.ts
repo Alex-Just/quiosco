@@ -12,10 +12,35 @@ const PARAGRAPHS = [
  * the same IndexedDB ("quiosco", v3), so the stores already exist and this
  * upgrade handler is a no-op.
  */
-async function seedDoneArticle(page: Page, id: string, status = "unread") {
+async function seedArticle(
+  page: Page,
+  id: string,
+  options: {
+    status?: string;
+    translationStatus?: string;
+    translationParagraphs?: string[];
+    translatedChunks?: number;
+    totalChunks?: number;
+  } = {},
+) {
+  const {
+    status = "unread",
+    translationStatus = "done",
+    translationParagraphs = PARAGRAPHS,
+    translatedChunks = 1,
+    totalChunks = 1,
+  } = options;
   await page.goto("/");
   await page.evaluate(
-    async ({ id, paragraphs, status }) => {
+    async ({
+      id,
+      paragraphs,
+      status,
+      translationStatus,
+      translationParagraphs,
+      translatedChunks,
+      totalChunks,
+    }) => {
       const article = {
         id,
         url: null,
@@ -23,10 +48,10 @@ async function seedDoneArticle(page: Page, id: string, status = "unread") {
         site: null,
         text: paragraphs.join("\n\n"),
         via: "manual",
-        translation: paragraphs.join("\n\n"),
-        translationStatus: "done",
-        translatedChunks: 1,
-        totalChunks: 1,
+        translation: translationParagraphs.join("\n\n"),
+        translationStatus,
+        translatedChunks,
+        totalChunks,
         status,
         error: null,
         createdAt: Date.now(),
@@ -58,9 +83,39 @@ async function seedDoneArticle(page: Page, id: string, status = "unread") {
         req.onerror = () => reject(req.error);
       });
     },
-    { id, paragraphs: PARAGRAPHS, status },
+    {
+      id,
+      paragraphs: PARAGRAPHS,
+      status,
+      translationStatus,
+      translationParagraphs,
+      translatedChunks,
+      totalChunks,
+    },
   );
 }
+
+async function seedDoneArticle(page: Page, id: string, status = "unread") {
+  await seedArticle(page, id, { status });
+}
+
+test("zen opens after the first translated page while more chunks remain", async ({
+  page,
+}) => {
+  await seedArticle(page, "zen-early", {
+    translationStatus: "running",
+    translationParagraphs: [PARAGRAPHS[0]!],
+    translatedChunks: 1,
+    totalChunks: 3,
+  });
+  await page.goto("/article/zen-early");
+
+  await expect(
+    page.getByRole("progressbar", { name: "Article progress" }),
+  ).toBeVisible();
+  await expect(page.getByText("1/1")).toBeVisible();
+  await expect(page.getByText(PARAGRAPHS[0]!)).toBeVisible();
+});
 
 test("zen copy button writes the current page original to the clipboard", async ({
   page,

@@ -15,7 +15,10 @@ import { ArticleZenPane } from "../components/ArticleZenPane";
 import { ArticleZenProgress } from "../components/ArticleZenProgress";
 import { SentenceSheet } from "../components/SentenceSheet";
 import { originalText } from "../lib/article";
-import { articleChromeCompact } from "../lib/articleChrome";
+import {
+  articleChromeCompact,
+  articleZenAvailable,
+} from "../lib/articleChrome";
 import {
   articleBody,
   bodyParagraphs,
@@ -84,7 +87,7 @@ export default function ArticleReader({
   const translationBody = article ? joinTranslationBody(article) : "";
   const body = article ? articleBody(article, view) : "";
   const paragraphs = bodyParagraphs(body);
-  const zenAvailable = compactChrome && paragraphs.length > 0;
+  const zenAvailable = article ? articleZenAvailable(article) : false;
 
   useZenSwipe({
     enabled:
@@ -133,7 +136,7 @@ export default function ArticleReader({
     );
   }, [paragraphs.length]);
 
-  // Finished articles open in Zen; leave Zen off when it is not available.
+  // Enter Zen once the first translation page exists (also mid-stream).
   useEffect(() => {
     if (!id) {
       setZenMode(false);
