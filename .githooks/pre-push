@@ -74,7 +74,7 @@ fi
 # push source SHA to match HEAD so the gate covers the commits being pushed.
 head_sha=$(git rev-parse HEAD)
 coderabbit_needed=0
-while IFS= read -r local_ref local_sha remote_ref remote_sha; do
+	while read -r local_ref local_sha remote_ref remote_sha; do
 	[ -n "$local_sha" ] || continue
 	if [ "$local_sha" = "$GIT_NULL_OID" ]; then
 		continue
