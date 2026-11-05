@@ -1,56 +1,94 @@
 #!/bin/sh
 #
-# pre-push hook: block the push when local CI checks or Qlty fail.
+# pre-push hook: block the push when local CI checks, Qlty, or CodeRabbit fail.
 #
 # Enable it in a clone with:
 #   git config core.hooksPath .githooks
 #
-# Install the Qlty CLI once (optional; skipped when missing):
-#   curl https://qlty.sh | sh
+# Optional tools (skipped when missing):
+#   Qlty:        curl https://qlty.sh | sh
+#   CodeRabbit:  brew install --cask coderabbit && coderabbit auth login
 #
 # This is a guardrail, not a guarantee: `git push --no-verify` bypasses it.
 #
 
 set -e
 
+CODERABBIT_GATE_SEVERITY="critical"
+CODERABBIT_FINDINGS_EXIT_CODE=2
+CODERABBIT_BASE_REF="${CODERABBIT_BASE_REF:-origin/main}"
+
+# Git passes the refs that are being pushed on stdin. Read them once up front
+# so later optional tools do not race for the same stream.
+input=$(cat)
+
 echo "pre-push: running pnpm check (typecheck, lint, test, build, scan)..."
 pnpm check
 
 if ! command -v qlty >/dev/null 2>&1; then
-    echo "pre-push: qlty is not installed, skipping the quality check."
-    echo "pre-push: install it with: curl https://qlty.sh | sh"
-    exit 0
+	echo "pre-push: qlty is not installed, skipping the quality check."
+	echo "pre-push: install it with: curl https://qlty.sh | sh"
+elif [ ! -f .qlty/qlty.toml ]; then
+	echo "pre-push: .qlty/qlty.toml is missing, skipping the quality check."
+else
+	# Qlty prints a stray upgrade-check line ("Tap enter to skip...") whenever
+	# stdin is not a terminal, which is always true here. Capture the output so
+	# the exit code is kept and that one line can be dropped.
+	report=$(mktemp) || exit 1
+	set +e
+	printf '%s\n' "$input" | qlty check \
+		--trigger pre-push \
+		--upstream-from-pre-push \
+		--no-formatters \
+		--skip-errored-plugins \
+		--no-upgrade-check >"$report" 2>&1
+	status=$?
+	set -e
+	grep -v '^Tap enter to skip\.\.\.$' "$report" || true
+	rm -f "$report"
+
+	if [ "$status" -ne 0 ]; then
+		echo
+		echo "pre-push: push blocked by the Qlty quality check."
+		echo "pre-push: fix the issues above, or bypass once with: git push --no-verify"
+		exit 1
+	fi
 fi
 
-if [ ! -f .qlty/qlty.toml ]; then
-    echo "pre-push: .qlty/qlty.toml is missing, skipping the quality check."
-    exit 0
+if ! command -v coderabbit >/dev/null 2>&1; then
+	echo "pre-push: coderabbit is not installed, skipping the AI review."
+	echo "pre-push: install it with: brew install --cask coderabbit"
+	exit 0
 fi
 
-# Git passes the refs that are being pushed on stdin.
-input=$(cat)
+if ! git rev-parse --verify "$CODERABBIT_BASE_REF" >/dev/null 2>&1; then
+	echo "pre-push: base ref '$CODERABBIT_BASE_REF' is missing, skipping CodeRabbit."
+	echo "pre-push: fetch it, or set CODERABBIT_BASE_REF to another ref."
+	exit 0
+fi
 
-# Qlty prints a stray upgrade-check line ("Tap enter to skip...") whenever
-# stdin is not a terminal, which is always true here. Capture the output so
-# the exit code is kept and that one line can be dropped.
-report=$(mktemp) || exit 0
+echo "pre-push: running CodeRabbit review (gate=$CODERABBIT_GATE_SEVERITY)..."
 set +e
-printf '%s\n' "$input" | qlty check \
-    --trigger pre-push \
-    --upstream-from-pre-push \
-    --no-formatters \
-    --skip-errored-plugins \
-    --no-upgrade-check > "$report" 2>&1
-status=$?
+coderabbit review \
+	--committed \
+	--base "$CODERABBIT_BASE_REF" \
+	--gate "$CODERABBIT_GATE_SEVERITY" \
+	--agent
+coderabbit_status=$?
 set -e
-grep -v '^Tap enter to skip\.\.\.$' "$report" || true
-rm -f "$report"
 
-if [ "$status" -ne 0 ]; then
-    echo
-    echo "pre-push: push blocked by the Qlty quality check."
-    echo "pre-push: fix the issues above, or bypass once with: git push --no-verify"
-    exit 1
+if [ "$coderabbit_status" -eq "$CODERABBIT_FINDINGS_EXIT_CODE" ]; then
+	echo
+	echo "pre-push: push blocked by CodeRabbit ($CODERABBIT_GATE_SEVERITY or higher)."
+	echo "pre-push: fix the issues above, or bypass once with: git push --no-verify"
+	exit 1
+fi
+
+if [ "$coderabbit_status" -ne 0 ]; then
+	echo
+	echo "pre-push: CodeRabbit review did not finish (exit $coderabbit_status)."
+	echo "pre-push: treating auth, rate-limit, and network errors as warnings."
+	echo "pre-push: sign in with: coderabbit auth login"
 fi
 
 exit 0
