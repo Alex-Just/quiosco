@@ -15,8 +15,11 @@
 set -e
 
 CODERABBIT_GATE_SEVERITY="critical"
-CODERABBIT_FINDINGS_EXIT_CODE=2
+CODERABBIT_EXIT_SUCCESS=0
+CODERABBIT_EXIT_INCOMPLETE=1
+CODERABBIT_EXIT_FINDINGS=2
 CODERABBIT_BASE_REF="${CODERABBIT_BASE_REF:-origin/main}"
+GIT_NULL_OID="0000000000000000000000000000000000000000"
 
 # Git passes the refs that are being pushed on stdin. Read them once up front
 # so later optional tools do not race for the same stream.
@@ -67,28 +70,72 @@ if ! git rev-parse --verify "$CODERABBIT_BASE_REF" >/dev/null 2>&1; then
 	exit 0
 fi
 
+# CodeRabbit reviews the checked-out workspace only. Require every non-delete
+# push source SHA to match HEAD so the gate covers the commits being pushed.
+head_sha=$(git rev-parse HEAD)
+coderabbit_needed=0
+while IFS= read -r local_ref local_sha remote_ref remote_sha; do
+	[ -n "$local_sha" ] || continue
+	if [ "$local_sha" = "$GIT_NULL_OID" ]; then
+		continue
+	fi
+	if [ "$local_sha" != "$head_sha" ]; then
+		echo
+		echo "pre-push: push blocked: CodeRabbit can only review checked-out HEAD."
+		echo "pre-push: pushing $local_ref ($local_sha) while HEAD is $head_sha."
+		echo "pre-push: check out that ref, then push again."
+		exit 1
+	fi
+	coderabbit_needed=1
+done <<EOF
+$(printf '%s\n' "$input")
+EOF
+
+if [ "$coderabbit_needed" -eq 0 ]; then
+	echo "pre-push: no non-delete refs to review with CodeRabbit."
+	exit 0
+fi
+
 echo "pre-push: running CodeRabbit review (gate=$CODERABBIT_GATE_SEVERITY)..."
+coderabbit_report=$(mktemp) || exit 1
 set +e
 coderabbit review \
 	--committed \
 	--base "$CODERABBIT_BASE_REF" \
 	--gate "$CODERABBIT_GATE_SEVERITY" \
-	--agent
+	--agent >"$coderabbit_report" 2>&1
 coderabbit_status=$?
 set -e
+cat "$coderabbit_report"
 
-if [ "$coderabbit_status" -eq "$CODERABBIT_FINDINGS_EXIT_CODE" ]; then
+if [ "$coderabbit_status" -eq "$CODERABBIT_EXIT_FINDINGS" ]; then
+	rm -f "$coderabbit_report"
 	echo
 	echo "pre-push: push blocked by CodeRabbit ($CODERABBIT_GATE_SEVERITY or higher)."
 	echo "pre-push: fix the issues above, or bypass once with: git push --no-verify"
 	exit 1
 fi
 
-if [ "$coderabbit_status" -ne 0 ]; then
-	echo
-	echo "pre-push: CodeRabbit review did not finish (exit $coderabbit_status)."
-	echo "pre-push: treating auth, rate-limit, and network errors as warnings."
-	echo "pre-push: sign in with: coderabbit auth login"
+if [ "$coderabbit_status" -eq "$CODERABBIT_EXIT_SUCCESS" ]; then
+	rm -f "$coderabbit_report"
+	exit 0
 fi
 
-exit 0
+# Exit 1 (incomplete) and any other nonzero: block, unless the agent stream
+# reports an explicitly tolerated recoverable error.
+if grep -E '"type"[[:space:]]*:[[:space:]]*"error"' "$coderabbit_report" \
+	| grep -E '"errorType"[[:space:]]*:[[:space:]]*"(rate_limit|auth|network)"' \
+	| grep -Eq '"recoverable"[[:space:]]*:[[:space:]]*true'; then
+	rm -f "$coderabbit_report"
+	echo
+	echo "pre-push: CodeRabbit review did not finish (exit $coderabbit_status)."
+	echo "pre-push: tolerated recoverable auth, rate-limit, or network error."
+	echo "pre-push: push continues; re-run locally with: coderabbit review --committed --gate $CODERABBIT_GATE_SEVERITY"
+	exit 0
+fi
+
+rm -f "$coderabbit_report"
+echo
+echo "pre-push: push blocked by incomplete CodeRabbit review (exit $coderabbit_status)."
+echo "pre-push: fix the issue above, sign in with coderabbit auth login, or bypass once with: git push --no-verify"
+exit 1
