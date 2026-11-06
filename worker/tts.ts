@@ -47,6 +47,30 @@ function parseRate(value: unknown): number | null {
   return Math.min(TTS_RATE_MAX, Math.max(TTS_RATE_MIN, value));
 }
 
+class BodyTooLargeError extends Error {}
+
+async function readBodyWithCap(
+  request: Request,
+  maxBytes: number,
+): Promise<string> {
+  if (!request.body) return "";
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder();
+  let total = 0;
+  let text = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => undefined);
+      throw new BodyTooLargeError();
+    }
+    text += decoder.decode(value, { stream: true });
+  }
+  return text + decoder.decode();
+}
+
 async function readPayload(request: Request): Promise<TtsPayload | Response> {
   const declaredLength = request.headers.get("content-length");
   if (declaredLength !== null) {
@@ -57,12 +81,12 @@ async function readPayload(request: Request): Promise<TtsPayload | Response> {
   }
   let raw: string;
   try {
-    raw = await request.text();
-  } catch {
+    raw = await readBodyWithCap(request, MAX_TTS_BODY_BYTES);
+  } catch (error) {
+    if (error instanceof BodyTooLargeError) {
+      return jsonResponse({ error: "request too large" }, 413);
+    }
     return jsonResponse({ error: "invalid request" }, 400);
-  }
-  if (new TextEncoder().encode(raw).byteLength > MAX_TTS_BODY_BYTES) {
-    return jsonResponse({ error: "request too large" }, 413);
   }
   let data: unknown;
   try {

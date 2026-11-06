@@ -91,6 +91,23 @@ describe("handleTts", () => {
     expect(response.status).toBe(413);
   });
 
+  it("rejects a chunked oversized body while reading it", async () => {
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array(MAX_TTS_BODY_BYTES + 1));
+        controller.close();
+      },
+    });
+    const response = await handleTts(
+      new Request("https://app.example/api/tts", {
+        method: "POST",
+        body: stream,
+        duplex: "half",
+      } as RequestInit & { duplex: "half" }),
+    );
+    expect(response.status).toBe(413);
+  });
+
   it("returns audio/mpeg for Edge when synthesis succeeds", async () => {
     const synthesize = vi.fn(async () => new Uint8Array([1, 2, 3]));
     const response = await handleTts(
