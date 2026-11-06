@@ -151,6 +151,22 @@ describe("settings", () => {
     expect(loadSettings().appToken).toBe("local-token");
   });
 
+  it("ignores a remote app token even when the row includes one", () => {
+    localStorage.clear();
+    saveSettings({
+      ...DEFAULT_SETTINGS,
+      appToken: "local-token",
+      model: "old",
+    });
+    const applied = applyRemoteSettings({
+      updatedAt: Date.now() + 1000,
+      data: JSON.stringify({ appToken: "remote-token", model: "new" }),
+    });
+    expect(applied?.model).toBe("new");
+    expect(applied?.appToken).toBe("local-token");
+    expect(loadSettings().appToken).toBe("local-token");
+  });
+
   it("merges remote ttsProvider and elevenLabsVoiceId", () => {
     localStorage.clear();
     saveSettings({

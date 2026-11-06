@@ -12,9 +12,13 @@ const LOCAL_CONFIG = "wrangler.local.toml";
 const TEMPLATE_CONFIG = "wrangler.toml";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const config = existsSync(path.join(root, LOCAL_CONFIG))
-  ? LOCAL_CONFIG
-  : TEMPLATE_CONFIG;
+// CI must always use the committed template that the workflow injects into.
+// A branch could otherwise force-add the gitignored local config and change
+// the deploy target while the token is present.
+const config =
+  !process.env.CI && existsSync(path.join(root, LOCAL_CONFIG))
+    ? LOCAL_CONFIG
+    : TEMPLATE_CONFIG;
 
 const [command, ...rest] = process.argv.slice(2);
 if (!command) {

@@ -3,6 +3,7 @@ import {
   EDGE_VOICE_ALVARO,
   EDGE_VOICE_ELVIRA,
   handleTts,
+  MAX_TTS_BODY_BYTES,
   MAX_TTS_TEXT_CHARS,
 } from "./tts";
 
@@ -59,6 +60,32 @@ describe("handleTts", () => {
           provider: "edge",
           voice: EDGE_VOICE_ALVARO,
         }),
+      }),
+    );
+    expect(response.status).toBe(413);
+  });
+
+  it("rejects oversized request bodies before parsing", async () => {
+    const response = await handleTts(
+      new Request("https://app.example/api/tts", {
+        method: "POST",
+        body: JSON.stringify({
+          text: "Hola.",
+          provider: "edge",
+          voice: EDGE_VOICE_ELVIRA,
+          padding: "x".repeat(MAX_TTS_BODY_BYTES),
+        }),
+      }),
+    );
+    expect(response.status).toBe(413);
+  });
+
+  it("rejects a declared oversized body before reading it", async () => {
+    const response = await handleTts(
+      new Request("https://app.example/api/tts", {
+        method: "POST",
+        headers: { "content-length": String(MAX_TTS_BODY_BYTES + 1) },
+        body: "{}",
       }),
     );
     expect(response.status).toBe(413);

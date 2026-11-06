@@ -6,6 +6,8 @@ const FORBIDDEN = [
   "APP_TOKEN",
   "ELEVENLABS_API_KEY",
   "SENTRY_DSN",
+  "JINA_API_KEY",
+  "CLOUDFLARE_API_TOKEN",
 ];
 
 function* walk(dir) {

@@ -131,7 +131,19 @@ function parseArticleData(data: string): Article | null {
   if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
     return null;
   }
+  if (!isSafeArticleUrl((parsed as { url?: unknown }).url)) return null;
   return parsed as Article;
+}
+
+function isSafeArticleUrl(value: unknown): boolean {
+  if (value === null || value === undefined || value === "") return true;
+  if (typeof value !== "string") return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 function applyRemoteSettingsIfPresent(

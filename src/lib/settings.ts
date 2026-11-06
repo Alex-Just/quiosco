@@ -223,6 +223,9 @@ export function applyRemoteSettings(
   const fromRemote = settingsFromPartial({
     ...current,
     ...parsed,
+    // The app token is device-local by design; a sync peer must never be able
+    // to replace it through a settings row.
+    appToken: current.appToken,
   } as Partial<Settings> & { voice?: unknown; ttsRandom?: unknown });
   const next: Settings = { ...fromRemote, updatedAt: remote.updatedAt };
 

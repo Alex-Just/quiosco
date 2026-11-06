@@ -134,11 +134,40 @@ function stripDecorations(text: string): string {
 }
 
 function stripMarkdown(text: string): string {
-  return text
-    .replace(/^#{1,6}\s*/gm, "")
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
-    .trim();
+  const source = text.replace(/^#{1,6}\s*/gm, "");
+  let output = "";
+  let index = 0;
+  let nextClose = -1;
+  while (index < source.length) {
+    const open = source.indexOf("[", index);
+    if (open === -1) {
+      output += source.slice(index);
+      break;
+    }
+    const isImage = open > 0 && source[open - 1] === "!";
+    if (nextClose < open + 1) nextClose = source.indexOf("]", open + 1);
+    const close = nextClose;
+    if (close === -1) {
+      output += source.slice(index);
+      break;
+    }
+    if (source[close + 1] !== "(") {
+      // Not a link or image; keep the bracket and keep scanning.
+      output += source.slice(index, open + 1);
+      index = open + 1;
+      continue;
+    }
+    const end = source.indexOf(")", close + 2);
+    if (end === -1) {
+      output += source.slice(index);
+      break;
+    }
+    output += source.slice(index, isImage ? open - 1 : open);
+    if (!isImage) output += source.slice(open + 1, close);
+    index = end + 1;
+    nextClose = -1;
+  }
+  return output.trim();
 }
 
 function normalizeForMatch(text: string): string {

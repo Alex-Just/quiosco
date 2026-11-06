@@ -1,4 +1,8 @@
-import { FETCH_TIMEOUT_MS } from "./fetchRung";
+import {
+  FETCH_TIMEOUT_MS,
+  MAX_RESPONSE_BYTES,
+  readBodyWithCap,
+} from "./fetchRung";
 import { jsonResponse } from "./headers";
 
 const TWITTER_HOSTS = new Set([
@@ -72,6 +76,14 @@ export function mediaCountOf(media: unknown): number {
   return 0;
 }
 
+export const MAX_THREAD_POSTS = 1000;
+export const MAX_THREAD_TEXT_CHARS = 1_000_000;
+
+async function readJsonWithCap<T>(response: Response): Promise<T> {
+  const bytes = await readBodyWithCap(response, MAX_RESPONSE_BYTES);
+  return JSON.parse(new TextDecoder().decode(bytes)) as T;
+}
+
 export function assembleThread(posts: ThreadPost[]): {
   title: string;
   text: string;
@@ -95,7 +107,7 @@ export function assembleThread(posts: ThreadPost[]): {
     : "";
   return {
     title: firstLine.slice(0, 200),
-    text: blocks.join("\n\n"),
+    text: blocks.join("\n\n").slice(0, MAX_THREAD_TEXT_CHARS),
     author,
     tweetCount: posts.length,
   };
@@ -109,11 +121,17 @@ export async function fetchFxThread(
     headers: { "User-Agent": QUIOSCO_UA },
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
-  if (response.status === 404)
+  if (response.status === 404) {
+    await response.body?.cancel().catch(() => undefined);
     throw new ThreadError("post not found", { notFound: true });
-  if (!response.ok)
+  }
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined);
     throw new ThreadError(`fxtwitter status ${response.status}`);
-  const data = (await response.json()) as { code?: unknown; thread?: unknown };
+  }
+  const data = await readJsonWithCap<{ code?: unknown; thread?: unknown }>(
+    response,
+  );
   if (data.code === 404)
     throw new ThreadError("post not found", { notFound: true });
   if (
@@ -125,9 +143,11 @@ export async function fetchFxThread(
   const thread = data.thread as FxPost[];
   const shared = thread.find((post) => String(post.id) === id) ?? thread[0];
   const anchorId = String(shared?.author?.id ?? "");
-  const kept = anchorId
-    ? thread.filter((post) => String(post.author?.id) === anchorId)
-    : thread;
+  const kept = (
+    anchorId
+      ? thread.filter((post) => String(post.author?.id) === anchorId)
+      : thread
+  ).slice(0, MAX_THREAD_POSTS);
   const seen = new Set<string>();
   const posts: ThreadPost[] = [];
   for (const post of kept) {
@@ -169,11 +189,15 @@ export async function fetchSyndicatedPost(
     headers: { "User-Agent": QUIOSCO_UA },
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
-  if (response.status === 404)
+  if (response.status === 404) {
+    await response.body?.cancel().catch(() => undefined);
     throw new ThreadError("post not found", { notFound: true });
-  if (!response.ok)
+  }
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined);
     throw new ThreadError(`syndication status ${response.status}`);
-  return (await response.json()) as SyndicatedPost;
+  }
+  return readJsonWithCap<SyndicatedPost>(response);
 }
 
 export async function walkThreadUp(
@@ -182,6 +206,7 @@ export async function walkThreadUp(
 ): Promise<ThreadPost[]> {
   const seen = new Set<string>();
   const chain: SyndicatedPost[] = [];
+  let totalChars = 0;
   let currentId: string | undefined = sharedId;
   while (currentId && !seen.has(currentId) && chain.length < MAX_WALK_HOPS) {
     seen.add(currentId);
@@ -195,7 +220,9 @@ export async function walkThreadUp(
       if (chain.length === 0) throw error;
       break;
     }
+    totalChars += typeof post.text === "string" ? post.text.length : 0;
     chain.push(post);
+    if (totalChars >= MAX_THREAD_TEXT_CHARS) break;
     currentId =
       typeof post.parent?.id_str === "string" ? post.parent.id_str : undefined;
   }

@@ -9,6 +9,9 @@ export const EDGE_VOICE_ALVARO = "es-ES-AlvaroNeural";
 /** One Zen page / sentence unit; reject whole-book dumps. */
 export const MAX_TTS_TEXT_CHARS = 4000;
 
+/** Reject oversized request bodies before JSON parsing. */
+export const MAX_TTS_BODY_BYTES = 64 * 1024;
+
 /** Clamp for the client's speech rate multiplier (1 = normal). */
 export const TTS_RATE_MIN = 0.5;
 export const TTS_RATE_MAX = 2;
@@ -45,9 +48,25 @@ function parseRate(value: unknown): number | null {
 }
 
 async function readPayload(request: Request): Promise<TtsPayload | Response> {
+  const declaredLength = request.headers.get("content-length");
+  if (declaredLength !== null) {
+    const length = Number(declaredLength);
+    if (Number.isFinite(length) && length > MAX_TTS_BODY_BYTES) {
+      return jsonResponse({ error: "request too large" }, 413);
+    }
+  }
+  let raw: string;
+  try {
+    raw = await request.text();
+  } catch {
+    return jsonResponse({ error: "invalid request" }, 400);
+  }
+  if (new TextEncoder().encode(raw).byteLength > MAX_TTS_BODY_BYTES) {
+    return jsonResponse({ error: "request too large" }, 413);
+  }
   let data: unknown;
   try {
-    data = await request.json();
+    data = JSON.parse(raw);
   } catch {
     return jsonResponse({ error: "invalid request" }, 400);
   }

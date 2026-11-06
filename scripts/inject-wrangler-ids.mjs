@@ -23,11 +23,19 @@ if (!kvId || !d1Id) {
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const target = path.join(root, "wrangler.toml");
 const before = readFileSync(target, "utf8");
+if (!before.includes(KV_PLACEHOLDER) || !before.includes(D1_PLACEHOLDER)) {
+  console.error(
+    "wrangler.toml must contain both the KV and D1 zero placeholders",
+  );
+  process.exit(1);
+}
 const after = before
   .replaceAll(KV_PLACEHOLDER, kvId)
   .replaceAll(D1_PLACEHOLDER, d1Id);
-if (after === before) {
-  console.error("wrangler.toml placeholders were not found");
+if (after.includes(KV_PLACEHOLDER) || after.includes(D1_PLACEHOLDER)) {
+  console.error(
+    "wrangler.toml still contains a zero placeholder after injection",
+  );
   process.exit(1);
 }
 writeFileSync(target, after);

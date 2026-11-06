@@ -18,3 +18,7 @@ docs/superpowers/
 .idea/
 
 .playwright-cli/
+# Security audit output (generated reports and ledgers are never committed).
+security-audit/
+security-audit-skill/
+audit-reports/

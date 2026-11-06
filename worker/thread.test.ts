@@ -1,11 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   assembleThread,
+  fetchFxThread,
   handleThread,
+  MAX_THREAD_POSTS,
+  MAX_THREAD_TEXT_CHARS,
   MAX_WALK_HOPS,
   mediaCountOf,
   parseTweetStatusUrl,
   syndicationToken,
+  walkThreadUp,
 } from "./thread";
 
 describe("parseTweetStatusUrl", () => {
@@ -121,6 +125,30 @@ describe("assembleThread", () => {
 describe("handleThread", () => {
   const id = "2110631479294431539";
 
+  it("caps FxTwitter post cardinality before assembling the article", async () => {
+    const thread = Array.from({ length: MAX_THREAD_POSTS + 5 }, (_, index) =>
+      fxPost(String(index), `post ${index}`),
+    );
+    const fetchImpl = vi.fn(async () => fxResponse(thread));
+    const posts = await fetchFxThread(
+      "0",
+      fetchImpl as unknown as typeof fetch,
+    );
+    expect(posts).toHaveLength(MAX_THREAD_POSTS);
+  });
+
+  it("rejects an oversized FxTwitter response body", async () => {
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(new Uint8Array(8 * 1024 * 1024 + 1), {
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    await expect(
+      fetchFxThread("1", fetchImpl as unknown as typeof fetch),
+    ).rejects.toThrow("response too large");
+  });
+
   it("fetches the FxTwitter thread and returns the assembled article", async () => {
     const fetchImpl = vi.fn(async () =>
       fxResponse([
@@ -232,6 +260,26 @@ const syndicated = (
 
 describe("handleThread fallback", () => {
   const id = "2110631479294431539";
+
+  it("stops the syndication walk when accumulated text reaches the cap", async () => {
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify(
+            syndicated(
+              id,
+              "x".repeat(MAX_THREAD_TEXT_CHARS + 1),
+              "u1",
+              syndicated("1", "Parent.", "u1"),
+            ),
+          ),
+          { headers: { "content-type": "application/json" } },
+        ),
+    );
+    const posts = await walkThreadUp(id, fetchImpl as unknown as typeof fetch);
+    expect(posts).toHaveLength(1);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
 
   it("walks up the syndication parents when FxTwitter fails, flagged partial", async () => {
     const fetchImpl = vi.fn(async (input: unknown) => {

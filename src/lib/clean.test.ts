@@ -151,6 +151,19 @@ describe("cleanArticleText", () => {
     expect(cleaned).not.toContain("](");
   });
 
+  it("removes inline images and keeps the surrounding text", () => {
+    const paste =
+      "Antes ![Pie de foto](https://example.com/foto.jpg) después.\n\nSegundo párrafo del artículo.";
+    expect(cleanArticleText(paste)).toBe(
+      "Antes  después.\n\nSegundo párrafo del artículo.",
+    );
+  });
+
+  it("keeps unmatched bracket runs without treating them as links", () => {
+    const paste = `${"[".repeat(2_000)} texto sin enlace.\n\nSegundo párrafo del artículo.`;
+    expect(cleanArticleText(paste)).toContain("texto sin enlace.");
+  });
+
   it("is idempotent", () => {
     const once = cleanArticleText(noisyPaste, TITLE);
     expect(cleanArticleText(once, TITLE)).toBe(once);

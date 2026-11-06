@@ -80,6 +80,48 @@ describe("syncNow", () => {
     store.close();
   });
 
+  it("applies a remote article with an http(s) source URL", async () => {
+    const store = await createStore(`test-${randomUUID()}`);
+    const article = makeArticle({ url: "https://example.com/reportaje" });
+    const api = fakeApi(() => ({
+      cursor: 1,
+      articles: [
+        {
+          id: article.id,
+          updatedAt: 1,
+          deleted: false,
+          data: JSON.stringify(article),
+        },
+      ],
+      settings: null,
+    }));
+    await syncNow(store, settings, api, fakeStorage());
+    expect(await store.get(article.id)).toMatchObject({
+      url: "https://example.com/reportaje",
+    });
+    store.close();
+  });
+
+  it("ignores a remote article with an executable source URL", async () => {
+    const store = await createStore(`test-${randomUUID()}`);
+    const article = makeArticle({ url: "javascript:alert(1)" });
+    const api = fakeApi(() => ({
+      cursor: 1,
+      articles: [
+        {
+          id: article.id,
+          updatedAt: 1,
+          deleted: false,
+          data: JSON.stringify(article),
+        },
+      ],
+      settings: null,
+    }));
+    await syncNow(store, settings, api, fakeStorage());
+    expect(await store.get(article.id)).toBeUndefined();
+    store.close();
+  });
+
   it("pushes rows from before the dirty flag existed and clears them", async () => {
     const dbName = `test-${randomUUID()}`;
     const store = await createStore(dbName);

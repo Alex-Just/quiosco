@@ -76,6 +76,93 @@ describe("jina rung", () => {
     ).rejects.toThrow("invalid target");
     expect(fetchImpl).not.toHaveBeenCalled();
   });
+
+  it("does not forward the Jina key to a cross-origin redirect", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(null, {
+          status: 302,
+          headers: { Location: "https://capture.example/c" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response("<html>ok</html>", {
+          headers: { "content-type": "text/html" },
+        }),
+      );
+    await runRung(
+      "jina",
+      "https://example.com/a",
+      makeEnv({ JINA_API_KEY: "jina-secret" }),
+      fetchImpl as unknown as typeof fetch,
+    );
+    const [, secondInit] = fetchImpl.mock.calls[1] as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect(
+      (secondInit.headers as Record<string, string>).Authorization,
+    ).toBeUndefined();
+  });
+
+  it("keeps the Jina key on a same-origin https redirect", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(null, {
+          status: 307,
+          headers: { Location: "https://r.jina.ai/other" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response("<html>ok</html>", {
+          headers: { "content-type": "text/html" },
+        }),
+      );
+    await runRung(
+      "jina",
+      "https://example.com/a",
+      makeEnv({ JINA_API_KEY: "jina-secret" }),
+      fetchImpl as unknown as typeof fetch,
+    );
+    const [, secondInit] = fetchImpl.mock.calls[1] as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect((secondInit.headers as Record<string, string>).Authorization).toBe(
+      "Bearer jina-secret",
+    );
+  });
+
+  it("strips the Jina key on an https-to-http redirect", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(null, {
+          status: 302,
+          headers: { Location: "http://r.jina.ai/other" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response("<html>ok</html>", {
+          headers: { "content-type": "text/html" },
+        }),
+      );
+    await runRung(
+      "jina",
+      "https://example.com/a",
+      makeEnv({ JINA_API_KEY: "jina-secret" }),
+      fetchImpl as unknown as typeof fetch,
+    );
+    const [, secondInit] = fetchImpl.mock.calls[1] as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect(
+      (secondInit.headers as Record<string, string>).Authorization,
+    ).toBeUndefined();
+  });
 });
 
 describe("wayback rung", () => {

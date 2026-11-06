@@ -237,11 +237,12 @@ export async function fetchWithRedirects(
   maxRedirects: number = MAX_REDIRECTS,
 ): Promise<{ response: Response; finalUrl: string }> {
   let current = start;
+  let currentHeaders = headers;
   for (let hop = 0; hop <= maxRedirects; hop += 1) {
     const check = validateTargetUrl(current.toString());
     if (!check.ok) throw new RungError(`invalid hop: ${check.reason}`);
     const response = await fetchImpl(check.url.toString(), {
-      headers,
+      headers: currentHeaders,
       redirect: "manual",
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
@@ -249,12 +250,32 @@ export async function fetchWithRedirects(
       const location = response.headers.get("Location");
       if (!location) throw new RungError("redirect without location");
       await response.body?.cancel().catch(() => undefined);
-      current = new URL(location, check.url);
+      const next = new URL(location, check.url);
+      currentHeaders = headersForRedirect(currentHeaders, check.url, next);
+      current = next;
       continue;
     }
     return { response, finalUrl: check.url.toString() };
   }
   throw new RungError("too many redirects");
+}
+
+function headersForRedirect(
+  headers: Record<string, string>,
+  from: URL,
+  to: URL,
+): Record<string, string> {
+  // A redirect must not carry provider credentials to another origin or over
+  // cleartext. Keep ordinary request headers so the target still sees a
+  // consistent client; drop only the secret-bearing ones.
+  if (from.origin === to.origin && to.protocol === "https:") return headers;
+  const safe: Record<string, string> = {};
+  for (const [name, value] of Object.entries(headers)) {
+    if (!/^(?:authorization|proxy-authorization|cookie)$/i.test(name)) {
+      safe[name] = value;
+    }
+  }
+  return safe;
 }
 
 export async function readBodyWithCap(
