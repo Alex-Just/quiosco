@@ -194,6 +194,7 @@ export default function ArticleReader({
           index={zenIndex}
           total={paragraphs.length}
           onOpenMore={() => setMoreOpen(true)}
+          onDelete={actions.onDelete}
         />
       )}
       {!zenMode && <ArticlePageHeader article={article} />}

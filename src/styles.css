@@ -13,6 +13,8 @@
   --zen-progress-pad-top: 8px;
   --zen-progress-pad-bottom: 16px;
   --zen-progress-control-size: 40px;
+  /* Keep in sync with SWIPE_ACTION_WIDTH in lib/listSwipe.ts. */
+  --swipe-action-width: 88px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -341,6 +343,65 @@ button.danger {
   background: color-mix(in srgb, var(--card) 70%, var(--bg));
 }
 
+.article-row:focus-visible {
+  /* The swipe wrapper clips outlines that sit outside the row. */
+  outline-offset: -3px;
+}
+
+.article-swipe {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius);
+}
+
+.article-swipe-actions {
+  position: absolute;
+  inset: 0 0 0 auto;
+  z-index: 0;
+  display: flex;
+  width: var(--swipe-action-width);
+}
+
+.article-swipe-delete {
+  width: 100%;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--danger);
+  color: var(--accent-fg);
+  font-weight: 600;
+}
+
+.article-swipe-delete:focus-visible {
+  outline-offset: -3px;
+}
+
+.article-swipe-content {
+  position: relative;
+  z-index: 1;
+  transition:
+    transform 160ms ease,
+    border-color 120ms ease,
+    background-color 120ms ease;
+  /* Let the page scroll and pinch-zoom; horizontal moves are the row gesture. */
+  touch-action: pan-y pinch-zoom;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.article-swipe-content.dragging {
+  cursor: grabbing;
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .article-swipe-content {
+    transition: none;
+  }
+}
+
 .article-title {
   font-size: 1rem;
   font-weight: 600;
@@ -491,11 +552,16 @@ button.danger {
   transition: width 120ms ease-out;
 }
 
-.zen-progress-more {
+.zen-progress-more,
+.zen-progress-delete {
   flex: 0 0 auto;
   min-width: var(--zen-progress-control-size);
   min-height: var(--zen-progress-control-size);
   pointer-events: auto;
+}
+
+.zen-progress-delete {
+  padding: 0;
 }
 
 .zen-listen {

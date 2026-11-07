@@ -358,8 +358,10 @@ export default function BookReader({
             index={zenUnit}
             total={paneParagraphs.length}
             onOpenMore={() => setMoreOpen(true)}
+            onDelete={onDelete}
             progressLabel="Book progress"
             moreLabel="More book actions"
+            deleteLabel="Delete book"
           />
         )
       ) : (

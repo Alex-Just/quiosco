@@ -50,11 +50,25 @@ export async function deleteArticle(
   article: Article,
   navigate: NavigateFunction,
 ): Promise<void> {
-  const confirmMessage =
-    article.kind === "book" ? "Delete this book?" : "Delete this article?";
-  if (!window.confirm(confirmMessage)) return;
-  await store.remove(article.id);
+  if (!(await confirmAndRemoveArticle(store, article))) return;
   navigate("/");
+}
+
+/** Confirms and removes an article; callers decide where to go next. */
+export async function confirmAndRemoveArticle(
+  store: ArticleStore,
+  article: Article,
+): Promise<boolean> {
+  if (!window.confirm(deleteArticleConfirmMessage(article))) return false;
+  await store.remove(article.id);
+  return true;
+}
+
+/** Confirm copy shared by the reader, Zen chrome, and the list quick action. */
+export function deleteArticleConfirmMessage(
+  article: Pick<Article, "kind">,
+): string {
+  return article.kind === "book" ? "Delete this book?" : "Delete this article?";
 }
 
 export function cancelArticleTranslation(

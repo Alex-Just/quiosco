@@ -361,3 +361,26 @@ test("zen end block deletes back to the list", async ({ page }) => {
   await page.getByRole("button", { name: "Delete", exact: true }).click();
   await page.waitForURL((url) => url.pathname === "/");
 });
+
+test("zen progress delete button deletes from any page", async ({ page }) => {
+  await seedDoneArticle(page, "zen-progress-delete");
+  await page.goto("/article/zen-progress-delete");
+
+  const del = page.getByRole("button", { name: "Delete article" });
+  await expect(del).toBeVisible();
+
+  // The trash sits in the top chrome and stays available on later pages.
+  const more = page.getByRole("button", { name: "More article actions" });
+  const delBox = await del.boundingBox();
+  const moreBox = await more.boundingBox();
+  if (!delBox || !moreBox) throw new Error("missing boxes");
+  expect(delBox.x).toBeLessThan(moreBox.x);
+
+  await page.keyboard.press("ArrowDown");
+  await expect(page.getByText("2/3")).toBeVisible();
+  await expect(del).toBeVisible();
+
+  page.on("dialog", (dialog) => dialog.accept());
+  await del.click();
+  await page.waitForURL((url) => url.pathname === "/");
+});

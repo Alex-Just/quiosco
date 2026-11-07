@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { listSource } from "../lib/articleDisplayHelpers";
-import { formatDate } from "../lib/format";
+import { SwipeableArticleRow } from "../components/SwipeableArticleRow";
+import { confirmAndRemoveArticle } from "../lib/articleActions";
 import { repairGarbageTitle } from "../lib/repairGarbageTitle";
 import type { Article } from "../lib/types";
 import { useStore } from "../lib/useStore";
@@ -13,6 +13,7 @@ export default function ListPage() {
   const store = useStore();
   const [articles, setArticles] = useState<Article[]>([]);
   const [tab, setTab] = useState<Tab>("unread");
+  const [openId, setOpenId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!store) return;
@@ -47,6 +48,16 @@ export default function ListPage() {
   };
   const visible = articles.filter((article) => article.status === tab);
 
+  const deleteArticle = async (article: Article) => {
+    if (!store) return;
+    const removed = await confirmAndRemoveArticle(store, article);
+    if (!removed) return;
+    setArticles((current) =>
+      current.filter((candidate) => candidate.id !== article.id),
+    );
+    setOpenId(null);
+  };
+
   return (
     <section>
       <nav className="tabs" aria-label="Filters">
@@ -55,7 +66,10 @@ export default function ListPage() {
             key={name}
             type="button"
             className={name === tab ? "tab active" : "tab"}
-            onClick={() => setTab(name)}
+            onClick={() => {
+              setTab(name);
+              setOpenId(null);
+            }}
           >
             {name} ({counts[name]})
           </button>
@@ -68,17 +82,13 @@ export default function ListPage() {
       ) : (
         <ul className="article-list">
           {visible.map((article) => (
-            <li key={article.id}>
-              <Link className="article-row" to={`/article/${article.id}`}>
-                <span className="article-title">{article.title}</span>
-                <span className="article-meta">
-                  {listSource(article)} · {formatDate(article.createdAt)}
-                  {article.translationStatus === "error"
-                    ? " · translation failed"
-                    : ""}
-                </span>
-              </Link>
-            </li>
+            <SwipeableArticleRow
+              key={article.id}
+              article={article}
+              open={openId === article.id}
+              onOpenChange={(open) => setOpenId(open ? article.id : null)}
+              onDelete={() => void deleteArticle(article)}
+            />
           ))}
         </ul>
       )}
