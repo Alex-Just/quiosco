@@ -213,6 +213,8 @@ export function useNarration(args: {
       .catch(() => undefined);
     return () => {
       alive = false;
+      // Unmount does not run the next setup, so cancel here too.
+      importRun.current += 1;
       runRef.current += 1;
       stopNarration();
     };
