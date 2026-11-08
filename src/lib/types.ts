@@ -141,6 +141,8 @@ export interface ThreadResponse {
 /** Last position KOReader pushed for a book, read by the app (read-only). */
 export interface KosyncProgress {
   document: string;
+  /** Basename KOReader sent; `*-bilingual.epub` enables exact XPointer mapping. */
+  filename: string | null;
   /** KOReader's pagination percentage, 0..1. */
   percentage: number;
   /** Opaque CRe XPointer (EPUB) or page number (PDF). */

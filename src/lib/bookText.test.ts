@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { newArticle } from "./article";
 import {
+  bookChapterBodyStarts,
   bookChapterStarts,
   bookFlatParagraphs,
   bookSentenceUnits,
+  bookUnitStarts,
   MAX_BOOK_UNIT_CHARS,
   paragraphComplete,
   unitsByParagraph,
@@ -45,6 +47,30 @@ describe("bookFlatParagraphs", () => {
     });
     expect(bookFlatParagraphs(article)).toEqual(["Uno.", "Dos."]);
     expect(bookChapterStarts(article)).toEqual([]);
+  });
+});
+
+describe("bookChapterBodyStarts", () => {
+  it("skips the chapter title unit", () => {
+    const units = bookSentenceUnits(bookFlatParagraphs(book));
+    const starts = bookChapterStarts(book);
+    const unitStarts = bookUnitStarts(units, starts);
+    expect(bookChapterBodyStarts(units, starts, unitStarts)).toEqual([1, 5]);
+  });
+
+  it("does not skip when a chapter title produced no unit", () => {
+    const article = {
+      ...newArticle({ url: null, title: "Vacío", text: "", via: "manual" }),
+      kind: "book" as const,
+      chapters: [
+        { title: "", text: "Uno. Dos." },
+        { title: "", text: "Tres." },
+      ],
+    };
+    const units = bookSentenceUnits(bookFlatParagraphs(article));
+    const starts = bookChapterStarts(article);
+    const unitStarts = bookUnitStarts(units, starts);
+    expect(bookChapterBodyStarts(units, starts, unitStarts)).toEqual([0, 2]);
   });
 });
 

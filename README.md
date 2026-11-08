@@ -235,8 +235,10 @@ How it works:
 - With **Send document metadata** enabled, KOReader includes the EPUB
   basename, title, and authors in each push. Quiosco stores them and matches a
   local book by its import filename, falling back to title/author.
-- Opening a book asks `/api/kosync/progress`. A position at least 0.2% ahead
-  produces a "PocketBook is at N%" banner; the jump is always explicit.
+- Opening a book asks `/api/kosync/progress`. A *-bilingual.epub exported
+  by quiosco carries an XPointer that resolves to the exact chapter and
+  sentence; other EPUBs fall back to a percentage, so the prompt is offered
+  but the landing point is approximate. The jump is always explicit.
 - `kosync_progress` is only ever written by KOReader's `PUT`; the app's route
   is a read.
 
@@ -264,12 +266,17 @@ Setup:
 Caveats:
 
 - EPUB only, and progress only: no highlights, notes, or bookmarks.
-- KOReader reports a percentage of its own pagination, so the jump is
-  approximate (usually within a page or two), never the exact sentence.
+- A quiosco `*-bilingual.epub` export maps exactly by XPointer, because its
+  chapters and sentence paragraphs are generated deterministically. Any other
+  EPUB uses KOReader's page-based percentage and is approximate (usually
+  within a page or two); do not expect the exact sentence.
 - Different editions or modified files do not match. As in KOReader, a
   mismatch is silent: the lookup simply finds nothing.
-- Backward jumps are not offered, matching KOReader's default
-  `sync_backward = Disable`.
+- Percentage matches only offer forward jumps, matching KOReader's default
+  `sync_backward = Disable`. An exact bilingual match may be behind the local
+  position so a previous approximate jump can be corrected; it is still only
+  an offer, never an automatic move. Dismissals are versioned, so a mapping
+  fix can surface the corrected position once.
 - The server stores `filename`, `title`, and `authors` when KOReader sends
   them. The official server discards this metadata; quiosco needs it to link
   the book, so with **Send document metadata** off the bridge cannot match new

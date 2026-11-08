@@ -16,6 +16,7 @@ import {
 } from "../lib/articleActionHandlers";
 import type { BookFinishProgress } from "../lib/bookFinish";
 import {
+  bookChapterBodyStarts,
   bookChapterStarts,
   bookFlatParagraphs,
   bookSentenceUnits,
@@ -167,6 +168,11 @@ export default function BookReader({
   const chapterUnitStarts = useMemo(
     () => bookUnitStarts(units, chapterStarts),
     [chapterStarts, units],
+  );
+  /** First body unit of each chapter, for exact bilingual XPointer mapping. */
+  const chapterBodyStarts = useMemo(
+    () => bookChapterBodyStarts(units, chapterStarts, chapterUnitStarts),
+    [units, chapterStarts, chapterUnitStarts],
   );
 
   const {
@@ -398,6 +404,7 @@ export default function BookReader({
     article,
     units,
     localIndex: zenUnit,
+    chapterBodyStarts,
     appToken: settings.appToken,
     enabled: zenMode,
     onJump: onKosyncJump,

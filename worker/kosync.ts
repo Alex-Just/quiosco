@@ -312,6 +312,7 @@ async function findLinkedProgress(
 function lookupResponse(row: KosyncProgressRow): Record<string, unknown> {
   return {
     document: row.document,
+    filename: row.filename,
     percentage: row.percentage,
     progress: row.progress,
     device: row.device,

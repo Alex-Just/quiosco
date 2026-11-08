@@ -227,6 +227,7 @@ describe("createApi", () => {
           JSON.stringify({
             progress: {
               document: "0123456789abcdef0123456789abcdef",
+              filename: "El principito.epub",
               percentage: 0.42,
               progress: "/body/DocFragment[2]/body/p[1]/text().4",
               device: "PocketBook",

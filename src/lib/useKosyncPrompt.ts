@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { createApi } from "./api";
 import type { BookSentenceUnit } from "./bookText";
 import {
+  KOSYNC_MAPPING_VERSION,
   type KosyncDismissal,
   type KosyncPrompt,
   loadKosyncDismissal,
@@ -29,23 +30,36 @@ export interface KosyncPromptController {
 
 /**
  * Read-only KOReader progress: fetch the last position pushed for this book
- * and offer a forward jump. Never writes a position back, because KOReader's
- * EPUB position is a CRe XPointer quiosco cannot produce.
+ * and offer a jump. Never writes a position back, because KOReader's EPUB
+ * position is a CRe XPointer quiosco cannot generally produce.
  *
- * One lookup per book open. A dismissal is remembered per book and per
- * remote push, so the same position is not offered twice but a newer push is.
+ * A quiosco `*-bilingual.epub` export inside KOReader maps exactly by
+ * XPointer; other EPUBs fall back to the approximate percentage. One lookup
+ * per book open. A dismissal is remembered per book, mapping generation, and
+ * remote push, so the same position is not offered twice but a newer push or
+ * a corrected mapping is.
  */
 export function useKosyncPrompt(args: {
   article: Article;
   units: readonly BookSentenceUnit[];
   /** Current Zen sentence index; null until the saved position is restored. */
   localIndex: number | null;
+  /** First body unit of each chapter (titles excluded). */
+  chapterBodyStarts: readonly number[];
   appToken: string;
   /** Zen only: the prompt is part of the sentence reader. */
   enabled: boolean;
   onJump: (index: number) => void;
 }): KosyncPromptController {
-  const { article, units, localIndex, appToken, enabled, onJump } = args;
+  const {
+    article,
+    units,
+    localIndex,
+    chapterBodyStarts,
+    appToken,
+    enabled,
+    onJump,
+  } = args;
   const [remote, setRemote] = useState<KosyncProgress | null>(null);
   const [dismissed, setDismissed] = useState<KosyncDismissal | null>(null);
 
@@ -97,14 +111,16 @@ export function useKosyncPrompt(args: {
       offsets,
       localIndex,
       dismissed,
+      chapterBodyStarts,
     });
-  }, [enabled, localIndex, remote, offsets, dismissed]);
+  }, [enabled, localIndex, remote, offsets, dismissed, chapterBodyStarts]);
 
   const remember = useCallback(
     (value: KosyncPrompt) => {
       const dismissal = {
         document: value.document,
         updatedAt: value.updatedAt,
+        version: KOSYNC_MAPPING_VERSION,
       };
       const storage = browserStorage();
       if (storage) saveKosyncDismissal(storage, article.id, dismissal);

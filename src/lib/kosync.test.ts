@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { BookSentenceUnit } from "./bookText";
 import {
+  bilingualXPointerUnitIndex,
+  KOSYNC_MAPPING_VERSION,
   loadKosyncDismissal,
   parseKosyncProgress,
   saveKosyncDismissal,
@@ -16,8 +18,22 @@ const units: BookSentenceUnit[] = [
   { paragraphIndex: 1, text: "cccc", skipped: false },
 ];
 
+/** Two chapters with a title unit each, then two body units each. */
+const chapteredUnits: BookSentenceUnit[] = [
+  { paragraphIndex: 0, text: "Uno", skipped: false },
+  { paragraphIndex: 1, text: "Uno a", skipped: false },
+  { paragraphIndex: 1, text: "Uno b", skipped: false },
+  { paragraphIndex: 2, text: "Dos", skipped: false },
+  { paragraphIndex: 3, text: "Dos a", skipped: false },
+  { paragraphIndex: 3, text: "Dos b", skipped: false },
+];
+
+/** First body units: chapter 1 starts at 1, chapter 2 at 4. */
+const chapterBodyStarts = [1, 4];
+
 const remote = (overrides: Partial<KosyncProgress> = {}): KosyncProgress => ({
   document: "0123456789abcdef0123456789abcdef",
+  filename: null,
   percentage: 0.75,
   progress: "/body/DocFragment[2]/body/p[1]/text().4",
   device: "PocketBook",
@@ -68,8 +84,38 @@ describe("unitIndexAtPercentage", () => {
   });
 });
 
+describe("bilingualXPointerUnitIndex", () => {
+  const index = (
+    progress: string,
+    filename: string | null = "libro-bilingual.epub",
+  ) =>
+    bilingualXPointerUnitIndex({
+      progress,
+      filename,
+      chapterBodyStarts,
+      unitCount: chapteredUnits.length,
+    });
+
+  it("maps the export's chapter and p index to a body unit", () => {
+    expect(index("/body/DocFragment[2]/body/p[1]/br[1].0")).toBe(4);
+    expect(index("/body/DocFragment[2]/body/p[2]/br[1].0")).toBe(5);
+    expect(index("/body/DocFragment[1]/body/p[2]/br[1].0")).toBe(2);
+  });
+
+  it("rejects out-of-range, non-export, and non-bilingual inputs", () => {
+    expect(index("/body/DocFragment[2]/body/p[3]/br[1].0")).toBeNull();
+    expect(index("/body/DocFragment[3]/body/p[1]/br[1].0")).toBeNull();
+    expect(index("/body/DocFragment[2]/body/p[1]/text().0")).toBeNull();
+    expect(
+      index("/body/DocFragment[2]/body/p[1]/br[1].0", "libro.epub"),
+    ).toBeNull();
+    expect(index("/body/DocFragment[2]/body/p[1]/br[1].0", null)).toBeNull();
+  });
+});
+
 describe("shouldPromptKosync", () => {
   const offsets = unitOffsets(units);
+  const chapteredOffsets = unitOffsets(chapteredUnits);
 
   it("offers a forward jump to a newer position", () => {
     expect(
@@ -78,6 +124,7 @@ describe("shouldPromptKosync", () => {
         offsets,
         localIndex: 0,
         dismissed: null,
+        chapterBodyStarts: [],
       }),
     ).toMatchObject({
       index: 2,
@@ -93,6 +140,7 @@ describe("shouldPromptKosync", () => {
         offsets,
         localIndex: 1,
         dismissed: null,
+        chapterBodyStarts: [],
       }),
     ).toBeNull();
     expect(
@@ -101,6 +149,7 @@ describe("shouldPromptKosync", () => {
         offsets,
         localIndex: 2,
         dismissed: null,
+        chapterBodyStarts: [],
       }),
     ).toBeNull();
   });
@@ -112,14 +161,48 @@ describe("shouldPromptKosync", () => {
         offsets,
         localIndex: 0,
         dismissed: null,
+        chapterBodyStarts: [],
       }),
     ).toBeNull();
+  });
+
+  it("uses the exact bilingual XPointer over the percentage", () => {
+    expect(
+      shouldPromptKosync({
+        remote: remote({
+          filename: "libro-bilingual.epub",
+          percentage: 0.95,
+          progress: "/body/DocFragment[2]/body/p[1]/br[1].0",
+        }),
+        offsets: chapteredOffsets,
+        localIndex: 0,
+        dismissed: null,
+        chapterBodyStarts,
+      }),
+    ).toMatchObject({ index: 4 });
+  });
+
+  it("offers an exact bilingual correction behind the local unit", () => {
+    expect(
+      shouldPromptKosync({
+        remote: remote({
+          filename: "libro-bilingual.epub",
+          percentage: 0.65,
+          progress: "/body/DocFragment[2]/body/p[1]/br[1].0",
+        }),
+        offsets: chapteredOffsets,
+        localIndex: 5,
+        dismissed: null,
+        chapterBodyStarts,
+      }),
+    ).toMatchObject({ index: 4 });
   });
 
   it("suppresses the same remote push after dismissal", () => {
     const dismissed = {
       document: remote().document,
       updatedAt: remote().updatedAt,
+      version: KOSYNC_MAPPING_VERSION,
     };
     expect(
       shouldPromptKosync({
@@ -127,6 +210,7 @@ describe("shouldPromptKosync", () => {
         offsets,
         localIndex: 0,
         dismissed,
+        chapterBodyStarts: [],
       }),
     ).toBeNull();
     expect(
@@ -135,6 +219,7 @@ describe("shouldPromptKosync", () => {
         offsets,
         localIndex: 0,
         dismissed,
+        chapterBodyStarts: [],
       }),
     ).not.toBeNull();
     expect(
@@ -143,6 +228,23 @@ describe("shouldPromptKosync", () => {
         offsets,
         localIndex: 0,
         dismissed,
+        chapterBodyStarts: [],
+      }),
+    ).not.toBeNull();
+  });
+
+  it("ignores a dismissal from an older mapping version", () => {
+    expect(
+      shouldPromptKosync({
+        remote: remote(),
+        offsets,
+        localIndex: 0,
+        dismissed: {
+          document: remote().document,
+          updatedAt: remote().updatedAt,
+          version: KOSYNC_MAPPING_VERSION - 1,
+        },
+        chapterBodyStarts: [],
       }),
     ).not.toBeNull();
   });
@@ -153,6 +255,7 @@ describe("parseKosyncProgress", () => {
     expect(
       parseKosyncProgress({
         document: remote().document,
+        filename: "libro-bilingual.epub",
         percentage: 1.4,
         progress: "56",
         device: " PocketBook ",
@@ -162,6 +265,7 @@ describe("parseKosyncProgress", () => {
       }),
     ).toMatchObject({
       document: remote().document,
+      filename: "libro-bilingual.epub",
       percentage: 1,
       device: "PocketBook",
       title: "El principito",
@@ -191,14 +295,28 @@ describe("kosync dismissal storage", () => {
     saveKosyncDismissal(store, "book-1", {
       document: remote().document,
       updatedAt: remote().updatedAt,
+      version: KOSYNC_MAPPING_VERSION,
     });
     expect(loadKosyncDismissal(store, "book-1")).toEqual({
       document: remote().document,
       updatedAt: remote().updatedAt,
+      version: KOSYNC_MAPPING_VERSION,
     });
 
     store.setItem("quiosco.kosync.dismissed.book-2", "{");
     expect(loadKosyncDismissal(store, "book-2")).toBeNull();
     expect(loadKosyncDismissal(store, "missing")).toBeNull();
+  });
+
+  it("loads a legacy dismissal as version 0 so the new mapping can prompt", () => {
+    const store = storage();
+    store.setItem(
+      "quiosco.kosync.dismissed.book-3",
+      JSON.stringify({
+        document: remote().document,
+        updatedAt: remote().updatedAt,
+      }),
+    );
+    expect(loadKosyncDismissal(store, "book-3")?.version).toBe(0);
   });
 });

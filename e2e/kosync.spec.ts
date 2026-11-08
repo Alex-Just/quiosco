@@ -60,7 +60,12 @@ function buildEpub(): Uint8Array {
 
 function pushProgress(
   request: APIRequestContext,
-  percentage: number,
+  args: {
+    filename: string;
+    progress: string;
+    percentage: number;
+    document?: string;
+  },
 ): Promise<import("@playwright/test").APIResponse> {
   return request.put("/kosync/syncs/progress", {
     headers: {
@@ -68,12 +73,12 @@ function pushProgress(
       "x-auth-key": AUTH_KEY,
     },
     data: {
-      document: DOCUMENT,
-      progress: "/body/DocFragment[2]/body/p[1]/text().0",
-      percentage,
+      document: args.document ?? DOCUMENT,
+      progress: args.progress,
+      percentage: args.percentage,
       device: "PocketBook",
       metadata: {
-        filename: "qa-kosync.epub",
+        filename: args.filename,
         title: "QA KOReader",
         authors: "QA",
       },
@@ -102,7 +107,15 @@ test("KOReader position offers, applies, and dismisses", async ({
     await page.waitForURL("**/article/**");
     const articleUrl = page.url();
 
-    expect((await pushProgress(request, 0.75)).ok()).toBe(true);
+    expect(
+      (
+        await pushProgress(request, {
+          filename: "qa-kosync.epub",
+          progress: "/body/DocFragment[2]/body/p[1]/text().0",
+          percentage: 0.75,
+        })
+      ).ok(),
+    ).toBe(true);
     await page.goto(articleUrl);
     const banner = page.locator(".kosync-prompt");
     await expect(banner).toBeVisible();
@@ -123,7 +136,15 @@ test("KOReader position offers, applies, and dismisses", async ({
 
     // A newer push is offered again, and "Not now" silences it.
     await page.waitForTimeout(1100);
-    expect((await pushProgress(request, 0.95)).ok()).toBe(true);
+    expect(
+      (
+        await pushProgress(request, {
+          filename: "qa-kosync.epub",
+          progress: "/body/DocFragment[2]/body/p[1]/text().0",
+          percentage: 0.95,
+        })
+      ).ok(),
+    ).toBe(true);
     await page.reload();
     await expect(banner).toBeVisible();
     await expect(banner).toContainText("PocketBook is at 95% in this book.");
@@ -131,6 +152,51 @@ test("KOReader position offers, applies, and dismisses", async ({
     await expect(banner).toHaveCount(0);
     await page.reload();
     await expect(banner).toHaveCount(0);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a quiosco bilingual export maps its XPointer exactly", async ({
+  page,
+  request,
+}) => {
+  const dir = await mkdtemp(join(tmpdir(), "quiosco-kosync-qa-"));
+  const file = join(dir, "qa-kosync-bilingual.epub");
+  await writeFile(file, buildEpub());
+  try {
+    await page.goto("/settings");
+    await page.getByLabel("App token").fill("e2e-token");
+    await page.getByLabel("Translate automatically after saving").uncheck();
+    await page.getByRole("button", { name: "Save" }).click();
+
+    await page.goto("/add");
+    await page.getByRole("tab", { name: "Book" }).click();
+    await page.getByLabel("EPUB file").setInputFiles(file);
+    await expect(page.getByText("2 chapters ·")).toBeVisible();
+    await page.getByRole("button", { name: "Save" }).click();
+    await page.waitForURL("**/article/**");
+    const articleUrl = page.url();
+
+    // Percentage 95% would land on the last screen; the export XPointer's
+    // DocFragment[2]/p[1] must win and land on chapter two's first sentence.
+    expect(
+      (
+        await pushProgress(request, {
+          document: "b".repeat(32),
+          filename: "qa-kosync-bilingual.epub",
+          progress: "/body/DocFragment[2]/body/p[1]/br[1].0",
+          percentage: 0.95,
+        })
+      ).ok(),
+    ).toBe(true);
+
+    await page.goto(articleUrl);
+    await expect(page.locator(".kosync-prompt")).toBeVisible();
+    await page.getByRole("button", { name: "Jump there" }).click();
+    await expect(page.locator(".zen-pane .para")).toContainText(
+      "Primera frase del capítulo dos",
+    );
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

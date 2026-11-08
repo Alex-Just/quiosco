@@ -119,6 +119,24 @@ export function bookSentenceUnits(
   return byParagraph;
 }
 
+/**
+ * First body unit of each chapter, with the chapter title excluded. The title
+ * occupies `chapterUnitStarts[i]` when it produced a unit; an empty title
+ * produces none, so the first body unit stays put.
+ */
+export function bookChapterBodyStarts(
+  units: readonly BookSentenceUnit[],
+  chapterStarts: readonly number[],
+  chapterUnitStarts: readonly number[],
+): number[] {
+  return chapterUnitStarts.map((firstUnit, index) => {
+    const titleParagraph = chapterStarts[index];
+    return units[firstUnit]?.paragraphIndex === titleParagraph
+      ? firstUnit + 1
+      : firstUnit;
+  });
+}
+
 /** True when every non-skipped unit of the paragraph has a translation. */
 export function paragraphComplete(
   units: readonly BookSentenceUnit[],

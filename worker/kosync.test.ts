@@ -467,9 +467,10 @@ describe("handleKosyncLookup", () => {
     const env = await envWithRow(fakeDb());
     const response = await lookup(env, "filename=el%20PRINCIPITO.epub");
     const body = (await response.json()) as {
-      progress: { document: string } | null;
+      progress: { document: string; filename: string | null } | null;
     };
     expect(body.progress?.document).toBe("0123456789abcdef0123456789abcdef");
+    expect(body.progress?.filename).toBe("El principito.epub");
   });
 
   it("falls back to title and author, then to a unique title", async () => {
