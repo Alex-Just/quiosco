@@ -76,6 +76,8 @@ export function useNarration(args: {
   const endedRef = useRef(args.onEnded);
   /** Invalidates the handlers of a segment that a newer action replaced. */
   const runRef = useRef(0);
+  /** Cancels a pack import once the book changes or another import starts. */
+  const importRun = useRef(0);
   startsRef.current = chapterUnitStarts;
   endedRef.current = args.onEnded;
 
@@ -149,22 +151,28 @@ export function useNarration(args: {
 
   const load = useCallback(
     (file: File) => {
+      importRun.current += 1;
+      const run = importRun.current;
+      const current = () => importRun.current === run;
       setImporting(true);
       setError(null);
       void (async () => {
         try {
           const next = await readNarrationPack(file);
+          if (!current()) return;
           if (!fitsBook(next, startsRef.current.length)) {
             setError(PACK_MISMATCH);
             return;
           }
           await store.putNarration(bookId, next);
+          if (!current()) return;
           packRef.current = next;
           setPack(next);
         } catch (importError) {
+          if (!current()) return;
           setError(importErrorMessage(importError));
         } finally {
-          setImporting(false);
+          if (current()) setImporting(false);
         }
       })();
     },
@@ -172,19 +180,24 @@ export function useNarration(args: {
   );
 
   const remove = useCallback(() => {
+    importRun.current += 1;
+    setImporting(false);
     stop();
     packRef.current = null;
     setPack(null);
     void store.removeNarration(bookId);
   }, [store, bookId, stop]);
 
-  // One pack per book: leaving the book ends its playback and its import.
+  // One pack per book: leaving the book ends its playback and drops any
+  // import still running for the book that was open.
   useEffect(() => {
+    importRun.current += 1;
     let alive = true;
     packRef.current = null;
     speakingRef.current = null;
     setPack(null);
     setSpeakingUnit(null);
+    setImporting(false);
     setError(null);
     void store
       .getNarration(bookId)
