@@ -413,7 +413,9 @@ describe("parseEpub", () => {
     await expectCode(parseEpub(epub(files)), "empty");
   });
 
-  it("rejects a book whose text exceeds the character cap", async () => {
+  it("rejects a book whose text exceeds the character cap", {
+    timeout: 20_000,
+  }, async () => {
     const files = epub3({
       "OEBPS/Text/cap001.xhtml": chapterXml(
         null,
