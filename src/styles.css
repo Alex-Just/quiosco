@@ -683,6 +683,36 @@ button.danger {
   font-size: 0.85rem;
 }
 
+/* Read-only KOReader position offer; it never moves the page on its own. */
+.kosync-prompt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 12px;
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+}
+
+.kosync-prompt p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.kosync-prompt-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.kosync-prompt-actions button {
+  min-height: var(--tap);
+  padding: 0 12px;
+  font-size: 0.85rem;
+}
+
 .sentence {
   display: inline;
   min-height: 0;

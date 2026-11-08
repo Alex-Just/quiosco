@@ -4,9 +4,11 @@ import {
   parseTranslateTextPayload,
   runTranslateStream,
 } from "./apiStream";
+import { parseKosyncProgress } from "./kosync";
 import type {
   DecideRequest,
   DecideResponse,
+  KosyncProgress,
   Rung,
   RungResponse,
   SyncRequest,
@@ -29,12 +31,18 @@ export interface ApiClient {
   health(): Promise<boolean>;
   decide(request: DecideRequest, signal?: AbortSignal): Promise<DecideResponse>;
   sync(request: SyncRequest): Promise<SyncResponse>;
+  kosyncProgress(
+    book: { filename?: string | null; title: string; author?: string | null },
+    signal?: AbortSignal,
+  ): Promise<KosyncProgress | null>;
 }
 
 // Client-side cutoff, slightly above the worker's own upstream timeouts (90s
 // translate, 20s per fetch hop) so its clean error responses win when it is
 // alive. Without this, a dropped connection hangs the fetch forever.
 const CLIENT_TIMEOUT_MS = 130_000;
+/** A progress lookup is a single indexed read; do not let it hang a book open. */
+const KOSYNC_LOOKUP_TIMEOUT_MS = 15_000;
 
 const THREAD_FETCH_FAILED = "Could not fetch the thread right now. Try again.";
 
@@ -55,6 +63,11 @@ async function ensureOk(response: Response): Promise<Response> {
 
 function requestTimeoutSignal(userSignal?: AbortSignal): AbortSignal {
   const timeout = AbortSignal.timeout(CLIENT_TIMEOUT_MS);
+  return userSignal ? AbortSignal.any([timeout, userSignal]) : timeout;
+}
+
+function kosyncTimeoutSignal(userSignal?: AbortSignal): AbortSignal {
+  const timeout = AbortSignal.timeout(KOSYNC_LOOKUP_TIMEOUT_MS);
   return userSignal ? AbortSignal.any([timeout, userSignal]) : timeout;
 }
 
@@ -188,6 +201,21 @@ export function createApi(options: {
         }),
       );
       return (await response.json()) as SyncResponse;
+    },
+
+    async kosyncProgress(book, signal) {
+      const params = new URLSearchParams();
+      if (book.filename) params.set("filename", book.filename);
+      if (book.title) params.set("title", book.title);
+      if (book.author) params.set("author", book.author);
+      const response = await ensureOk(
+        await fetchFn(`/api/kosync/progress?${params.toString()}`, {
+          headers: authHeaders,
+          signal: kosyncTimeoutSignal(signal),
+        }),
+      );
+      const data = (await response.json()) as { progress?: unknown };
+      return parseKosyncProgress(data.progress);
     },
   };
 }

@@ -28,6 +28,14 @@ type ArticleActionsSheetProps = {
   /** Why the finish entry cannot be used (missing app token). */
   finishExportHint?: string | null;
   exporting?: boolean;
+  /** Books only: a narration pack is stored for this book. */
+  narrationReady?: boolean;
+  /** Books only: a pack import is running. */
+  narrationImporting?: boolean;
+  /** Books only: hand a picked pack zip to the importer. */
+  onImportNarration?: (file: File) => void;
+  /** Books only: drop the stored pack. */
+  onRemoveNarration?: () => void;
   onClose: () => void;
   onToggleRead: () => void;
   onToggleArchive: () => void;
@@ -55,6 +63,10 @@ export function ArticleActionsSheet({
   finishRunning,
   finishExportHint,
   exporting,
+  narrationReady = false,
+  narrationImporting = false,
+  onImportNarration,
+  onRemoveNarration,
   onClose,
   onToggleRead,
   onToggleArchive,
@@ -130,6 +142,37 @@ export function ArticleActionsSheet({
                 <p className="sheet-hint muted">{translationHint}</p>
               )}
             </>
+          )}
+          {isBook && onImportNarration && (
+            <label className="button">
+              {narrationImporting
+                ? "Importing audiobook…"
+                : narrationReady
+                  ? "Replace audiobook"
+                  : "Add audiobook"}
+              <input
+                type="file"
+                accept=".zip,application/zip"
+                hidden
+                disabled={narrationImporting}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  // Let the same file be picked again after a failure.
+                  event.target.value = "";
+                  if (!file) return;
+                  onImportNarration(file);
+                  onClose();
+                }}
+              />
+            </label>
+          )}
+          {isBook && narrationReady && onRemoveNarration && (
+            <button
+              type="button"
+              onClick={() => runAndClose(onRemoveNarration)}
+            >
+              Remove audiobook
+            </button>
           )}
           {isBook && onExportEpub && (
             <button

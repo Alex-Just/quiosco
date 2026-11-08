@@ -4,6 +4,7 @@ import { handleDecide } from "./decide";
 import type { Env } from "./env";
 import { handleFetchRung } from "./fetchRung";
 import { applySecurityHeaders, jsonResponse } from "./headers";
+import { handleKosync, handleKosyncLookup } from "./kosync";
 import { workerSentryOptions } from "./sentry";
 import { handleSync } from "./sync";
 import { handleThread } from "./thread";
@@ -29,6 +30,14 @@ export async function handleRequest(
     return applySecurityHeaders(
       Response.redirect(new URL("/share", url.origin).toString(), 303),
     );
+  }
+
+  if (url.pathname === "/kosync" || url.pathname.startsWith("/kosync/")) {
+    // KOReader speaks its own auth (x-auth-user/x-auth-key) and must reach
+    // this route without the app bearer token.
+    return applySecurityHeaders(await handleKosync(request, env, url), {
+      noStore: true,
+    });
   }
 
   if (url.pathname.startsWith("/api/")) {
@@ -72,6 +81,11 @@ async function handleApi(
     response = await handleDecide(request, env);
   } else if (url.pathname === "/api/sync" && request.method === "POST") {
     response = await handleSync(request, env);
+  } else if (
+    url.pathname === "/api/kosync/progress" &&
+    request.method === "GET"
+  ) {
+    response = await handleKosyncLookup(request, env);
   } else {
     response = jsonResponse({ error: "not found" }, 404);
   }

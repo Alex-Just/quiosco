@@ -45,6 +45,6 @@ const shareRoute = new Route(
 registerRoute(shareRoute);
 registerRoute(
   new NavigationRoute(createHandlerBoundToURL("index.html"), {
-    denylist: [/^\/api\//],
+    denylist: [/^\/api\//, /^\/kosync(?:\/|$)/],
   }),
 );

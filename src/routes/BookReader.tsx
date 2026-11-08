@@ -7,6 +7,7 @@ import { ArticleZenPane } from "../components/ArticleZenPane";
 import { ArticleZenProgress } from "../components/ArticleZenProgress";
 import { BookChapterSheet } from "../components/BookChapterSheet";
 import { BookText } from "../components/BookText";
+import { KosyncPromptBanner } from "../components/KosyncPrompt";
 import { SentenceSheet } from "../components/SentenceSheet";
 import {
   makeOnDelete,
@@ -18,6 +19,7 @@ import {
   bookChapterStarts,
   bookFlatParagraphs,
   bookSentenceUnits,
+  bookUnitStarts,
   paragraphComplete,
   unitsByParagraph,
 } from "../lib/bookText";
@@ -28,6 +30,8 @@ import type { Article } from "../lib/types";
 import { useArticleScroll } from "../lib/useArticleScroll";
 import { type BookExportUiStatus, useBookExport } from "../lib/useBookExport";
 import { useBookTranslation } from "../lib/useBookTranslation";
+import { useKosyncPrompt } from "../lib/useKosyncPrompt";
+import { useNarration } from "../lib/useNarration";
 import { useSentenceSpeech } from "../lib/useSentenceSpeech";
 import { useZenPosition } from "../lib/useZenPosition";
 import { useZenSwipe } from "../lib/useZenSwipe";
@@ -161,11 +165,7 @@ export default function BookReader({
   const paneParagraphs = useMemo(() => units.map((unit) => unit.text), [units]);
   /** Zen screen index of each chapter's title paragraph. */
   const chapterUnitStarts = useMemo(
-    () =>
-      chapterStarts.map((start) => {
-        const index = units.findIndex((unit) => unit.paragraphIndex >= start);
-        return index === -1 ? 0 : index;
-      }),
+    () => bookUnitStarts(units, chapterStarts),
     [chapterStarts, units],
   );
 
@@ -181,6 +181,47 @@ export default function BookReader({
     onCopySentence,
     stopSpeechForViewChange,
   } = useSentenceSpeech(translationMode ? "translation" : "original");
+
+  /**
+   * Recorded narration for this book, when a pack is stored. It replaces
+   * synthesized speech for the original sentence on screen; the translation
+   * view and articles keep using TTS.
+   */
+  const narration = useNarration({
+    store,
+    bookId: article.id,
+    chapterUnitStarts,
+    onEnded: (unit) => {
+      if (!autoListen) return;
+      setZenUnit((index) => {
+        if (index == null) return index;
+        const next = unit + 1;
+        return next < paneParagraphs.length ? next : index;
+      });
+    },
+  });
+  const narrated = narration.ready;
+  const { stop: stopNarration, toggle: toggleNarration, canPlay } = narration;
+
+  // Import progress and failure surface as the reader's toast; the pack is
+  // hundreds of megabytes, so silence would look like a dead button. A stored
+  // pack that no longer fits the book reports here too.
+  const importingNarration = useRef(false);
+  useEffect(() => {
+    if (narration.importing) {
+      importingNarration.current = true;
+      setHint("Importing audiobook…");
+      return;
+    }
+    if (narration.error) {
+      importingNarration.current = false;
+      setHint(narration.error);
+      return;
+    }
+    if (!importingNarration.current) return;
+    importingNarration.current = false;
+    setHint("Audiobook ready.");
+  }, [narration.importing, narration.error, setHint]);
 
   const bookExport = useBookExport({
     store,
@@ -231,6 +272,7 @@ export default function BookReader({
     // Zen and regular mode index speech differently (sentence unit vs flat
     // paragraph): stop the utterance before the highlight can land on an
     // unrelated paragraph.
+    narration.stop();
     stopSpeechForViewChange();
     setZenMode((open) => !open);
   };
@@ -251,6 +293,7 @@ export default function BookReader({
   });
 
   const onToggleTranslationMode = () => {
+    narration.stop();
     stopSpeechForViewChange();
     setTranslationMode((on) => !on);
   };
@@ -303,13 +346,19 @@ export default function BookReader({
   }, []);
 
   // Speech follows the screen: turning the page stops whatever is speaking,
-  // and with Auto on it starts the new sentence (same flow as articles).
+  // and with Auto on it starts the new sentence (same flow as articles). A
+  // narrated book advances through its own audio instead of TTS.
   const prevZenUnit = useRef(zenUnit);
   useEffect(() => {
     if (prevZenUnit.current === zenUnit) return;
     prevZenUnit.current = zenUnit;
+    stopNarration();
     stopSpeechForViewChange();
     if (!autoListen || !zenMode || zenUnit == null) return;
+    if (narrated && canPlay(zenUnit)) {
+      toggleNarration(zenUnit);
+      return;
+    }
     const text = units[zenUnit]?.text ?? "";
     if (!text) return;
     onListenZenOriginal(zenUnit, text);
@@ -318,6 +367,10 @@ export default function BookReader({
     autoListen,
     zenMode,
     units,
+    narrated,
+    canPlay,
+    stopNarration,
+    toggleNarration,
     stopSpeechForViewChange,
     onListenZenOriginal,
   ]);
@@ -333,6 +386,21 @@ export default function BookReader({
     view: "original",
     zenIndex: zenUnit,
     onRestored: onZenRestored,
+  });
+
+  const onKosyncJump = useCallback((index: number) => {
+    setZenMode(true);
+    setZenUnit(index);
+  }, []);
+  // Read-only: the PocketBook (or any KOReader) may have a further position.
+  // The hook offers it; it never writes one back.
+  const kosync = useKosyncPrompt({
+    article,
+    units,
+    localIndex: zenUnit,
+    appToken: settings.appToken,
+    enabled: zenMode,
+    onJump: onKosyncJump,
   });
 
   const onSelectChapter = (index: number) => {
@@ -373,6 +441,14 @@ export default function BookReader({
           moreLabel="More book actions"
         />
       )}
+      {kosync.prompt && (
+        <KosyncPromptBanner
+          device={kosync.prompt.device}
+          percentage={kosync.prompt.percentage}
+          onJump={kosync.jump}
+          onDismiss={kosync.dismiss}
+        />
+      )}
       {zenMode ? (
         zenUnit == null ? (
           <p className="muted">Loading…</p>
@@ -388,11 +464,21 @@ export default function BookReader({
             />
             {statusText && <p className="muted zen-status">{statusText}</p>}
             <ArticleZenListenButton
-              listening={isZenOriginalSpeaking(zenUnit)}
+              listening={
+                canPlay(zenUnit)
+                  ? narration.speakingUnit === zenUnit
+                  : isZenOriginalSpeaking(zenUnit)
+              }
               autoListen={autoListen}
               disabled={zenListenText.length === 0}
               copied={pageCopied}
-              onClick={() => onListenZenOriginal(zenUnit, zenListenText)}
+              onClick={() => {
+                if (canPlay(zenUnit)) {
+                  toggleNarration(zenUnit);
+                  return;
+                }
+                onListenZenOriginal(zenUnit, zenListenText);
+              }}
               onCopy={() =>
                 void copyZenPageOriginal(zenListenText, setPageCopied, setHint)
               }
@@ -435,6 +521,10 @@ export default function BookReader({
           onCancelFinish={() => bookExport.cancelFinish()}
           finishRunning={bookExport.uiStatus === "working"}
           exporting={bookExport.uiStatus === "exporting"}
+          narrationReady={narrated}
+          narrationImporting={narration.importing}
+          onImportNarration={narration.load}
+          onRemoveNarration={narration.remove}
           // In Zen the translation entry's hint already explains both
           // disabled items; in regular mode this entry carries it.
           finishExportHint={canTranslate || zenMode ? null : MISSING_TOKEN_HINT}
@@ -457,9 +547,20 @@ export default function BookReader({
       {menu && (
         <SentenceSheet
           menu={menu}
-          isSpeaking={isSpeaking}
+          isSpeaking={(paragraph, sentenceIndex) =>
+            zenMode && canPlay(paragraph)
+              ? narration.speakingUnit === paragraph
+              : isSpeaking(paragraph, sentenceIndex)
+          }
           onClose={() => setMenu(null)}
-          onListen={onListen}
+          onListen={() => {
+            if (zenMode && menu && canPlay(menu.paragraph)) {
+              toggleNarration(menu.paragraph);
+              setMenu(null);
+              return;
+            }
+            onListen();
+          }}
           onCopySentence={onCopySentence}
         />
       )}

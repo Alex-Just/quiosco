@@ -125,6 +125,24 @@ describe("router", () => {
     expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
   });
 
+  it("routes /kosync without the app bearer token", async () => {
+    const response = await handleRequest(
+      new Request("https://app.example/kosync/healthcheck"),
+      makeEnv(),
+    );
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ state: "OK" });
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+  });
+
+  it("requires the app token for the kosync lookup", async () => {
+    const response = await handleRequest(
+      new Request("https://app.example/api/kosync/progress?title=Book"),
+      makeEnv(),
+    );
+    expect(response.status).toBe(401);
+  });
+
   it("routes GET /api/thread to the thread handler", async () => {
     vi.stubGlobal(
       "fetch",

@@ -74,6 +74,18 @@ describe("newBook", () => {
     expect(book.chapters).toBe(chapters);
     expect(book.author).toBeNull();
     expect(book.bookLanguage).toBeNull();
+    expect(book.sourceFilename).toBeNull();
+  });
+
+  it("keeps the EPUB basename for KOReader progress matching", () => {
+    const book = newBook({
+      title: "El principito",
+      author: null,
+      language: null,
+      chapters,
+      sourceFilename: "  El principito.epub  ",
+    });
+    expect(book.sourceFilename).toBe("El principito.epub");
   });
 
   it("falls back to Untitled for an empty title", () => {

@@ -22,3 +22,7 @@ docs/superpowers/
 security-audit/
 security-audit-skill/
 audit-reports/
+
+# Generated narration packs and their transcription cache (audiobook alignment).
+*.narration.zip
+*.narration-transcripts/

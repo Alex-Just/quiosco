@@ -13,7 +13,8 @@ read/unread/archived list with copy-to-clipboard.
   Readability), 5-rung fetch ladder orchestration, IndexedDB storage, UI.
 - **Cloudflare Worker** — serves the built PWA and a thin authenticated proxy:
   `/api/fetch` (rung passthrough), `/api/translate` (Zen), `/api/sync`
-  (multi-device sync), `/api/health`.
+  (multi-device sync), `/api/health`, plus the read-only KOReader progress
+  endpoint at `/kosync`.
 - **Storage** — IndexedDB on each device (offline-first), synced across your
   devices through Cloudflare D1 (`/api/sync`). See "Sync (D1)" below.
 
@@ -24,7 +25,9 @@ device and keeps its chapters as text; the `.epub` file itself is not stored.
 
 Books share the library, actions, and read/unread/archived states with
 articles, but they are **local-only**: they never enter `/api/sync`, and
-reading position stays local, exactly as it does for articles.
+reading position stays local, exactly as it does for articles. An optional
+read-only bridge can pull the position KOReader pushes from a PocketBook or
+other e-reader; see "KOReader progress sync" below.
 
 A book opens in Zen. Translation mode is a Zen-only toggle: a book with no
 translations yet starts in the original text, and one that already has
@@ -38,6 +41,47 @@ flags on the same screen, as in articles.
 Every translated sentence is cached permanently, keyed by content — the cache
 is shared across books, so a sentence is never translated twice. The importer
 adds a single runtime dependency: `fflate` (EPUB unzip).
+
+### Narrated books (audiobook instead of TTS)
+
+A book can play its recorded audiobook instead of synthesized speech: tap a
+sentence and you hear the narrator read that exact sentence. This is forced
+alignment, done once offline.
+
+**Build a pack.** You need `ffmpeg` on `PATH` and [uv](https://docs.astral.sh/uv/)
+for transcription:
+
+```bash
+pnpm audiobook --epub "Harry Potter y el caliz de fuego.epub" --audio ~/audiobook/4
+```
+
+The tool parses the EPUB with the app's own importer and sentence splitter, so
+unit indices match what the reader renders; transcribes each track with
+mlx-whisper (word timestamps, cached per chapter, so an interrupted run
+resumes); aligns the transcript to the book text with a Needleman–Wunsch pass;
+and writes `<epub name>.narration.zip` (manifest + one stored audio entry per
+chapter).
+
+- Audiobooks rarely contain the cover, title page, or author bio that an EPUB
+  spine does. When the track count and the chapter count differ the tool prints
+  the chapter list with a suggested offset; pass `--skip <n>` to confirm which
+  chapter track 1 narrates.
+- Each chapter prints its match percentage. Below 80% the track is probably
+  not that chapter, or the ebook is a different edition — check it before
+  importing.
+- Audio is transcoded to mono Opus at 32 kbps by default (~320 MB for 22 h).
+  `--copy` keeps the originals instead; `--bitrate` tunes the trade-off.
+- `--prompt "Harry Potter, Hogwarts, …"` gives the recognizer character names
+  it would otherwise guess at.
+
+**Import.** In the book, **More → Add audiobook** and pick the `.zip`. The pack
+is stored on the device (IndexedDB), never synced, and removed with the book.
+From then on the Zen **Listen** control and a sentence's **Listen** action play
+the recording; chapters the audiobook does not cover (front matter) keep using
+TTS.
+
+Only the original text can be narrated — the recording does not contain the
+translation, so translated screens still use TTS.
 
 ## Diagnostics (local log + optional Sentry)
 
@@ -118,8 +162,10 @@ hook.
    GitHub secret if you use CI deploy).
 3. **D1**: `pnpm exec wrangler d1 create quiosco` — paste `database_id` into
    `wrangler.local.toml` and the `QUIOSCO_D1_DATABASE_ID` GitHub secret. Apply
-   the schema:
-   `pnpm exec wrangler d1 execute quiosco --remote --file worker/migrations/0001_sync.sql`.
+   both schemas (the wrapper picks up `wrangler.local.toml`):
+   `node scripts/wrangler-run.mjs d1 execute quiosco --remote --file worker/migrations/0001_sync.sql`
+   and
+   `node scripts/wrangler-run.mjs d1 execute quiosco --remote --file worker/migrations/0002_kosync.sql`.
 4. **Secrets**:
    `pnpm exec wrangler secret put OPENCODE_API_KEY` and
    `pnpm exec wrangler secret put APP_TOKEN` (generate: `openssl rand -hex 32`).
@@ -128,14 +174,17 @@ hook.
    Recommended: `pnpm exec wrangler secret put JINA_API_KEY` (free key from
    jina.ai) — Cloudflare's shared egress IPs are rate-limited on the reader's
    anonymous tier, so the `jina` fallback rung returns 429 without it.
+   Optional KOReader progress sync: `pnpm exec wrangler secret put KOSYNC_USER`
+   and `pnpm exec wrangler secret put KOSYNC_KEY` (see below).
    Optional Worker Sentry: `pnpm exec wrangler secret put SENTRY_DSN` with the
    DSN from a dedicated Workers project (not the React `VITE_SENTRY_DSN`).
 5. **Deploy**: `pnpm deploy` (or push to `main` — CI deploys after checks pass).
 6. **Verify**: `GET /` returns the CSP header; `GET /api/health` returns 401
    without the token.
-7. **Rate limit**: add a Cloudflare rate-limiting rule on `/api/*`. One shared
-   `APP_TOKEN` gates the fetch proxy, Zen spend, and sync — treat it as the
-   crown jewel.
+7. **Rate limit**: add Cloudflare rate-limiting rules on `/api/*` and
+   `/kosync/*`. One shared `APP_TOKEN` gates the fetch proxy, Zen spend, and
+   sync — treat it as the crown jewel. The kosync route is public by protocol
+   and authenticates with a single MD5 key.
 
 ### CI deploy (GitHub Actions)
 
@@ -168,6 +217,73 @@ After D1 is created and the schema is applied (see checklist above):
 1. Deploy as usual (`pnpm deploy`).
 2. On each device: Settings → App token → Save → "Sync now".
    The app also syncs on open, after local changes, and when the network returns.
+
+## KOReader progress sync (read-only)
+
+Quiosco can read the reading position that KOReader pushes from a PocketBook
+(or any KOReader) and offer to jump to it when the same EPUB is open. It is
+**read-only**: quiosco never writes a position back, because KOReader's EPUB
+position is a CRe XPointer that quiosco cannot generate. The bridge is off
+until both `KOSYNC_USER` and `KOSYNC_KEY` are set.
+
+How it works:
+
+- The Worker exposes a kosync-compatible server at `/kosync`.
+- The KOReader document matching method (Binary or Filename) does not affect
+  the bridge: quiosco links by the metadata filename/title, not by the digest.
+  Pick Filename if you also sync between KOReader devices.
+- With **Send document metadata** enabled, KOReader includes the EPUB
+  basename, title, and authors in each push. Quiosco stores them and matches a
+  local book by its import filename, falling back to title/author.
+- Opening a book asks `/api/kosync/progress`. A position at least 0.2% ahead
+  produces a "PocketBook is at N%" banner; the jump is always explicit.
+- `kosync_progress` is only ever written by KOReader's `PUT`; the app's route
+  is a read.
+
+Setup:
+
+1. Choose a long random sync password and compute its MD5:
+   `printf %s 'your-password' | md5sum` (Linux) or
+   `printf %s 'your-password' | md5 -q` (macOS).
+2. Set the secrets:
+   `pnpm exec wrangler secret put KOSYNC_USER` (for example `quiosco`) and
+   `pnpm exec wrangler secret put KOSYNC_KEY` (the MD5, never the plaintext).
+3. Apply the kosync migration (see the checklist above) and deploy.
+   Verify with `curl https://<quiosco-domain>/kosync/healthcheck`; it returns
+   `{"state":"OK"}`.
+4. On the PocketBook: **Progress sync → Custom sync server** →
+   `https://<quiosco-domain>/kosync` (no trailing slash, no `/users/auth`).
+   Use **Register / Login** with `KOSYNC_USER` and the **plaintext** password
+   (KOReader hashes it before sending; `KOSYNC_KEY` is only the server-side
+   hash), turn **Send document metadata** on, then **Push progress from this
+   device now**.
+5. Open the same EPUB in quiosco. Books imported before this feature have no
+   original filename, so they fall back to title/author; re-import for exact
+   matching.
+
+Caveats:
+
+- EPUB only, and progress only: no highlights, notes, or bookmarks.
+- KOReader reports a percentage of its own pagination, so the jump is
+  approximate (usually within a page or two), never the exact sentence.
+- Different editions or modified files do not match. As in KOReader, a
+  mismatch is silent: the lookup simply finds nothing.
+- Backward jumps are not offered, matching KOReader's default
+  `sync_backward = Disable`.
+- The server stores `filename`, `title`, and `authors` when KOReader sends
+  them. The official server discards this metadata; quiosco needs it to link
+  the book, so with **Send document metadata** off the bridge cannot match new
+  pushes (the app has no document digest).
+- `/kosync/*` is public by protocol and authenticates with one MD5 key. Use a
+  strong password and a rate-limiting rule.
+
+Local development: apply both schemas to the local D1 once, then run
+`pnpm dev`:
+
+```bash
+node scripts/wrangler-run.mjs d1 execute quiosco --local --file worker/migrations/0001_sync.sql
+node scripts/wrangler-run.mjs d1 execute quiosco --local --file worker/migrations/0002_kosync.sql
+```
 
 ## Install on Android
 
@@ -209,6 +325,10 @@ printed.
   fail; for X/Twitter post links, the post id is sent to api.fxtwitter.com
   (and, if that fails, cdn.syndication.twimg.com). The Googlebot rung uses
   user-agent spoofing, kept for personal reading only.
+- The optional KOReader bridge stores only the reading position plus the
+  filename/title/authors KOReader sends when **Send document metadata** is on.
+  It never stores book content. Its key is an MD5 hash and `/kosync/*` is
+  public by protocol: use a strong password and a rate-limiting rule.
 - Personal use: read privately, never redistribute. Hard paywalls are not
   defeated; the manual text path is for content you already have access to.
 

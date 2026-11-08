@@ -103,6 +103,7 @@ export function AddBookForm({
         author: author.trim() || null,
         language: preview.language,
         chapters: preview.chapters,
+        sourceFilename: fileName,
       });
       await store.put(book);
       onSaved(book.id);

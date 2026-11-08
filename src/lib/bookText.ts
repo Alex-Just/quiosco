@@ -39,6 +39,28 @@ export function bookChapterStarts(article: Article): number[] {
   return starts;
 }
 
+/**
+ * First sentence-unit index of each chapter, in chapter order. A chapter with
+ * no letter-bearing text repeats its neighbour's index, so slicing chapter `c`
+ * as `units[starts[c] .. starts[c + 1])` still yields exactly its own units.
+ */
+export function bookUnitStarts(
+  units: readonly BookSentenceUnit[],
+  chapterStarts: readonly number[],
+): number[] {
+  const starts: number[] = [];
+  let unit = 0;
+  for (const paragraph of chapterStarts) {
+    while (unit < units.length) {
+      const current = units[unit];
+      if (current === undefined || current.paragraphIndex >= paragraph) break;
+      unit += 1;
+    }
+    starts.push(unit);
+  }
+  return starts;
+}
+
 // Cut an oversized sentence at the last whitespace that fits inside the cap,
 // so every returned piece is at most MAX_BOOK_UNIT_CHARS long; a sentence with
 // no whitespace inside the cap is hard-cut.
@@ -85,8 +107,7 @@ export function bookSentenceUnits(
   return units;
 }
 
-/** Unit indices per flat paragraph, in reading order. */
-export function unitsByParagraph(
+/** Unit indices per flat paragraph, in reading order. */ export function unitsByParagraph(
   units: readonly BookSentenceUnit[],
 ): Map<number, number[]> {
   const byParagraph = new Map<number, number[]>();

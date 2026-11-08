@@ -1,4 +1,5 @@
 import { type DBSchema, type IDBPDatabase, openDB } from "idb";
+import type { NarrationPack } from "./narration/manifest";
 import { notifyStoreChange } from "./storeEvents";
 import type {
   Article,
@@ -21,6 +22,11 @@ interface QuioscoDB extends DBSchema {
     key: string;
     value: SentenceCacheEntry;
   };
+  /** Narrated books: one pack per book id. Local-only, never synced. */
+  narration: {
+    key: string;
+    value: NarrationPack;
+  };
 }
 
 export interface ArticleStore {
@@ -41,6 +47,9 @@ export interface ArticleStore {
   ): Promise<void>;
   getSentences(keys: readonly string[]): Promise<SentenceCacheEntry[]>;
   putSentences(entries: readonly SentenceCacheEntry[]): Promise<void>;
+  getNarration(bookId: string): Promise<NarrationPack | undefined>;
+  putNarration(bookId: string, pack: NarrationPack): Promise<void>;
+  removeNarration(bookId: string): Promise<void>;
   close(): void;
 }
 
@@ -48,7 +57,7 @@ export async function createStore(
   dbName = "quiosco",
   onChange?: () => void,
 ): Promise<ArticleStore> {
-  const db = await openDB<QuioscoDB>(dbName, 3, {
+  const db = await openDB<QuioscoDB>(dbName, 4, {
     upgrade(database: IDBPDatabase<QuioscoDB>, oldVersion: number) {
       if (oldVersion < 1) {
         const store = database.createObjectStore("articles", {
@@ -62,6 +71,10 @@ export async function createStore(
       }
       if (oldVersion < 3) {
         database.createObjectStore("sentences", { keyPath: "key" });
+      }
+      if (oldVersion < 4) {
+        // Out-of-line keys: the pack is keyed by the book id it narrates.
+        database.createObjectStore("narration");
       }
     },
   });
@@ -104,6 +117,7 @@ export async function createStore(
         // Books never sync, so a tombstone would keep their chapters around
         // forever; delete the row outright. The sentence cache is untouched.
         await db.delete("articles", id);
+        await db.delete("narration", id);
       } else {
         await db.put("articles", {
           ...existing,
@@ -152,6 +166,19 @@ export async function createStore(
       const tx = db.transaction("sentences", "readwrite");
       for (const entry of entries) await tx.store.put(entry);
       await tx.done;
+    },
+    async getNarration(bookId) {
+      return db.get("narration", bookId);
+    },
+    async putNarration(bookId, pack) {
+      await db.put("narration", pack, bookId);
+      notifyStoreChange(bookId);
+      onChange?.();
+    },
+    async removeNarration(bookId) {
+      await db.delete("narration", bookId);
+      notifyStoreChange(bookId);
+      onChange?.();
     },
     close() {
       db.close();

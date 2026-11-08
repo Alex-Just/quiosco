@@ -220,6 +220,63 @@ describe("createApi", () => {
     expect(JSON.parse(String(init.body))).toEqual(payload);
   });
 
+  it("looks up KOReader progress by book identity", async () => {
+    const fetchFn = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            progress: {
+              document: "0123456789abcdef0123456789abcdef",
+              percentage: 0.42,
+              progress: "/body/DocFragment[2]/body/p[1]/text().4",
+              device: "PocketBook",
+              updatedAt: 1_760_000_000,
+              title: "El principito",
+              authors: "Antoine de Saint-Exupéry",
+            },
+          }),
+          { headers: { "content-type": "application/json" } },
+        ),
+    );
+    const api = createApi({
+      token: "t",
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    await expect(
+      api.kosyncProgress({
+        filename: "El principito.epub",
+        title: "El principito",
+        author: "Antoine de Saint-Exupéry",
+      }),
+    ).resolves.toMatchObject({
+      percentage: 0.42,
+      device: "PocketBook",
+      updatedAt: 1_760_000_000,
+    });
+    const [url, init] = fetchFn.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe(
+      "/api/kosync/progress?filename=El+principito.epub&title=El+principito&author=Antoine+de+Saint-Exup%C3%A9ry",
+    );
+    expect(init.headers).toEqual({ Authorization: "Bearer t" });
+  });
+
+  it("returns null when KOReader has no position for the book", async () => {
+    const fetchFn = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ progress: null }), {
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    const api = createApi({
+      token: "t",
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    await expect(api.kosyncProgress({ title: "T" })).resolves.toBeNull();
+  });
+
   it("fetchThread calls /api/thread and parses the response", async () => {
     const body = {
       title: "Hilo",

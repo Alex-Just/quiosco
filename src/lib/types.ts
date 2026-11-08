@@ -45,6 +45,12 @@ export interface Article {
   kind?: ArticleKind;
   author?: string | null;
   bookLanguage?: string | null;
+  /**
+   * Books only: the EPUB basename as imported. KOReader's progress sync sends
+   * the same basename in its optional metadata, which is how the app links a
+   * local book to a PocketBook position.
+   */
+  sourceFilename?: string | null;
   chapters?: BookChapter[];
   translation: string | null;
   /** Streamed tail of the chunk in flight; only set while translating. */
@@ -130,6 +136,20 @@ export interface ThreadResponse {
   tweetCount: number;
   partial: boolean;
   source: "fxtwitter" | "syndication";
+}
+
+/** Last position KOReader pushed for a book, read by the app (read-only). */
+export interface KosyncProgress {
+  document: string;
+  /** KOReader's pagination percentage, 0..1. */
+  percentage: number;
+  /** Opaque CRe XPointer (EPUB) or page number (PDF). */
+  progress: string;
+  device: string;
+  /** Unix seconds, from the kosync server. */
+  updatedAt: number;
+  title: string | null;
+  authors: string | null;
 }
 
 export interface TranslateRequest {

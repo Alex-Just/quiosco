@@ -56,6 +56,8 @@ export function newBook(input: {
   author: string | null;
   language: string | null;
   chapters: BookChapter[];
+  /** Original EPUB basename, kept to match KOReader progress metadata. */
+  sourceFilename?: string | null;
 }): Article {
   const now = Date.now();
   return {
@@ -68,6 +70,7 @@ export function newBook(input: {
     kind: "book",
     author: input.author,
     bookLanguage: input.language,
+    sourceFilename: input.sourceFilename?.trim() || null,
     chapters: input.chapters,
     translation: null,
     partial: null,
