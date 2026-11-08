@@ -253,7 +253,7 @@ test("manual add, read/archive lifecycle, delete", async ({ page }) => {
   await page.getByRole("link", { name: /Prueba E2E/ }).click();
   await page.waitForURL("**/article/**");
   page.on("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: "Delete" }).click();
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
   await page.waitForURL((url) => url.pathname === "/");
 });
 
@@ -381,7 +381,7 @@ test("syncs an article between two devices", async ({ browser }) => {
   await pageB.getByRole("link", { name: new RegExp(title) }).click();
   await pageB.waitForURL("**/article/**");
   pageB.on("dialog", (dialog) => dialog.accept());
-  await pageB.getByRole("button", { name: "Delete" }).click();
+  await pageB.getByRole("button", { name: "Delete", exact: true }).click();
   await pageB.waitForURL((url) => url.pathname === "/");
 
   await pageB.goto("/settings");

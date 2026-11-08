@@ -744,6 +744,15 @@ test("translates the Zen sentence from the cache and pauses on failure", async (
   await page.goto("/settings");
   await page.getByLabel("App token").fill("");
   await page.getByRole("button", { name: "Save" }).click();
+  // The save is what the book reads on mount; prove it landed before leaving.
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const raw = localStorage.getItem("quiosco.settings.v1");
+        return raw ? (JSON.parse(raw) as { appToken?: string }).appToken : null;
+      }),
+    )
+    .toBe("");
   await page.goto("/");
   await page.getByRole("link", { name: /Libro de prueba/ }).click();
   await expect(page.locator("article")).not.toHaveAttribute(

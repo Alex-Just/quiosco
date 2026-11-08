@@ -27,7 +27,7 @@ async function seedArticle(
         updatedAt: Date.now(),
       };
       await new Promise<void>((resolve, reject) => {
-        const req = indexedDB.open("quiosco", 3);
+        const req = indexedDB.open("quiosco", 4);
         req.onupgradeneeded = () => {
           const db = req.result;
           if (!db.objectStoreNames.contains("articles")) {
@@ -40,6 +40,9 @@ async function seedArticle(
           }
           if (!db.objectStoreNames.contains("sentences")) {
             db.createObjectStore("sentences", { keyPath: "key" });
+          }
+          if (!db.objectStoreNames.contains("narration")) {
+            db.createObjectStore("narration");
           }
         };
         req.onsuccess = () => {
