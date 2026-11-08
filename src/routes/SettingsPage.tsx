@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createApi } from "../lib/api";
 import { formatDateTime } from "../lib/format";
 import { clearLogs, exportLogText, getLogStatus } from "../lib/log";
@@ -32,6 +32,8 @@ const MODEL_SUGGESTIONS = [
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
+  /** Unsaved edits must survive a background sync reloading the form. */
+  const dirtyRef = useRef(false);
   const [saved, setSaved] = useState(false);
   const [health, setHealth] = useState<"idle" | "checking" | "ok" | "fail">(
     "idle",
@@ -61,7 +63,10 @@ export default function SettingsPage() {
   }
 
   useEffect(() => {
-    const reload = () => setSettings(loadSettings());
+    const reload = () => {
+      if (dirtyRef.current) return;
+      setSettings(loadSettings());
+    };
     window.addEventListener("quiosco:sync", reload);
     return () => window.removeEventListener("quiosco:sync", reload);
   }, []);
@@ -104,12 +109,14 @@ export default function SettingsPage() {
   }
 
   function update(patch: Partial<Settings>) {
+    dirtyRef.current = true;
     setSettings((current) => ({ ...current, ...patch }));
     setSaved(false);
   }
 
   function onSave() {
     saveSettings(settings);
+    dirtyRef.current = false;
     setSaved(true);
     // Settings are part of the sync payload: schedule a push like any local write.
     scheduleSync();
