@@ -120,9 +120,9 @@ export function bookSentenceUnits(
 }
 
 /**
- * First body unit of each chapter, with the chapter title excluded. The title
- * occupies `chapterUnitStarts[i]` when it produced a unit; an empty title
- * produces none, so the first body unit stays put.
+ * First body unit of each chapter, with every chapter-title unit excluded.
+ * A title can split into several sentence units; an empty title produces
+ * none, so the first body unit stays put.
  */
 export function bookChapterBodyStarts(
   units: readonly BookSentenceUnit[],
@@ -131,9 +131,14 @@ export function bookChapterBodyStarts(
 ): number[] {
   return chapterUnitStarts.map((firstUnit, index) => {
     const titleParagraph = chapterStarts[index];
-    return units[firstUnit]?.paragraphIndex === titleParagraph
-      ? firstUnit + 1
-      : firstUnit;
+    let bodyUnit = firstUnit;
+    while (
+      titleParagraph !== undefined &&
+      units[bodyUnit]?.paragraphIndex === titleParagraph
+    ) {
+      bodyUnit += 1;
+    }
+    return bodyUnit;
   });
 }
 

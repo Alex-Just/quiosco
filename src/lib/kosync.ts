@@ -15,7 +15,7 @@ import type { KosyncProgress } from "./types";
 export const KOSYNC_PROMPT_MIN_AHEAD = 0.002;
 
 /** Bump when the mapping changes so old dismissals cannot hide a correction. */
-export const KOSYNC_MAPPING_VERSION = 2;
+export const KOSYNC_MAPPING_VERSION = 3;
 
 export interface UnitOffsets {
   /** Character offset where each unit starts. */

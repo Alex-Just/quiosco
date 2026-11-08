@@ -72,6 +72,21 @@ describe("bookChapterBodyStarts", () => {
     const unitStarts = bookUnitStarts(units, starts);
     expect(bookChapterBodyStarts(units, starts, unitStarts)).toEqual([0, 2]);
   });
+
+  it("skips every unit of a title that split into sentences", () => {
+    const article = {
+      ...newArticle({ url: null, title: "Título", text: "", via: "manual" }),
+      kind: "book" as const,
+      chapters: [
+        { title: "Capítulo uno. La prueba.", text: "Hola." },
+        { title: "Dos", text: "Adiós." },
+      ],
+    };
+    const units = bookSentenceUnits(bookFlatParagraphs(article));
+    const starts = bookChapterStarts(article);
+    const unitStarts = bookUnitStarts(units, starts);
+    expect(bookChapterBodyStarts(units, starts, unitStarts)).toEqual([2, 4]);
+  });
 });
 
 describe("bookSentenceUnits", () => {
