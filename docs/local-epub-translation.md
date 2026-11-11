@@ -143,9 +143,10 @@ The output is the same **bilingual, text-only** EPUB the reader exports:
 - Chapter titles come from the source EPUB; the title paragraph is not repeated
   in the chapter body.
 
-The built-in rules are Spanish-to-Russian. The CLI refuses to use them when
-the EPUB's metadata source language is not Spanish or when the target is not
-Russian; pass a `--rules-file` for any other combination. The display pairing
+The built-in rules are Spanish-to-Russian. Both `es` and `spa` metadata tags
+count as Spanish. The CLI refuses to use the built-in rules when the EPUB's
+source language is not Spanish or when the target is not Russian; pass a
+`--rules-file` for any other combination. The display pairing
 in `pairSourceWithTranslation` is also Spanish-source by convention; a
 source-language-aware pairing would be a separate change.
 
@@ -163,7 +164,8 @@ source-language-aware pairing would be a separate change.
   `.opencode/agents/translate-epub.md` exists and the command runs from the
   repository root (the CLI sets this automatically).
 - **Built-in rules refused** — the book is not Spanish or the target is not
-  Russian. Pass `--rules-file` with rules for that language pair.
+  Russian. Pass `--rules-file` with rules for that language pair. An empty
+  `--rules-file` is rejected.
 - **Corrupt cache** — delete the cache file or pass `--cache` with a new path.
 - **Output equals the cache or input** — the CLI rejects this before
   translating; choose a different `--output`.

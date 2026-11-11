@@ -4,7 +4,7 @@
 // exports. No Worker, Zen key or app token is involved.
 import { mkdir, readFile, realpath, rename, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { dirname, isAbsolute, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import {
@@ -31,6 +31,7 @@ import {
 } from "./lib/translateEpub";
 
 const DEFAULT_TARGET_LANGUAGE = "Russian";
+const SPANISH_LANGUAGES = new Set(["es", "spa"]);
 // A normal window finishes in under a minute. Three minutes bounds a transient
 // provider stall without letting one stuck request block the run for long.
 const DEFAULT_TIMEOUT_MS = 3 * 60_000;
@@ -132,7 +133,7 @@ export async function main(
         "Book language is unknown; assuming Spanish for the built-in rules.\n",
       );
     }
-    if (sourceLanguage !== null && sourceLanguage !== "es") {
+    if (sourceLanguage !== null && !SPANISH_LANGUAGES.has(sourceLanguage)) {
       throw new Error(
         `The built-in rules assume a Spanish source (this book says "${book.language}"). Pass --rules-file.`,
       );
@@ -270,9 +271,12 @@ async function readOptions(
   );
   const rulesFile = values["rules-file"];
   const rulesFromFile = rulesFile !== undefined;
-  const rules = rulesFile
-    ? (await readFile(resolve(rulesFile), "utf8")).trim()
-    : DEFAULT_RULES;
+  let rules = DEFAULT_RULES;
+  if (rulesFile !== undefined) {
+    if (!rulesFile.trim()) throw new Error("--rules-file must not be empty.");
+    rules = (await readFile(resolve(rulesFile), "utf8")).trim();
+    if (!rules) throw new Error("--rules-file is empty.");
+  }
 
   return {
     inputPath: resolve(inputPath),
@@ -374,17 +378,29 @@ function formatEpubError(error: EpubError): string {
   }
 }
 
-/** Canonical identity when both paths exist; resolved spelling otherwise. */
-async function sameFile(left: string, right: string): Promise<boolean> {
-  try {
-    const [leftReal, rightReal] = await Promise.all([
-      realpath(left),
-      realpath(right),
-    ]);
-    return leftReal === rightReal;
-  } catch {
-    return resolve(left) === resolve(right);
+/** Resolve a path through its nearest existing ancestor, including symlinks. */
+async function canonicalPath(path: string): Promise<string> {
+  let current = resolve(path);
+  const suffix: string[] = [];
+  for (;;) {
+    try {
+      const real = await realpath(current);
+      return suffix.length === 0 ? real : join(real, ...[...suffix].reverse());
+    } catch {
+      const parent = dirname(current);
+      if (parent === current) return resolve(path);
+      suffix.push(basename(current));
+      current = parent;
+    }
   }
+}
+
+async function sameFile(left: string, right: string): Promise<boolean> {
+  const [leftReal, rightReal] = await Promise.all([
+    canonicalPath(left),
+    canonicalPath(right),
+  ]);
+  return leftReal === rightReal;
 }
 
 function parseNonNegativeInteger(

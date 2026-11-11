@@ -172,6 +172,49 @@ describe("openTranslationCache", () => {
     }
   });
 
+  it("keeps a repaired on-disk entry it did not change", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "quiosco-cache-"));
+    try {
+      const path = join(directory, "cache.json");
+      const key = "a".repeat(64);
+      const empty: SentenceCacheEntry = {
+        key,
+        source: "Uno.",
+        translation: "",
+        targetLanguage: TARGET,
+        rulesHash: "c".repeat(64),
+        model: "test",
+        createdAt: 1,
+      };
+      await writeFile(
+        path,
+        JSON.stringify({ version: 1, entries: { [key]: empty } }),
+        "utf8",
+      );
+
+      const one = await openTranslationCache(path);
+      const two = await openTranslationCache(path);
+      const repaired = { ...empty, translation: "🇪🇸 Uno.\n🇷🇺 Один." };
+      two.set(repaired);
+      await two.save();
+
+      const other: SentenceCacheEntry = {
+        ...empty,
+        key: "b".repeat(64),
+        source: "Dos.",
+        translation: "🇪🇸 Dos.\n🇷🇺 Два.",
+      };
+      one.set(other);
+      await one.save();
+
+      const reopened = await openTranslationCache(path);
+      expect(reopened.get(key)).toEqual(repaired);
+      expect(reopened.get(other.key)).toEqual(other);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it("rejects an unsupported cache version", async () => {
     const directory = await mkdtemp(join(tmpdir(), "quiosco-cache-"));
     try {

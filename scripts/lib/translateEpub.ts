@@ -2,7 +2,14 @@
 // numbered-reply parser, cache key and bilingual display pairing, but replaces
 // the Worker + Zen transport with one `opencode run` call per window.
 import { spawn } from "node:child_process";
-import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  readFile,
+  rename,
+  rmdir,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { BookSentenceUnit } from "../../src/lib/bookText";
@@ -206,11 +213,13 @@ export async function openTranslationCache(
 ): Promise<TranslationCache> {
   const document = await readCacheDocument(filePath);
   const entries = new Map(Object.entries(document.entries));
+  const changedKeys = new Set<string>();
 
   return {
     get: (key) => entries.get(key),
     set: (entry) => {
       entries.set(entry.key, entry);
+      changedKeys.add(entry.key);
     },
     save: async () => {
       await mkdir(dirname(filePath), { recursive: true });
@@ -220,7 +229,7 @@ export async function openTranslationCache(
         // work. The lock covers the read-merge-write sequence.
         const onDisk = await readCacheDocument(filePath);
         for (const [key, entry] of Object.entries(onDisk.entries)) {
-          if (!entries.has(key)) entries.set(key, entry);
+          if (!changedKeys.has(key)) entries.set(key, entry);
         }
         const payload: CacheDocument = {
           version: CACHE_VERSION,
@@ -255,7 +264,7 @@ async function withFileLock<T>(
       try {
         const info = await stat(lockPath);
         if (Date.now() - info.mtimeMs > LOCK_STALE_MS) {
-          await rm(lockPath, { recursive: true, force: true });
+          await rmdir(lockPath);
           continue;
         }
       } catch {
@@ -272,7 +281,7 @@ async function withFileLock<T>(
   try {
     return await run();
   } finally {
-    await rm(lockPath, { recursive: true, force: true });
+    await rmdir(lockPath).catch(() => undefined);
   }
 }
 
