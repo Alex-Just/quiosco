@@ -2,9 +2,9 @@
 // sentence window at a time through the OpenCode app's local service, caches
 // every accepted sentence, and writes the same bilingual EPUB the reader
 // exports. No Worker, Zen key or app token is involved.
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, realpath, rename, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { dirname, resolve } from "node:path";
+import { dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import {
@@ -70,6 +70,7 @@ interface CliOptions {
   model: string;
   targetLanguage: string;
   rules: string;
+  rulesFromFile: boolean;
   maxWindows?: number;
   timeoutMs: number;
   opencodeBinary: string;
@@ -123,11 +124,36 @@ export async function main(
     return 0;
   }
 
+  if (!options.rulesFromFile) {
+    const sourceLanguage =
+      book.language?.toLowerCase().split(/[-_]/)[0] ?? null;
+    if (sourceLanguage === null) {
+      process.stderr.write(
+        "Book language is unknown; assuming Spanish for the built-in rules.\n",
+      );
+    }
+    if (sourceLanguage !== null && sourceLanguage !== "es") {
+      throw new Error(
+        `The built-in rules assume a Spanish source (this book says "${book.language}"). Pass --rules-file.`,
+      );
+    }
+    if (options.targetLanguage.toLowerCase() !== "russian") {
+      throw new Error(
+        `The built-in rules translate to Russian. Pass --rules-file for "${options.targetLanguage}".`,
+      );
+    }
+  }
+
   const outputPath =
     options.outputPath ??
     resolve(dirname(options.inputPath), exportFilename(book.title));
-  if (resolve(outputPath) === resolve(options.inputPath)) {
+  if (await sameFile(outputPath, options.inputPath)) {
     throw new Error("The output path must differ from the input path.");
+  }
+  if (await sameFile(outputPath, options.cachePath)) {
+    throw new Error(
+      "The output path must differ from the translation cache path.",
+    );
   }
 
   const system = buildBookSystemPrompt({
@@ -220,12 +246,20 @@ async function readOptions(
   if (!targetLanguage) {
     throw new Error("--target-language must not be empty.");
   }
-  const opencodeBinary = values.opencode.trim();
-  if (!opencodeBinary) throw new Error("--opencode must not be empty.");
-  if (values.output !== undefined && !values.output.trim()) {
+  const rawOpencode = values.opencode.trim();
+  if (!rawOpencode) throw new Error("--opencode must not be empty.");
+  // A path-like value is relative to the user's shell, not the repository
+  // cwd the child process runs in; bare names still use PATH.
+  const opencodeBinary =
+    rawOpencode.includes("/") && !isAbsolute(rawOpencode)
+      ? resolve(rawOpencode)
+      : rawOpencode;
+  const outputValue = values.output;
+  if (outputValue !== undefined && !outputValue.trim()) {
     throw new Error("--output must not be empty.");
   }
-  if (values.cache !== undefined && !values.cache.trim()) {
+  const cacheValue = values.cache;
+  if (cacheValue !== undefined && !cacheValue.trim()) {
     throw new Error("--cache must not be empty.");
   }
 
@@ -234,20 +268,21 @@ async function readOptions(
     DEFAULT_TIMEOUT_MS,
     "timeout-ms",
   );
-  const rules =
-    values["rules-file"] === undefined
-      ? DEFAULT_RULES
-      : (await readFile(resolve(values["rules-file"]), "utf8")).trim();
+  const rulesFile = values["rules-file"];
+  const rulesFromFile = rulesFile !== undefined;
+  const rules = rulesFile
+    ? (await readFile(resolve(rulesFile), "utf8")).trim()
+    : DEFAULT_RULES;
 
   return {
     inputPath: resolve(inputPath),
-    outputPath:
-      values.output === undefined ? undefined : resolve(values.output),
+    outputPath: outputValue === undefined ? undefined : resolve(outputValue),
     cachePath:
-      values.cache === undefined ? DEFAULT_CACHE_PATH : resolve(values.cache),
+      cacheValue === undefined ? DEFAULT_CACHE_PATH : resolve(cacheValue),
     model,
     targetLanguage,
     rules,
+    rulesFromFile,
     maxWindows: parseNonNegativeInteger(values["max-windows"], "max-windows"),
     timeoutMs,
     opencodeBinary,
@@ -336,6 +371,19 @@ function formatEpubError(error: EpubError): string {
         : "This book is too large to import.";
     case "empty":
       return "Could not read any text from this book.";
+  }
+}
+
+/** Canonical identity when both paths exist; resolved spelling otherwise. */
+async function sameFile(left: string, right: string): Promise<boolean> {
+  try {
+    const [leftReal, rightReal] = await Promise.all([
+      realpath(left),
+      realpath(right),
+    ]);
+    return leftReal === rightReal;
+  } catch {
+    return resolve(left) === resolve(right);
   }
 }
 

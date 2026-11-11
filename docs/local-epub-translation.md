@@ -89,7 +89,9 @@ across books. Re-running the same command resumes from the cache; an
 interrupted window is simply retried.
 
 Each save writes a temporary file and atomically renames it over the cache, so
-a crash cannot leave half-written JSON. A corrupt or unsupported cache is
+a crash cannot leave half-written JSON. Saves also take an inter-process lock
+and merge entries already on disk, so two books can share one cache without
+either run overwriting the other's work. A corrupt or unsupported cache is
 reported with an instruction to delete it or pass another `--cache`.
 
 ## Long runs
@@ -141,9 +143,11 @@ The output is the same **bilingual, text-only** EPUB the reader exports:
 - Chapter titles come from the source EPUB; the title paragraph is not repeated
   in the chapter body.
 
-The built-in rules and `pairSourceWithTranslation` are Spanish-to-Russian
-conventions. For another source language, pass a `--rules-file` and check the
-display pairing; a source-language-aware pairing would be a separate change.
+The built-in rules are Spanish-to-Russian. The CLI refuses to use them when
+the EPUB's metadata source language is not Spanish or when the target is not
+Russian; pass a `--rules-file` for any other combination. The display pairing
+in `pairSourceWithTranslation` is also Spanish-source by convention; a
+source-language-aware pairing would be a separate change.
 
 ## Troubleshooting
 
@@ -158,7 +162,11 @@ display pairing; a source-language-aware pairing would be a separate change.
 - **Agent not found** — ensure
   `.opencode/agents/translate-epub.md` exists and the command runs from the
   repository root (the CLI sets this automatically).
+- **Built-in rules refused** — the book is not Spanish or the target is not
+  Russian. Pass `--rules-file` with rules for that language pair.
 - **Corrupt cache** — delete the cache file or pass `--cache` with a new path.
+- **Output equals the cache or input** — the CLI rejects this before
+  translating; choose a different `--output`.
 - **Partial output** — `--max-windows` or a stopped run still exports what is
   translated; the rest falls back to source text.
 

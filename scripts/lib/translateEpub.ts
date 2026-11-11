@@ -2,7 +2,7 @@
 // numbered-reply parser, cache key and bilingual display pairing, but replaces
 // the Worker + Zen transport with one `opencode run` call per window.
 import { spawn } from "node:child_process";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { BookSentenceUnit } from "../../src/lib/bookText";
@@ -26,6 +26,10 @@ export const DEFAULT_CACHE_PATH = join(
 
 const CACHE_VERSION = 1;
 const MAX_ATTEMPTS = 3;
+/** Cache writes are short; this only needs to cover another process's save. */
+const LOCK_RETRY_MS = 50;
+const LOCK_TIMEOUT_MS = 60_000;
+const LOCK_STALE_MS = 5 * 60_000;
 
 export interface ModelRef {
   providerID: string;
@@ -210,19 +214,66 @@ export async function openTranslationCache(
     },
     save: async () => {
       await mkdir(dirname(filePath), { recursive: true });
-      const payload: CacheDocument = {
-        version: CACHE_VERSION,
-        entries: Object.fromEntries(entries),
-      };
-      const tempPath = `${filePath}.${process.pid}.tmp`;
-      await writeFile(
-        tempPath,
-        `${JSON.stringify(payload, null, 2)}\n`,
-        "utf8",
-      );
-      await rename(tempPath, filePath);
+      await withFileLock(filePath, async () => {
+        // Another process may have translated since this cache was opened.
+        // Merge its entries before replacing the file so neither run loses
+        // work. The lock covers the read-merge-write sequence.
+        const onDisk = await readCacheDocument(filePath);
+        for (const [key, entry] of Object.entries(onDisk.entries)) {
+          if (!entries.has(key)) entries.set(key, entry);
+        }
+        const payload: CacheDocument = {
+          version: CACHE_VERSION,
+          entries: Object.fromEntries(entries),
+        };
+        const tempPath = `${filePath}.${process.pid}.tmp`;
+        await writeFile(
+          tempPath,
+          `${JSON.stringify(payload, null, 2)}\n`,
+          "utf8",
+        );
+        await rename(tempPath, filePath);
+      });
     },
   };
+}
+
+async function withFileLock<T>(
+  filePath: string,
+  run: () => Promise<T>,
+): Promise<T> {
+  const lockPath = `${filePath}.lock`;
+  const started = Date.now();
+
+  for (;;) {
+    try {
+      await mkdir(lockPath);
+      break;
+    } catch (error) {
+      if (!isErrnoException(error) || error.code !== "EEXIST") throw error;
+
+      try {
+        const info = await stat(lockPath);
+        if (Date.now() - info.mtimeMs > LOCK_STALE_MS) {
+          await rm(lockPath, { recursive: true, force: true });
+          continue;
+        }
+      } catch {
+        // The lock vanished between mkdir and stat; retry immediately.
+      }
+
+      if (Date.now() - started > LOCK_TIMEOUT_MS) {
+        throw new Error(`Timed out waiting for cache lock ${lockPath}.`);
+      }
+      await sleep(LOCK_RETRY_MS);
+    }
+  }
+
+  try {
+    return await run();
+  } finally {
+    await rm(lockPath, { recursive: true, force: true });
+  }
 }
 
 export interface TranslationProgress {
@@ -291,7 +342,9 @@ export async function translateUnits(
     const sentences: string[] = [];
     for (let index = plan.start; index < plan.end; index += 1) {
       const unit = args.units[index];
-      if (unit === undefined || unit.skipped) continue;
+      if (unit === undefined || unit.skipped || translations.has(index)) {
+        continue;
+      }
       indices.push(index);
       sentences.push(unit.text);
     }

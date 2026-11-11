@@ -134,6 +134,44 @@ describe("openTranslationCache", () => {
     }
   });
 
+  it("merges entries written by another cache instance", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "quiosco-cache-"));
+    try {
+      const path = join(directory, "cache.json");
+      const first: SentenceCacheEntry = {
+        key: "a".repeat(64),
+        source: "Uno.",
+        translation: "🇪🇸 Uno.\n🇷🇺 Один.",
+        targetLanguage: TARGET,
+        rulesHash: "c".repeat(64),
+        model: "test",
+        createdAt: 1,
+      };
+      const second: SentenceCacheEntry = {
+        key: "b".repeat(64),
+        source: "Dos.",
+        translation: "🇪🇸 Dos.\n🇷🇺 Два.",
+        targetLanguage: TARGET,
+        rulesHash: "c".repeat(64),
+        model: "test",
+        createdAt: 2,
+      };
+
+      const one = await openTranslationCache(path);
+      const two = await openTranslationCache(path);
+      one.set(first);
+      await one.save();
+      two.set(second);
+      await two.save();
+
+      const reopened = await openTranslationCache(path);
+      expect(reopened.get(first.key)).toEqual(first);
+      expect(reopened.get(second.key)).toEqual(second);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it("rejects an unsupported cache version", async () => {
     const directory = await mkdtemp(join(tmpdir(), "quiosco-cache-"));
     try {
@@ -225,6 +263,43 @@ describe("translateUnits", () => {
     expect(prompts).toHaveLength(2);
     expect(prompts[1]).toContain("<translate>\n1. Adiós.\n</translate>");
     expect(prompts[1]).not.toContain("1. Hola.");
+  });
+
+  it("does not re-request a cached sentence inside a window", async () => {
+    const units = [unit("A"), unit("B"), unit("C")];
+    const key = await sentenceCacheKey("B", {
+      targetLanguage: TARGET,
+      rules: RULES,
+    });
+    const cached: SentenceCacheEntry = {
+      key,
+      source: "B",
+      translation: "🇪🇸 B\n🇷🇺 Б",
+      targetLanguage: TARGET,
+      rulesHash: await rulesHash(RULES),
+      model: "old",
+      createdAt: 0,
+    };
+    const { cache } = memoryCache([cached]);
+    let prompt = "";
+
+    const result = await translateUnits({
+      units,
+      system: "SYSTEM",
+      targetLanguage: TARGET,
+      rules: RULES,
+      model: "opencode/deepseek-v4.1-flash-free",
+      cache,
+      translate: async (nextPrompt) => {
+        prompt = nextPrompt;
+        return reply(["A", "C"], ["А", "Ц"]);
+      },
+    });
+
+    expect(prompt).toContain("<translate>\n1. A\n2. C\n</translate>");
+    expect(prompt).not.toContain("1. B");
+    expect(result.complete).toBe(true);
+    expect(result.translations.get(1)).toBe(cached.translation);
   });
 
   it("retries a reply that accepted no sentences", async () => {
