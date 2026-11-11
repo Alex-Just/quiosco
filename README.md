@@ -45,43 +45,43 @@ adds a single runtime dependency: `fflate` (EPUB unzip).
 ### Narrated books (audiobook instead of TTS)
 
 A book can play its recorded audiobook instead of synthesized speech: tap a
-sentence and you hear the narrator read that exact sentence. This is forced
-alignment, done once offline.
-
-**Build a pack.** You need `ffmpeg` on `PATH` and [uv](https://docs.astral.sh/uv/)
-for transcription:
+sentence and you hear the narrator read that exact sentence. The mapping is
+computed once, offline.
 
 ```bash
-pnpm audiobook --epub "Harry Potter y el caliz de fuego.epub" --audio ~/audiobook/4
+pnpm audiobook --epub "book.epub" --audio ~/audiobook/4 --dry-run   # check the mapping
+pnpm audiobook --epub "book.epub" --audio ~/audiobook/4 --skip 4    # build the pack
 ```
 
 The tool parses the EPUB with the app's own importer and sentence splitter, so
-unit indices match what the reader renders; transcribes each track with
-mlx-whisper (word timestamps, cached per chapter, so an interrupted run
-resumes); aligns the transcript to the book text with a Needleman–Wunsch pass;
-and writes `<epub name>.narration.zip` (manifest + one stored audio entry per
-chapter).
+unit indices match what the reader renders. It checks every audio file for
+incomplete downloads, transcribes each track with mlx-whisper (cached per
+chapter, so an interrupted run resumes), aligns the transcript to the book text,
+and writes `<epub name>.narration.zip`.
 
-- Audiobooks rarely contain the cover, title page, or author bio that an EPUB
-  spine does. When the track count and the chapter count differ the tool prints
-  the chapter list with a suggested offset; pass `--skip <n>` to confirm which
-  chapter track 1 narrates.
-- Each chapter prints its match percentage. Below 80% the track is probably
-  not that chapter, or the ebook is a different edition — check it before
-  importing.
-- Audio is transcoded to mono Opus at 32 kbps by default (~320 MB for 22 h).
-  `--copy` keeps the originals instead; `--bitrate` tunes the trade-off.
-- `--prompt "Harry Potter, Hogwarts, …"` gives the recognizer character names
-  it would otherwise guess at.
+`--skip N` says which parsed chapter track 1 narrates. Audiobooks skip the
+cover, title page and section pages that the EPUB carries, so the counts
+usually differ. Without `--skip` the tool prints the chapter table with a
+suggested offset; `--dry-run` prints the full mapping first.
 
-**Import.** In the book, **More → Add audiobook** and pick the `.zip`. The pack
+Audio is transcoded to mono Opus at 32 kbps by default, about 14 MB per hour.
+`--copy` keeps the originals; `--bitrate` tunes the trade-off. Transcription
+runs at roughly 8.5 times realtime on an M4, so a 30 hour book takes about 3.5
+hours.
+
+**Import.** In the book, **More**, **Add audiobook**, pick the `.zip`. The pack
 is stored on the device (IndexedDB), never synced, and removed with the book.
 From then on the Zen **Listen** control and a sentence's **Listen** action play
-the recording; chapters the audiobook does not cover (front matter) keep using
-TTS.
+the recording. Chapters the audiobook does not cover keep using TTS.
 
-Only the original text can be narrated — the recording does not contain the
+Only the original text can be narrated: the recording does not contain the
 translation, so translated screens still use TTS.
+
+See [docs/audiobook-alignment.md](docs/audiobook-alignment.md) for the full
+runbook, timing, and troubleshooting.
+
+See [docs/audiobook-alignment.md](docs/audiobook-alignment.md) for the full
+runbook, including `--dry-run` and audio-integrity checks.
 
 ## Diagnostics (local log + optional Sentry)
 
