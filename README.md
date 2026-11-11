@@ -100,6 +100,36 @@ Sentry, then set `SENTRY_DSN` via `pnpm exec wrangler secret put SENTRY_DSN`
 (and optionally in `.dev.vars` for local). The Worker uses
 `@sentry/cloudflare` and reports only when that secret is present.
 
+## Local EPUB translation (OpenCode app)
+
+`pnpm translate:epub <book.epub>` parses the EPUB on this machine and
+translates it window by window through the OpenCode app's local service, using
+its stored model credentials. It does not use the Worker, `OPENCODE_API_KEY` or
+`APP_TOKEN`.
+
+```bash
+pnpm translate:epub /path/to/book.epub
+pnpm translate:epub /path/to/book.epub --dry-run
+pnpm translate:epub /path/to/book.epub --max-windows 2
+```
+
+The default model is `opencode/deepseek-v4.1-flash-free`; override it with
+`--model <provider/model>`. Each accepted sentence is cached by content in
+`~/.cache/quiosco/epub-translations.json` (override with `--cache`), so an
+interrupted run resumes without paying for the same sentence twice. The output
+is the same bilingual, text-only EPUB the reader exports, written next to the
+input as `<title>-bilingual.epub` (override with `--output`).
+
+The free model is cloud inference served by OpenCode, not an offline model. For
+a fully offline pipeline, configure Ollama or LM Studio as an OpenCode provider
+and pass its model with `--model`. For a multi-hour book, keep the Mac awake
+with `caffeinate -i pnpm translate:epub ...`; an interrupted run resumes from
+the cache.
+
+See [docs/local-epub-translation.md](docs/local-epub-translation.md) for model
+access, long-running supervisor examples, options, output limitations and
+troubleshooting.
+
 ## Development
 
 ```bash

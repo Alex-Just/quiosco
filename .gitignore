@@ -14,7 +14,11 @@ playwright-report/
 .superpowers/
 docs/superpowers/
 # OpenCode local agent prompts (not app source; Qlty also skips these).
-.opencode/
+# The EPUB translator agent is tracked because scripts/translate-epub.ts uses it.
+.opencode/*
+!.opencode/agents/
+.opencode/agents/*
+!.opencode/agents/translate-epub.md
 .idea/
 
 .playwright-cli/
