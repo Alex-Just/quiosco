@@ -216,6 +216,11 @@ function audioProblem(path: string): string | null {
   const size = statSync(path).size;
   if (size === 0) return "empty file";
 
+  // PCM WAV encodes silence as zero samples, so a valid recording with pauses
+  // would trip the scan below. It targets compressed files whose truncated
+  // downloads are padded with zeros.
+  if (extname(path).toLowerCase() === ".wav") return null;
+
   const descriptor = openSync(path, "r");
   try {
     const buffer = Buffer.alloc(1 << 20);
@@ -395,6 +400,7 @@ function resolveSkip(
   requested: number | null,
   chapters: readonly BookChapter[],
   tracks: number,
+  previewOnly = false,
 ): number {
   const total = chapters.length;
   if (requested !== null) {
@@ -408,6 +414,15 @@ function resolveSkip(
   if (tracks === total) return 0;
 
   const suggestion = suggestSkip(chapters, tracks);
+  // A dry run is how the reader chooses the offset, so it must not stop here.
+  if (previewOnly) {
+    console.log(
+      `\nThis EPUB has ${total} chapters; the audiobook has ${tracks}. ` +
+        `Previewing --skip ${suggestion}.`,
+    );
+    return suggestion;
+  }
+
   console.log(
     `\nThis EPUB has ${total} chapters; the audiobook has ${tracks}.`,
   );
@@ -525,7 +540,12 @@ async function main(): Promise<void> {
     );
   }
 
-  const skip = resolveSkip(options.skip, book.chapters, audio.length);
+  const skip = resolveSkip(
+    options.skip,
+    book.chapters,
+    audio.length,
+    options.dryRun,
+  );
   checkAudio(audio);
 
   // Track n of the audiobook narrates book chapter `skip + n`; every other
