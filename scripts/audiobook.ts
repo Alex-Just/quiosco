@@ -21,7 +21,9 @@ import {
   openSync,
   readdirSync,
   readFileSync,
+  readSync,
   rmSync,
+  statSync,
   writeFileSync,
   writeSync,
 } from "node:fs";
@@ -91,6 +93,7 @@ const USAGE = `Build a narration pack from an EPUB and its audiobook.
   --transcripts <dir>   Word-timestamp cache (default: <epub name>.narration-transcripts)
   --skip <n>            Chapter index track 1 narrates (front matter is not
                         in the audiobook); required when the counts differ
+  --dry-run             Print the track-to-chapter mapping and stop
   --copy                Keep the source audio instead of transcoding to Opus
   --bitrate <rate>      Opus bitrate when transcoding (default: 32k)
   --model <repo>        mlx-whisper model (default: whisper-large-v3-turbo)
@@ -106,6 +109,7 @@ interface Options {
   out: string;
   transcripts: string;
   skip: number | null;
+  dryRun: boolean;
   copy: boolean;
   bitrate: string;
   model: string;
@@ -141,7 +145,7 @@ function parseArgs(argv: readonly string[]): Options {
       process.exit(0);
     }
     if (!arg.startsWith("--")) fail(`unexpected argument: ${arg}`);
-    if (arg === "--copy" || arg === "--no-transcribe") {
+    if (arg === "--copy" || arg === "--no-transcribe" || arg === "--dry-run") {
       flags.add(arg);
       continue;
     }
@@ -176,6 +180,7 @@ function parseArgs(argv: readonly string[]): Options {
     out,
     transcripts,
     skip,
+    dryRun: flags.has("--dry-run"),
     copy: flags.has("--copy"),
     bitrate: values.get("--bitrate") ?? "32k",
     model: values.get("--model") ?? "mlx-community/whisper-large-v3-turbo",
@@ -195,6 +200,69 @@ function audioFiles(directory: string): string[] {
     .filter((name) => AUDIO_EXTENSIONS.has(extname(name).toLowerCase()))
     .sort(collator.compare)
     .map((name) => join(directory, name));
+}
+
+/** A run of zeros this long is missing audio, not a pause. */
+const ZERO_RUN_LIMIT = 1_000_000;
+/** Normal speech has almost no zero bytes; this much means holes. */
+const ZERO_FRACTION_LIMIT = 0.05;
+
+/**
+ * Why this track cannot be used, or null. A half-downloaded MP3 keeps its
+ * final size but is padded with zeros, so it probes as valid and transcribes
+ * as garbage; the byte scan is what catches it.
+ */
+function audioProblem(path: string): string | null {
+  const size = statSync(path).size;
+  if (size === 0) return "empty file";
+
+  const descriptor = openSync(path, "r");
+  try {
+    const buffer = Buffer.alloc(1 << 20);
+    let zeros = 0;
+    let run = 0;
+    let longest = 0;
+    let read = readSync(descriptor, buffer, 0, buffer.length, null);
+    while (read > 0) {
+      for (let index = 0; index < read; index += 1) {
+        if (buffer[index] === 0) {
+          zeros += 1;
+          run += 1;
+          if (run > longest) longest = run;
+        } else {
+          run = 0;
+        }
+      }
+      read = readSync(descriptor, buffer, 0, buffer.length, null);
+    }
+    if (zeros / size > ZERO_FRACTION_LIMIT || longest > ZERO_RUN_LIMIT) {
+      const percent = ((zeros / size) * 100).toFixed(0);
+      const gap = (longest / 1_000_000).toFixed(1);
+      return `${percent}% zero bytes, longest gap ${gap} MB`;
+    }
+  } finally {
+    closeSync(descriptor);
+  }
+  return null;
+}
+
+/** Refuse to spend an hour transcribing files that cannot produce a pack. */
+function checkAudio(files: readonly string[]): void {
+  const problems: string[] = [];
+  const progress = process.stdout.isTTY;
+  files.forEach((file, index) => {
+    if (progress) {
+      process.stdout.write(`\rChecking audio ${index + 1}/${files.length}…`);
+    }
+    const problem = audioProblem(file);
+    if (problem) problems.push(`  ${basename(file)}: ${problem}`);
+  });
+  if (progress) process.stdout.write("\r");
+  if (problems.length > 0) {
+    fail(
+      `these audio files are incomplete; re-download them:\n${problems.join("\n")}`,
+    );
+  }
 }
 
 function pad(chapter: number): string {
@@ -458,6 +526,27 @@ async function main(): Promise<void> {
   }
 
   const skip = resolveSkip(options.skip, book.chapters, audio.length);
+  checkAudio(audio);
+
+  // Track n of the audiobook narrates book chapter `skip + n`; every other
+  // chapter stays empty so pack indices keep matching the reader's.
+  const trackOfChapter = new Map<number, number>();
+  audio.forEach((_, track) => {
+    trackOfChapter.set(skip + track, track);
+  });
+
+  if (options.dryRun) {
+    console.log(
+      `\n${book.chapters.length} chapters, ${audio.length} tracks, --skip ${skip}\n`,
+    );
+    book.chapters.forEach((chapter, index) => {
+      const track = trackOfChapter.get(index);
+      const label =
+        track === undefined ? "  -  " : ` ${String(track + 1).padStart(3)} `;
+      console.log(`${label}  ${String(index).padStart(3)}  ${chapter.title}`);
+    });
+    return;
+  }
 
   mkdirSync(options.transcripts, { recursive: true });
   const transcriptFiles = audio.map((_, index) =>
@@ -476,13 +565,6 @@ async function main(): Promise<void> {
       console.log("Transcripts are cached.");
     }
   }
-
-  // Track n of the audiobook narrates book chapter `skip + n`; every other
-  // chapter stays empty so pack indices keep matching the reader's.
-  const trackOfChapter = new Map<number, number>();
-  audio.forEach((_, track) => {
-    trackOfChapter.set(skip + track, track);
-  });
 
   const work = mkdtempSync(join(tmpdir(), "quiosco-pack-"));
   const staged: string[] = [];
