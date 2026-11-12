@@ -38,6 +38,7 @@ export function pairSourceWithTranslation(
   if (!flagged) return repaired;
 
   const onlyText = stripSentenceMarkers(stanzas[0] ?? repaired).trim();
+  if (onlyText === sourceText) return repaired;
   if ((onlyText.split("\n")[0] ?? "").trim() === sourceText) return repaired;
 
   return `${withSourceFlag(sourceText)}\n${repaired}`;
@@ -76,6 +77,10 @@ function targetStanza(block: string, sourceText: string): string {
 
   const stanza = stanzas[0] ?? block;
   const stripped = stripSentenceMarkers(stanza).trim();
+  if (stripped === sourceText) return "";
+  if (stripped.startsWith(`${sourceText}\n`)) {
+    return stripped.slice(sourceText.length + 1).trim();
+  }
   const lines = stripped.split("\n");
   if ((lines[0] ?? "").trim() === sourceText) {
     return lines.slice(1).join("\n").trim();

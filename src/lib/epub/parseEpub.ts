@@ -307,8 +307,10 @@ export async function parseEpub(
     }
 
     const sidecarChapters = bilingual?.chapters ?? [];
-    const finalChapters =
-      sidecarChapters.length > 0 ? sidecarChapters : chapters;
+    const useSidecarChapters = sidecarChapters.some(
+      (chapter) => chapter.text.trim().length > 0,
+    );
+    const finalChapters = useSidecarChapters ? sidecarChapters : chapters;
     if (finalChapters.length === 0) throw new EpubError("empty");
     const finalChars = finalChapters.reduce(
       (sum, chapter) => sum + chapter.text.length,

@@ -121,6 +121,25 @@ describe("buildEpub", () => {
     expect(parsed.chapters).toEqual(bilingual.chapters);
   });
 
+  it("keeps the spine when every sidecar chapter is empty", async () => {
+    const bytes = buildEpubBytes({
+      title: "Libro",
+      author: null,
+      language: "es",
+      uuid: UUID,
+      modified: MODIFIED,
+      chapters: [{ title: "Uno", paragraphs: ["Hola."] }],
+      bilingual: {
+        targetLanguage: "Russian",
+        chapters: [{ title: "Parte I", text: "" }],
+        entries: [{ source: "Hola.", translation: "Привет." }],
+      },
+    });
+
+    const parsed = await parseEpub(bytes);
+    expect(parsed.chapters).toEqual([{ title: "Uno", text: "Hola." }]);
+  });
+
   it("recovers the source from a target-only bilingual block", async () => {
     const bytes = buildEpubBytes({
       title: "Libro",

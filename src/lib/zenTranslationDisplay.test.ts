@@ -74,4 +74,16 @@ describe("pairBilingualTranslation", () => {
     const block = "🇪🇸 Hola mundo.\nПривет, мир.";
     expect(pairBilingualTranslation("Hola mundo.", block)).toBe(block);
   });
+
+  it("handles multiline source-only and source-plus-target stanzas", () => {
+    expect(pairSourceWithTranslation("Hola\nmundo.", "🇪🇸 Hola\nmundo.")).toBe(
+      "🇪🇸 Hola\nmundo.",
+    );
+    expect(pairBilingualTranslation("Hola\nmundo.", "🇪🇸 Hola\nmundo.")).toBe(
+      "🇪🇸 Hola\nmundo.",
+    );
+    expect(
+      pairBilingualTranslation("Hola\nmundo.", "🇪🇸 Hola\nmundo.\nПривет."),
+    ).toBe("🇪🇸 Hola\nmundo.\nПривет.");
+  });
 });
