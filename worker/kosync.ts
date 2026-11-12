@@ -492,6 +492,16 @@ export async function handleKosyncPush(
 
   // Missing changes metadata fails closed: no clobber, retry next change.
   if ((result?.meta?.changes ?? 0) === 0) {
+    // A timed-out client can retry after its write actually committed. Adopt
+    // only the exact same position; anything else is a real newer push.
+    const current = await findProgress(env.DB, row.document);
+    if (current?.progress === progress) {
+      return jsonResponse({
+        pushed: true,
+        document: current.document,
+        updatedAt: current.updated_at,
+      });
+    }
     return jsonResponse({ pushed: false, reason: "stale" });
   }
   return jsonResponse({

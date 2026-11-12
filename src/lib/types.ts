@@ -173,7 +173,7 @@ export interface KosyncPushResult {
   reason?: KosyncPushReason;
   /** Present when pushed: the KOReader document that was updated. */
   document?: string;
-  /** Present when pushed: the new server timestamp in Unix seconds. */
+  /** Present when pushed: the row's server timestamp in Unix seconds. */
   updatedAt?: number;
 }
 

@@ -683,6 +683,34 @@ describe("handleKosyncPush", () => {
     });
   });
 
+  it("recovers a retry whose timed-out write already committed", async () => {
+    const { env } = await envWithRow();
+    vi.spyOn(Date, "now").mockReturnValue((at + 10) * 1000);
+    await push(env);
+
+    // The client timed out before receiving updatedAt, so it retries with the
+    // old base. The row already holds this exact pointer: adopt its timestamp.
+    const retry = await push(env, body({ baseUpdatedAt: at }));
+    await expect(retry.json()).resolves.toEqual({
+      pushed: true,
+      document,
+      updatedAt: at + 10,
+    });
+
+    // A different position with the same old base is still a real stale case.
+    const moved = await push(
+      env,
+      body({
+        progress: "/body/DocFragment[1]/body/p[2]/br[1].0",
+        baseUpdatedAt: at,
+      }),
+    );
+    await expect(moved.json()).resolves.toEqual({
+      pushed: false,
+      reason: "stale",
+    });
+  });
+
   it("allows consecutive pushes once the base follows the last response", async () => {
     const { env } = await envWithRow();
     vi.spyOn(Date, "now").mockReturnValue((at + 10) * 1000);
