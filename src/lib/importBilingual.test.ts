@@ -49,7 +49,7 @@ describe("seedImportedTranslations", () => {
     });
 
     expect(count).toBe(1);
-    expect(entries[0]?.translation).toBe("🇪🇸 Hola.\nПривет.");
+    expect(entries[0]?.translation).toBe("🇪🇸 Hola.\n🇷🇺 Привет.");
   });
 
   it("does nothing when the sidecar target differs from the settings", async () => {

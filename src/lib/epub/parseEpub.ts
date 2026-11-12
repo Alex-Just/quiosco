@@ -310,6 +310,13 @@ export async function parseEpub(
     const finalChapters =
       sidecarChapters.length > 0 ? sidecarChapters : chapters;
     if (finalChapters.length === 0) throw new EpubError("empty");
+    const finalChars = finalChapters.reduce(
+      (sum, chapter) => sum + chapter.text.length,
+      0,
+    );
+    if (finalChars > MAX_BOOK_CHARS) {
+      throw new EpubError("too-large", "text");
+    }
     return {
       title: pkg.title,
       author: pkg.author,

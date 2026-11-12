@@ -9,6 +9,24 @@ import { pairBilingualTranslation } from "./zenTranslationDisplay";
 
 const IMPORT_MODEL = "quiosco-bilingual-import";
 
+/** Flags for the common target languages; unknown languages stay unflagged. */
+const LANGUAGE_FLAGS: Readonly<Record<string, string>> = {
+  russian: "🇷🇺",
+  english: "🇬🇧",
+  spanish: "🇪🇸",
+  french: "🇫🇷",
+  german: "🇩🇪",
+  italian: "🇮🇹",
+  portuguese: "🇵🇹",
+  ukrainian: "🇺🇦",
+  polish: "🇵🇱",
+  dutch: "🇳🇱",
+  turkish: "🇹🇷",
+  japanese: "🇯🇵",
+  korean: "🇰🇷",
+  chinese: "🇨🇳",
+};
+
 export async function seedImportedTranslations(args: {
   store: Pick<ArticleStore, "putSentences">;
   bilingual: BilingualBook;
@@ -27,6 +45,7 @@ export async function seedImportedTranslations(args: {
   });
   const rulesHashValue = await keyMemo.rulesHash();
   const createdAt = Date.now();
+  const targetFlag = languageFlag(args.bilingual.targetLanguage);
   const entries = new Map<string, SentenceCacheEntry>();
 
   for (const pair of args.bilingual.entries) {
@@ -38,7 +57,7 @@ export async function seedImportedTranslations(args: {
     entries.set(key, {
       key,
       source,
-      translation: pairBilingualTranslation(source, translation),
+      translation: pairBilingualTranslation(source, translation, targetFlag),
       targetLanguage: args.settings.targetLanguage,
       rulesHash: rulesHashValue,
       model: IMPORT_MODEL,
@@ -53,4 +72,8 @@ export async function seedImportedTranslations(args: {
 
 function normalizeLanguage(value: string): string {
   return value.trim().toLowerCase();
+}
+
+function languageFlag(value: string): string {
+  return LANGUAGE_FLAGS[normalizeLanguage(value)] ?? "";
 }

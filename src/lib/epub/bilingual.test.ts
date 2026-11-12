@@ -10,7 +10,10 @@ describe("bilingual sidecar", () => {
   it("round-trips the target language and pairs", () => {
     const book = {
       targetLanguage: "Russian",
-      chapters: [{ title: "Uno", text: "Hola." }],
+      chapters: [
+        { title: "Parte I", text: "" },
+        { title: "Uno", text: "Hola." },
+      ],
       entries: [{ source: "Hola.", translation: "🇪🇸 Hola.\n🇷🇺 Привет." }],
     };
     expect(parseBilingualSidecar(buildBilingualSidecar(book))).toEqual(book);

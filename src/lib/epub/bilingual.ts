@@ -79,8 +79,7 @@ export function parseBilingualSidecar(raw: string): BilingualBook | null {
       if (!isRecord(chapter)) return [];
       if (
         typeof chapter.title !== "string" ||
-        typeof chapter.text !== "string" ||
-        chapter.text.trim().length === 0
+        typeof chapter.text !== "string"
       ) {
         return [];
       }

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { strToU8, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
+import { buildEpubBytes } from "./buildEpub";
 import {
   EpubError,
   type EpubErrorCode,
@@ -423,6 +424,31 @@ describe("parseEpub", () => {
       ),
     });
     const error = await parseEpub(epub(files)).then(
+      () => null,
+      (reason: unknown) => reason,
+    );
+    expect(error).toBeInstanceOf(EpubError);
+    expect((error as EpubError).code).toBe("too-large");
+    expect((error as EpubError).detail).toBe("text");
+  });
+
+  it("rejects oversized source chapters from a sidecar", {
+    timeout: 20_000,
+  }, async () => {
+    const bytes = buildEpubBytes({
+      title: "Libro",
+      author: null,
+      language: "es",
+      uuid: "11111111-2222-3333-4444-555555555555",
+      modified: "2026-10-19T10:00:00.000Z",
+      chapters: [{ title: "Uno", paragraphs: ["Hola."] }],
+      bilingual: {
+        targetLanguage: "Russian",
+        chapters: [{ title: "Uno", text: "a".repeat(MAX_BOOK_CHARS + 1) }],
+        entries: [{ source: "Hola.", translation: "Привет." }],
+      },
+    });
+    const error = await parseEpub(bytes).then(
       () => null,
       (reason: unknown) => reason,
     );

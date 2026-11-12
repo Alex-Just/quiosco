@@ -69,4 +69,9 @@ describe("pairBilingualTranslation", () => {
     const bilingual = "🇪🇸 Hola mundo.\n🇷🇺 Привет, мир.";
     expect(pairBilingualTranslation("Hola mundo.", bilingual)).toBe(bilingual);
   });
+
+  it("does not duplicate a single-flag stanza that already opens with the source", () => {
+    const block = "🇪🇸 Hola mundo.\nПривет, мир.";
+    expect(pairBilingualTranslation("Hola mundo.", block)).toBe(block);
+  });
 });

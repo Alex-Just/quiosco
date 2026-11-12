@@ -20,6 +20,7 @@ export default function ArticlePage() {
   if (article.kind === "book") {
     return (
       <BookReader
+        key={article.id}
         store={store}
         article={article}
         setArticle={setArticle}

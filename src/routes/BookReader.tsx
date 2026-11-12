@@ -249,8 +249,8 @@ export default function BookReader({
     paragraphUnits,
   });
 
-  const canTranslate =
-    Boolean(settings.appToken) || article.bookTranslationOn === true;
+  const hasToken = Boolean(settings.appToken);
+  const canTranslate = hasToken || article.bookTranslationOn === true;
   const currentUnit = zenUnit == null ? null : (units[zenUnit] ?? null);
   const displayedText =
     translationMode && zenUnit != null
@@ -535,7 +535,7 @@ export default function BookReader({
           onRemoveNarration={narration.remove}
           // In Zen the translation entry's hint already explains both
           // disabled items; in regular mode this entry carries it.
-          finishExportHint={canTranslate || zenMode ? null : MISSING_TOKEN_HINT}
+          finishExportHint={hasToken || zenMode ? null : MISSING_TOKEN_HINT}
           onClose={() => setMoreOpen(false)}
           onToggleRead={toggleRead}
           onToggleArchive={toggleArchive}

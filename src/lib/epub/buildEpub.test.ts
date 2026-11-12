@@ -93,7 +93,10 @@ describe("buildEpub", () => {
   it("writes and round-trips the bilingual sidecar", async () => {
     const bilingual = {
       targetLanguage: "Russian",
-      chapters: [{ title: "Uno", text: "Hola." }],
+      chapters: [
+        { title: "Parte I", text: "" },
+        { title: "Uno", text: "Hola." },
+      ],
       entries: [{ source: "Hola.", translation: "🇪🇸 Hola.\n🇷🇺 Привет." }],
     };
     const bytes = buildEpubBytes({

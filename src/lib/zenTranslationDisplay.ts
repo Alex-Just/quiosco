@@ -38,29 +38,48 @@ export function pairSourceWithTranslation(
   if (!flagged) return repaired;
 
   const onlyText = stripSentenceMarkers(stanzas[0] ?? repaired).trim();
-  if (onlyText === sourceText) return repaired;
+  if ((onlyText.split("\n")[0] ?? "").trim() === sourceText) return repaired;
 
   return `${withSourceFlag(sourceText)}\n${repaired}`;
 }
 
 /**
- * Sidecar import: the source is known, so pair a translation-only block even
- * when the model omitted its language flag. Complete bilingual blocks and
- * source-only blocks are left alone.
+ * Sidecar import: the source and target language are known, so build one
+ * canonical two-stanza block even when the model omitted flags. Complete
+ * bilingual blocks keep their target stanza; source-only blocks stay source.
  */
 export function pairBilingualTranslation(
   source: string,
   translation: string,
+  targetFlag = "",
 ): string {
   const sourceText = source.trim();
   const repaired = repairFlagMarkers(translation).trim();
   if (!repaired) return sourceText;
   if (!sourceText) return repaired;
 
-  const stanzas = splitFlagStanzas(repaired);
-  if (stanzas.length >= 2) return repaired;
-  const onlyText = stripSentenceMarkers(stanzas[0] ?? repaired).trim();
-  if (onlyText === sourceText) return repaired;
+  const targetText = targetStanza(repaired, sourceText);
+  if (!targetText) return withSourceFlag(sourceText);
+  const targetLine =
+    targetFlag && !startsWithFlag(targetText)
+      ? `${targetFlag} ${targetText}`
+      : targetText;
+  return `${withSourceFlag(sourceText)}\n${targetLine}`;
+}
 
-  return `${withSourceFlag(sourceText)}\n${repaired}`;
+function targetStanza(block: string, sourceText: string): string {
+  const stanzas = splitFlagStanzas(block);
+  if (stanzas.length >= 2) {
+    // Keep the target stanza's own flag when present.
+    return (stanzas[stanzas.length - 1] ?? "").trim();
+  }
+
+  const stanza = stanzas[0] ?? block;
+  const stripped = stripSentenceMarkers(stanza).trim();
+  const lines = stripped.split("\n");
+  if ((lines[0] ?? "").trim() === sourceText) {
+    return lines.slice(1).join("\n").trim();
+  }
+  // A target-only stanza may already carry its flag; preserve it.
+  return startsWithFlag(stanza) ? stanza.trim() : stripped;
 }
