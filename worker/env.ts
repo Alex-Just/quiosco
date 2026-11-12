@@ -43,7 +43,7 @@ export interface Env {
   DAILY_CHUNK_BUDGET: string;
   /**
    * Optional KOReader progress sync account. Both must be set to enable the
-   * read-only bridge; KOSYNC_KEY is md5(plaintext password), never the
+   * bridge; KOSYNC_KEY is md5(plaintext password), never the
    * plaintext, because KOReader sends the hash as x-auth-key.
    */
   KOSYNC_USER?: string;

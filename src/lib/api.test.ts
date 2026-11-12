@@ -278,6 +278,90 @@ describe("createApi", () => {
     await expect(api.kosyncProgress({ title: "T" })).resolves.toBeNull();
   });
 
+  it("pushes an exact position with keepalive", async () => {
+    const fetchFn = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            pushed: true,
+            document: "0123456789abcdef0123456789abcdef",
+            updatedAt: 1_760_000_010,
+          }),
+          { headers: { "content-type": "application/json" } },
+        ),
+    );
+    const api = createApi({
+      token: "t",
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    const request = {
+      filename: "Libro-bilingual.epub",
+      progress: "/body/DocFragment[2]/body/p[1]/br[1].0",
+      percentage: 0.42,
+      baseUpdatedAt: 1_760_000_000,
+    };
+    await expect(api.kosyncPush(request)).resolves.toEqual({
+      pushed: true,
+      document: "0123456789abcdef0123456789abcdef",
+      updatedAt: 1_760_000_010,
+    });
+
+    const [url, init] = fetchFn.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe("/api/kosync/push");
+    expect(init.method).toBe("POST");
+    expect(init.keepalive).toBe(true);
+    expect(init.headers).toEqual({
+      Authorization: "Bearer t",
+      "Content-Type": "application/json",
+    });
+    expect(JSON.parse(String(init.body))).toEqual(request);
+  });
+
+  it("returns a stale push result for the reader to stop on", async () => {
+    const fetchFn = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ pushed: false, reason: "stale" }), {
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    const api = createApi({
+      token: "t",
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    await expect(
+      api.kosyncPush({
+        filename: "Libro-bilingual.epub",
+        progress: "/body/DocFragment[1]/body/p[1]/br[1].0",
+        percentage: 0,
+        baseUpdatedAt: 1_760_000_000,
+      }),
+    ).resolves.toEqual({ pushed: false, reason: "stale" });
+  });
+
+  it("rejects a malformed push response", async () => {
+    const fetchFn = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ pushed: true }), {
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    const api = createApi({
+      token: "t",
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    await expect(
+      api.kosyncPush({
+        filename: "Libro-bilingual.epub",
+        progress: "/body/DocFragment[1]/body/p[1]/br[1].0",
+        percentage: 0,
+        baseUpdatedAt: 1_760_000_000,
+      }),
+    ).rejects.toBeInstanceOf(ApiError);
+  });
+
   it("fetchThread calls /api/thread and parses the response", async () => {
     const body = {
       title: "Hilo",

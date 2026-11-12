@@ -4,7 +4,8 @@ OPENCODE_API_KEY=your-zen-key-here
 # Optional: required only when Settings → TTS provider is ElevenLabs.
 ELEVENLABS_API_KEY=your-elevenlabs-key-here
 JINA_API_KEY=jina_api_key
-# Optional: read-only KOReader progress sync. KOSYNC_KEY is the MD5 of the
+# Optional: KOReader progress sync (read, plus exact app push for bilingual
+# exports). KOSYNC_KEY is the MD5 of the
 # password you type in KOReader, never the plaintext:
 #   printf %s 'your-password' | md5sum   # Linux
 #   printf %s 'your-password' | md5 -q   # macOS

@@ -143,6 +143,24 @@ describe("router", () => {
     expect(response.status).toBe(401);
   });
 
+  it("requires the app token for a kosync push and reports a disabled bridge", async () => {
+    const missing = await handleRequest(
+      new Request("https://app.example/api/kosync/push", { method: "POST" }),
+      makeEnv(),
+    );
+    expect(missing.status).toBe(401);
+
+    const disabled = await handleRequest(
+      authed("/api/kosync/push", { method: "POST", body: "{}" }),
+      makeEnv(),
+    );
+    expect(disabled.status).toBe(200);
+    await expect(disabled.json()).resolves.toEqual({
+      pushed: false,
+      reason: "disabled",
+    });
+  });
+
   it("routes GET /api/thread to the thread handler", async () => {
     vi.stubGlobal(
       "fetch",

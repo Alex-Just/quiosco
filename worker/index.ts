@@ -4,7 +4,7 @@ import { handleDecide } from "./decide";
 import type { Env } from "./env";
 import { handleFetchRung } from "./fetchRung";
 import { applySecurityHeaders, jsonResponse } from "./headers";
-import { handleKosync, handleKosyncLookup } from "./kosync";
+import { handleKosync, handleKosyncLookup, handleKosyncPush } from "./kosync";
 import { workerSentryOptions } from "./sentry";
 import { handleSync } from "./sync";
 import { handleThread } from "./thread";
@@ -86,6 +86,8 @@ async function handleApi(
     request.method === "GET"
   ) {
     response = await handleKosyncLookup(request, env);
+  } else if (url.pathname === "/api/kosync/push" && request.method === "POST") {
+    response = await handleKosyncPush(request, env);
   } else {
     response = jsonResponse({ error: "not found" }, 404);
   }

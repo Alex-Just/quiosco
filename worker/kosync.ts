@@ -26,6 +26,14 @@ const MAX_FILENAME_CHARS = 512;
 const MAX_TITLE_CHARS = 512;
 const MAX_AUTHORS_CHARS = 512;
 const MAX_DEVICE_CHARS = 128;
+const MAX_PROGRESS_CHARS = 512;
+
+/** Only quiosco's own export has deterministic chapter/paragraph XPointers. */
+const BILINGUAL_FILENAME = /-bilingual\.epub$/i;
+const EXPORT_XPOINTER =
+  /^\/body\/DocFragment\[[1-9]\d{0,5}\]\/body\/p\[[1-9]\d{0,5}\]\/br\[1\](?:\.\d{1,6})?$/;
+/** Shown by KOReader as the device that last pushed. */
+const APP_DEVICE = "Quiosco";
 
 const PROGRESS_COLUMNS =
   "document, filename, title, authors, progress, percentage, device, device_id, updated_at";
@@ -250,6 +258,21 @@ async function findProgress(
     .first<KosyncProgressRow>();
 }
 
+async function findProgressByFilename(
+  db: D1Like,
+  filename: string,
+): Promise<KosyncProgressRow | null> {
+  return db
+    .prepare(
+      `SELECT ${PROGRESS_COLUMNS} FROM kosync_progress
+       WHERE filename = ? COLLATE NOCASE
+       ORDER BY updated_at DESC
+       LIMIT 1`,
+    )
+    .bind(filename)
+    .first<KosyncProgressRow>();
+}
+
 function progressResponse(row: KosyncProgressRow): Record<string, unknown> {
   return {
     document: row.document,
@@ -266,15 +289,7 @@ async function findLinkedProgress(
   identity: BookIdentity,
 ): Promise<KosyncProgressRow | null> {
   if (identity.filename) {
-    const byFilename = await db
-      .prepare(
-        `SELECT ${PROGRESS_COLUMNS} FROM kosync_progress
-         WHERE filename = ? COLLATE NOCASE
-         ORDER BY updated_at DESC
-         LIMIT 1`,
-      )
-      .bind(identity.filename)
-      .first<KosyncProgressRow>();
+    const byFilename = await findProgressByFilename(db, identity.filename);
     if (byFilename) return byFilename;
   }
   if (!identity.title) return null;
@@ -401,4 +416,87 @@ export async function handleKosyncLookup(
   }
   const row = await findLinkedProgress(env.DB, identity);
   return jsonResponse({ progress: row ? lookupResponse(row) : null });
+}
+
+/**
+ * App-facing write: push the reader's exact position for a bilingual export.
+ *
+ * KOReader stores the EPUB position as a CRe XPointer. quiosco can only
+ * generate one for a `*-bilingual.epub` it produced itself, so this route
+ * refuses every other file. The row must already exist: the document id is
+ * KOReader's, and the app learns it from the read lookup.
+ *
+ * `baseUpdatedAt` is the server timestamp the app last saw. The conditional
+ * UPDATE is the concurrency guard: if KOReader pushed after that, no row
+ * changes and the app stops for the session instead of clobbering it.
+ */
+export async function handleKosyncPush(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  if (!env.KOSYNC_USER?.trim() || !env.KOSYNC_KEY?.trim()) {
+    return jsonResponse({ pushed: false, reason: "disabled" });
+  }
+
+  const body = await readJsonBody(request);
+  if (body instanceof Response) {
+    return body.status === 413
+      ? body
+      : jsonResponse({ error: "bad request" }, 400);
+  }
+
+  const filename = normalizeFilename(body.filename);
+  if (!filename) return jsonResponse({ error: "bad request" }, 400);
+  if (!BILINGUAL_FILENAME.test(filename)) {
+    return jsonResponse({ pushed: false, reason: "not-exact" });
+  }
+
+  const progress = cleanString(body.progress, MAX_PROGRESS_CHARS);
+  const percentage = body.percentage;
+  const baseUpdatedAt = body.baseUpdatedAt;
+  if (
+    !progress ||
+    !EXPORT_XPOINTER.test(progress) ||
+    typeof percentage !== "number" ||
+    !Number.isFinite(percentage) ||
+    percentage < 0 ||
+    percentage > 1 ||
+    typeof baseUpdatedAt !== "number" ||
+    !Number.isInteger(baseUpdatedAt) ||
+    baseUpdatedAt < 0
+  ) {
+    return jsonResponse({ error: "bad request" }, 400);
+  }
+
+  const row = await findProgressByFilename(env.DB, filename);
+  if (!row?.filename || !BILINGUAL_FILENAME.test(row.filename)) {
+    return jsonResponse({ pushed: false, reason: "unlinked" });
+  }
+
+  const timestamp = Math.floor(Date.now() / 1000);
+  const result = (await env.DB.prepare(
+    `UPDATE kosync_progress
+     SET progress = ?, percentage = ?, device = ?, device_id = NULL,
+         updated_at = ?
+     WHERE document = ? AND updated_at <= ?`,
+  )
+    .bind(
+      progress,
+      percentage,
+      APP_DEVICE,
+      timestamp,
+      row.document,
+      baseUpdatedAt,
+    )
+    .run()) as { meta?: { changes?: number } } | undefined;
+
+  // Missing changes metadata fails closed: no clobber, retry next change.
+  if ((result?.meta?.changes ?? 0) === 0) {
+    return jsonResponse({ pushed: false, reason: "stale" });
+  }
+  return jsonResponse({
+    pushed: true,
+    document: row.document,
+    updatedAt: timestamp,
+  });
 }

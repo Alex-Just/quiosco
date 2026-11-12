@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { BookSentenceUnit } from "./bookText";
 import {
+  bilingualXPointer,
   bilingualXPointerUnitIndex,
   KOSYNC_MAPPING_VERSION,
   loadKosyncDismissal,
@@ -110,6 +111,50 @@ describe("bilingualXPointerUnitIndex", () => {
       index("/body/DocFragment[2]/body/p[1]/br[1].0", "libro.epub"),
     ).toBeNull();
     expect(index("/body/DocFragment[2]/body/p[1]/br[1].0", null)).toBeNull();
+  });
+});
+
+describe("bilingualXPointer", () => {
+  const chapterUnitStarts = [0, 3];
+  const pointer = (
+    index: number,
+    starts: readonly number[] = chapterBodyStarts,
+  ) =>
+    bilingualXPointer({
+      index,
+      chapterUnitStarts,
+      chapterBodyStarts: starts,
+      unitCount: chapteredUnits.length,
+    });
+
+  it("maps a body unit back to the export's chapter and p index", () => {
+    expect(pointer(1)).toBe("/body/DocFragment[1]/body/p[1]/br[1].0");
+    expect(pointer(2)).toBe("/body/DocFragment[1]/body/p[2]/br[1].0");
+    expect(pointer(4)).toBe("/body/DocFragment[2]/body/p[1]/br[1].0");
+    expect(pointer(5)).toBe("/body/DocFragment[2]/body/p[2]/br[1].0");
+  });
+
+  it("round-trips through the reader's mapper", () => {
+    for (const index of [1, 2, 4, 5]) {
+      const progress = pointer(index) as string;
+      expect(
+        bilingualXPointerUnitIndex({
+          progress,
+          filename: "libro-bilingual.epub",
+          chapterBodyStarts,
+          unitCount: chapteredUnits.length,
+        }),
+      ).toBe(index);
+    }
+  });
+
+  it("rejects title units, out-of-range indexes, and chapterless books", () => {
+    expect(pointer(0)).toBeNull();
+    expect(pointer(3)).toBeNull();
+    expect(pointer(6)).toBeNull();
+    expect(pointer(-1)).toBeNull();
+    expect(pointer(1.5)).toBeNull();
+    expect(pointer(1, [])).toBeNull();
   });
 });
 

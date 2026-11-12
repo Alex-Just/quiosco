@@ -1,5 +1,9 @@
 import type { BookSentenceUnit } from "./bookText";
-import type { KosyncProgress } from "./types";
+import type {
+  KosyncProgress,
+  KosyncPushReason,
+  KosyncPushResult,
+} from "./types";
 
 /**
  * KOReader sends two position signals: a CRe XPointer and a pagination
@@ -47,6 +51,13 @@ const DISMISSED_PREFIX = "quiosco.kosync.dismissed.";
 
 const BILINGUAL_XPOINTER =
   /^\/body\/DocFragment\[(\d+)\]\/body\/p\[(\d+)\]\/br\[1\](?:\.\d+)?$/;
+
+/** True for a quiosco bilingual export, the only EPUB with exact XPointers. */
+export function isBilingualExportFilename(
+  value: string | null | undefined,
+): boolean {
+  return value?.toLowerCase().endsWith("-bilingual.epub") === true;
+}
 
 export function unitOffsets(units: readonly BookSentenceUnit[]): UnitOffsets {
   const starts = new Array<number>(units.length);
@@ -99,7 +110,7 @@ export function bilingualXPointerUnitIndex(args: {
   unitCount: number;
 }): number | null {
   const { progress, filename, chapterBodyStarts, unitCount } = args;
-  if (!filename?.toLowerCase().endsWith("-bilingual.epub")) return null;
+  if (!isBilingualExportFilename(filename)) return null;
   const match = BILINGUAL_XPOINTER.exec(progress);
   if (!match) return null;
   const chapter = Number(match[1]);
@@ -113,6 +124,45 @@ export function bilingualXPointerUnitIndex(args: {
   const end = chapterBodyStarts[chapter] ?? unitCount;
   const unit = start + paragraph - 1;
   return unit >= start && unit < end ? unit : null;
+}
+
+/**
+ * Exact export XPointer for a body unit: the inverse of
+ * `bilingualXPointerUnitIndex`. Title units have no `<p>`, so they return
+ * null, as do units outside the book or in a chapterless book.
+ *
+ * `chapterUnitStarts` is the first Zen unit of each chapter including its
+ * title; `chapterBodyStarts` is the first unit after that title. A unit is
+ * body text only inside `[bodyStart, nextChapterTitleStart)`.
+ */
+export function bilingualXPointer(args: {
+  index: number;
+  chapterUnitStarts: readonly number[];
+  chapterBodyStarts: readonly number[];
+  unitCount: number;
+}): string | null {
+  const { index, chapterUnitStarts, chapterBodyStarts, unitCount } = args;
+  if (!Number.isInteger(index) || index < 0 || index >= unitCount) return null;
+  if (chapterUnitStarts.length === 0) return null;
+  if (chapterUnitStarts.length !== chapterBodyStarts.length) return null;
+
+  let chapter = -1;
+  for (
+    let candidate = 0;
+    candidate < chapterUnitStarts.length;
+    candidate += 1
+  ) {
+    if ((chapterUnitStarts[candidate] ?? 0) <= index) chapter = candidate;
+    else break;
+  }
+  if (chapter < 0) return null;
+
+  const bodyStart = chapterBodyStarts[chapter] ?? 0;
+  const end = chapterUnitStarts[chapter + 1] ?? unitCount;
+  if (index < bodyStart || index >= end) return null;
+
+  const paragraph = index - bodyStart + 1;
+  return `/body/DocFragment[${chapter + 1}]/body/p[${paragraph}]/br[1].0`;
 }
 
 export function shouldPromptKosync(args: {
@@ -189,6 +239,38 @@ export function parseKosyncProgress(value: unknown): KosyncProgress | null {
     updatedAt: row.updatedAt,
     title: typeof row.title === "string" ? row.title : null,
     authors: typeof row.authors === "string" ? row.authors : null,
+  };
+}
+
+const PUSH_REASONS: ReadonlySet<string> = new Set([
+  "disabled",
+  "unlinked",
+  "not-exact",
+  "stale",
+]);
+
+/** Strict parse: a success must carry the new base timestamp and document. */
+export function parseKosyncPushResult(value: unknown): KosyncPushResult | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  if (typeof row.pushed !== "boolean") return null;
+  const reason =
+    typeof row.reason === "string" && PUSH_REASONS.has(row.reason)
+      ? (row.reason as KosyncPushReason)
+      : undefined;
+  const document = typeof row.document === "string" ? row.document : undefined;
+  const updatedAt =
+    typeof row.updatedAt === "number" && Number.isFinite(row.updatedAt)
+      ? row.updatedAt
+      : undefined;
+  if (row.pushed && (document === undefined || updatedAt === undefined)) {
+    return null;
+  }
+  return {
+    pushed: row.pushed,
+    ...(reason === undefined ? {} : { reason }),
+    ...(document === undefined ? {} : { document }),
+    ...(updatedAt === undefined ? {} : { updatedAt }),
   };
 }
 

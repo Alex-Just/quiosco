@@ -13,8 +13,8 @@ read/unread/archived list with copy-to-clipboard.
   Readability), 5-rung fetch ladder orchestration, IndexedDB storage, UI.
 - **Cloudflare Worker** — serves the built PWA and a thin authenticated proxy:
   `/api/fetch` (rung passthrough), `/api/translate` (Zen), `/api/sync`
-  (multi-device sync), `/api/health`, plus the read-only KOReader progress
-  endpoint at `/kosync`.
+  (multi-device sync), `/api/health`, plus the KOReader progress bridge
+  (`/kosync` for the e-reader, `/api/kosync/*` for the app).
 - **Storage** — IndexedDB on each device (offline-first), synced across your
   devices through Cloudflare D1 (`/api/sync`). See "Sync (D1)" below.
 
@@ -28,8 +28,9 @@ novels.
 Books share the library, actions, and read/unread/archived states with
 articles, but they are **local-only**: they never enter `/api/sync`, and
 reading position stays local, exactly as it does for articles. An optional
-read-only bridge can pull the position KOReader pushes from a PocketBook or
-other e-reader; see "KOReader progress sync" below.
+bridge exchanges positions with KOReader on a PocketBook or other e-reader,
+and pushes the app's exact sentence back for quiosco's bilingual exports; see
+"KOReader progress sync" below.
 
 A book opens in Zen. Translation mode is a Zen-only toggle: a book with no
 translations yet starts in the original text, and one that already has
@@ -219,9 +220,9 @@ hook.
 6. **Verify**: `GET /` returns the CSP header; `GET /api/health` returns 401
    without the token.
 7. **Rate limit**: add Cloudflare rate-limiting rules on `/api/*` and
-   `/kosync/*`. One shared `APP_TOKEN` gates the fetch proxy, Zen spend, and
-   sync — treat it as the crown jewel. The kosync route is public by protocol
-   and authenticates with a single MD5 key.
+   `/kosync/*`. One shared `APP_TOKEN` gates the fetch proxy, Zen spend,
+   sync, and the app-facing kosync routes — treat it as the crown jewel. The
+   kosync route is public by protocol and authenticates with a single MD5 key.
 
 ### CI deploy (GitHub Actions)
 
@@ -255,13 +256,15 @@ After D1 is created and the schema is applied (see checklist above):
 2. On each device: Settings → App token → Save → "Sync now".
    The app also syncs on open, after local changes, and when the network returns.
 
-## KOReader progress sync (read-only)
+## KOReader progress sync
 
-Quiosco can read the reading position that KOReader pushes from a PocketBook
-(or any KOReader) and offer to jump to it when the same EPUB is open. It is
-**read-only**: quiosco never writes a position back, because KOReader's EPUB
-position is a CRe XPointer that quiosco cannot generate. The bridge is off
-until both `KOSYNC_USER` and `KOSYNC_KEY` are set.
+Quiosco can exchange reading positions with KOReader on a PocketBook (or any
+KOReader). For a quiosco-generated `*-bilingual.epub` the bridge is two-way:
+KOReader pushes and the app offers to jump, and reading in the app pushes the
+exact sentence back so KOReader resumes there. For any other EPUB it is
+read-only: KOReader's position is a CRe XPointer quiosco cannot generate, so
+the app only offers the approximate percentage. The bridge is off until both
+`KOSYNC_USER` and `KOSYNC_KEY` are set.
 
 How it works:
 
@@ -276,8 +279,16 @@ How it works:
   by quiosco carries an XPointer that resolves to the exact chapter and
   sentence; other EPUBs fall back to a percentage, so the prompt is offered
   but the landing point is approximate. The jump is always explicit.
-- `kosync_progress` is only ever written by KOReader's `PUT`; the app's route
-  is a read.
+- For a `*-bilingual.epub`, the reader also pushes: 1.5 s after the sentence
+  settles, and when the app is hidden, it writes the exact XPointer through
+  `/api/kosync/push`. That route uses `APP_TOKEN`; the kosync MD5 key never
+  reaches the client.
+- A push never clobbers a newer e-reader position. The app sends the server
+  timestamp it last read; if KOReader pushed after that, the row is left alone
+  and the app stops pushing for the session. The app also never pushes while a
+  jump banner is showing.
+- The app can only push a book after KOReader has pushed it at least once:
+  that first push supplies the document id the app writes to.
 
 Setup:
 
@@ -298,15 +309,21 @@ Setup:
    device now**.
 5. Open the same EPUB in quiosco. Books imported before this feature have no
    original filename, so they fall back to title/author; re-import for exact
-   matching.
+   matching. For two-way sync, open the book once in KOReader and push, then
+   read in quiosco: each settled sentence is pushed back and KOReader resumes
+   there on its next pull.
 
 Caveats:
 
 - EPUB only, and progress only: no highlights, notes, or bookmarks.
 - A quiosco `*-bilingual.epub` export maps exactly by XPointer, because its
-  chapters and sentence paragraphs are generated deterministically. Any other
-  EPUB uses KOReader's page-based percentage and is approximate (usually
-  within a page or two); do not expect the exact sentence.
+  chapters and sentence paragraphs are generated deterministically. That is
+  also the only file the app pushes; other EPUBs use KOReader's page-based
+  percentage for the read side (approximate, usually within a page or two)
+  and stay read-only.
+- The app pushes only while it is open, with a flush when it is hidden: a TWA
+  has no background sync. A network failure is silent and retries on the next
+  page turn.
 - Different editions or modified files do not match. As in KOReader, a
   mismatch is silent: the lookup simply finds nothing.
 - Percentage matches only offer forward jumps, matching KOReader's default
@@ -318,8 +335,9 @@ Caveats:
   them. The official server discards this metadata; quiosco needs it to link
   the book, so with **Send document metadata** off the bridge cannot match new
   pushes (the app has no document digest).
-- `/kosync/*` is public by protocol and authenticates with one MD5 key. Use a
-  strong password and a rate-limiting rule.
+- `/kosync/*` is public by protocol and authenticates with one MD5 key; the
+  app-facing `/api/kosync/*` routes use `APP_TOKEN` instead. Use a strong
+  password and a rate-limiting rule.
 
 Local development: apply both schemas to the local D1 once, then run
 `pnpm dev`:
@@ -377,7 +395,8 @@ printed.
   user-agent spoofing, kept for personal reading only.
 - The optional KOReader bridge stores only the reading position plus the
   filename/title/authors KOReader sends when **Send document metadata** is on.
-  It never stores book content. Its key is an MD5 hash and `/kosync/*` is
+  Reading a bilingual export in quiosco updates that stored position; the
+  bridge never stores book content. Its key is an MD5 hash and `/kosync/*` is
   public by protocol: use a strong password and a rate-limiting rule.
 - Personal use: read privately, never redistribute. Hard paywalls are not
   defeated; the manual text path is for content you already have access to.

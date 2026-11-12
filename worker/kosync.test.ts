@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { D1Like, D1Statement, Env } from "./env";
-import { handleKosync, handleKosyncLookup } from "./kosync";
+import { handleKosync, handleKosyncLookup, handleKosyncPush } from "./kosync";
 
 type Row = {
   document: string;
@@ -105,6 +105,29 @@ function fakeDb() {
             updated_at: updatedAt,
           });
           return {};
+        }
+        if (text.startsWith("UPDATE kosync_progress")) {
+          const [
+            progress,
+            percentage,
+            device,
+            updatedAt,
+            document,
+            baseUpdatedAt,
+          ] = args as [string, number, string, number, string, number];
+          const existing = rows.get(document);
+          if (!existing || existing.updated_at > baseUpdatedAt) {
+            return { meta: { changes: 0 } };
+          }
+          rows.set(document, {
+            ...existing,
+            progress,
+            percentage,
+            device,
+            device_id: null,
+            updated_at: updatedAt,
+          });
+          return { meta: { changes: 1 } };
         }
         throw new Error(`unexpected run(): ${text}`);
       },
@@ -519,5 +542,165 @@ describe("handleKosyncLookup", () => {
     await expect(
       (await lookup(env, "filename=El%20principito.epub")).json(),
     ).resolves.toEqual({ progress: null });
+  });
+});
+
+describe("handleKosyncPush", () => {
+  const filename = "Libro-bilingual.epub";
+  const document = "0123456789abcdef0123456789abcdef";
+  const pointer = "/body/DocFragment[2]/body/p[1]/br[1].0";
+  const at = 1_760_000_000;
+  const body = (overrides: Record<string, unknown> = {}) => ({
+    filename,
+    progress: pointer,
+    percentage: 0.42,
+    baseUpdatedAt: at,
+    ...overrides,
+  });
+  const push = (env: Env, payload: Record<string, unknown> = body()) =>
+    handleKosyncPush(
+      new Request("https://app.example/api/kosync/push", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+      env,
+    );
+
+  async function envWithRow() {
+    const db = fakeDb();
+    const env = makeEnv(db);
+    vi.spyOn(Date, "now").mockReturnValue(at * 1000);
+    await handleKosync(
+      request("PUT", "/syncs/progress", {
+        body: progressBody({
+          metadata: {
+            filename,
+            title: "Libro",
+            authors: "Autora",
+          },
+        }),
+      }),
+      env,
+      new URL("https://app.example/kosync/syncs/progress"),
+    );
+    return { db, env };
+  }
+
+  it("stays disabled without both kosync secrets", async () => {
+    const env = makeEnv(fakeDb());
+    env.KOSYNC_KEY = undefined;
+    const response = await push(env);
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      pushed: false,
+      reason: "disabled",
+    });
+  });
+
+  it("refuses files that are not exact bilingual exports", async () => {
+    const { env } = await envWithRow();
+    await expect(
+      (await push(env, body({ filename: "Libro.epub" }))).json(),
+    ).resolves.toEqual({ pushed: false, reason: "not-exact" });
+    await expect(
+      (await push(env, body({ filename: "Otro-bilingual.epub" }))).json(),
+    ).resolves.toEqual({ pushed: false, reason: "unlinked" });
+  });
+
+  it("rejects malformed positions, percentages, and bases", async () => {
+    const { env } = await envWithRow();
+    const cases = [
+      body({ filename: undefined }),
+      body({ progress: "56" }),
+      body({ progress: "/body/DocFragment[2]/body/p[1]/text().0" }),
+      body({ percentage: 1.5 }),
+      body({ percentage: Number.NaN }),
+      body({ baseUpdatedAt: -1 }),
+      body({ baseUpdatedAt: 1.5 }),
+      body({ baseUpdatedAt: undefined }),
+    ];
+    for (const payload of cases) {
+      const response = await push(env, payload);
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toEqual({ error: "bad request" });
+    }
+  });
+
+  it("updates the row, preserves metadata, and marks the app as device", async () => {
+    const { db, env } = await envWithRow();
+    vi.spyOn(Date, "now").mockReturnValue((at + 10) * 1000);
+
+    const response = await push(env);
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      pushed: true,
+      document,
+      updatedAt: at + 10,
+    });
+
+    expect(db.rows.get(document)).toEqual({
+      document,
+      filename,
+      title: "Libro",
+      authors: "Autora",
+      progress: pointer,
+      percentage: 0.42,
+      device: "Quiosco",
+      device_id: null,
+      updated_at: at + 10,
+    });
+
+    const lookup = await handleKosyncLookup(
+      new Request(
+        `https://app.example/api/kosync/progress?filename=${encodeURIComponent(filename)}`,
+      ),
+      env,
+    );
+    await expect(lookup.json()).resolves.toMatchObject({
+      progress: {
+        document,
+        filename,
+        progress: pointer,
+        device: "Quiosco",
+        updatedAt: at + 10,
+      },
+    });
+  });
+
+  it("never overwrites a position KOReader pushed after the app's read", async () => {
+    const { db, env } = await envWithRow();
+    vi.spyOn(Date, "now").mockReturnValue((at + 10) * 1000);
+
+    const response = await push(env, body({ baseUpdatedAt: at - 1 }));
+    await expect(response.json()).resolves.toEqual({
+      pushed: false,
+      reason: "stale",
+    });
+    expect(db.rows.get(document)).toMatchObject({
+      progress: "/body/DocFragment[2]/body/p[1]/text().4",
+      device: "PocketBook",
+      updated_at: at,
+    });
+  });
+
+  it("allows consecutive pushes once the base follows the last response", async () => {
+    const { env } = await envWithRow();
+    vi.spyOn(Date, "now").mockReturnValue((at + 10) * 1000);
+    const first = await push(env);
+    await expect(first.json()).resolves.toMatchObject({ pushed: true });
+
+    vi.spyOn(Date, "now").mockReturnValue((at + 20) * 1000);
+    const second = await push(
+      env,
+      body({
+        progress: "/body/DocFragment[2]/body/p[2]/br[1].0",
+        baseUpdatedAt: at + 10,
+      }),
+    );
+    await expect(second.json()).resolves.toEqual({
+      pushed: true,
+      document,
+      updatedAt: at + 20,
+    });
   });
 });

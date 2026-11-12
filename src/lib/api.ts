@@ -4,11 +4,13 @@ import {
   parseTranslateTextPayload,
   runTranslateStream,
 } from "./apiStream";
-import { parseKosyncProgress } from "./kosync";
+import { parseKosyncProgress, parseKosyncPushResult } from "./kosync";
 import type {
   DecideRequest,
   DecideResponse,
   KosyncProgress,
+  KosyncPushRequest,
+  KosyncPushResult,
   Rung,
   RungResponse,
   SyncRequest,
@@ -35,6 +37,7 @@ export interface ApiClient {
     book: { filename?: string | null; title: string; author?: string | null },
     signal?: AbortSignal,
   ): Promise<KosyncProgress | null>;
+  kosyncPush(request: KosyncPushRequest): Promise<KosyncPushResult>;
 }
 
 // Client-side cutoff, slightly above the worker's own upstream timeouts (90s
@@ -216,6 +219,24 @@ export function createApi(options: {
       );
       const data = (await response.json()) as { progress?: unknown };
       return parseKosyncProgress(data.progress);
+    },
+
+    async kosyncPush(request) {
+      // keepalive lets the visibility-change flush finish while the TWA is
+      // being backgrounded. The body is tiny, well under the 64 KiB cap.
+      const response = await ensureOk(
+        await fetchFn("/api/kosync/push", {
+          method: "POST",
+          headers: { ...authHeaders, "Content-Type": "application/json" },
+          body: JSON.stringify(request),
+          keepalive: true,
+        }),
+      );
+      const result = parseKosyncPushResult(await response.json());
+      if (!result) {
+        throw new ApiError("malformed kosync push response", 502);
+      }
+      return result;
     },
   };
 }

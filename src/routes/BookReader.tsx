@@ -405,6 +405,7 @@ export default function BookReader({
     article,
     units,
     localIndex: zenUnit,
+    chapterUnitStarts,
     chapterBodyStarts,
     appToken: settings.appToken,
     enabled: zenMode,

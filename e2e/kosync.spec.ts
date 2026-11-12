@@ -201,3 +201,90 @@ test("a quiosco bilingual export maps its XPointer exactly", async ({
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("the app pushes its exact position back for a bilingual export", async ({
+  page,
+  request,
+}) => {
+  const dir = await mkdtemp(join(tmpdir(), "quiosco-kosync-push-"));
+  const filename = "qa-push-bilingual.epub";
+  const document = "c".repeat(32);
+  const file = join(dir, filename);
+  await writeFile(file, buildEpub());
+  try {
+    await page.goto("/settings");
+    await page.getByLabel("App token").fill("e2e-token");
+    await page.getByLabel("Translate automatically after saving").uncheck();
+    await page.getByRole("button", { name: "Save" }).click();
+
+    await page.goto("/add");
+    await page.getByRole("tab", { name: "Book" }).click();
+    await page.getByLabel("EPUB file").setInputFiles(file);
+    await expect(page.getByText("2 chapters ·")).toBeVisible();
+    await page.getByRole("button", { name: "Save" }).click();
+    await page.waitForURL("**/article/**");
+    const articleUrl = page.url();
+
+    // A non-exact pointer at 0% links the row by filename without offering a
+    // jump, so the app starts from a clean base with no banner in the way.
+    expect(
+      (
+        await pushProgress(request, {
+          document,
+          filename,
+          progress: "/body/DocFragment[1]/body/p[1]/text().0",
+          percentage: 0,
+        })
+      ).ok(),
+    ).toBe(true);
+
+    await page.goto(articleUrl);
+    await expect(page.locator(".kosync-prompt")).toHaveCount(0);
+    const label = page.locator(".zen-progress-label");
+    await expect(label).toHaveText(/^1\//);
+
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("ArrowDown");
+    const current = await label.textContent();
+    const index = Number(/^(\d+)\//.exec(current ?? "")?.[1] ?? 0) - 1;
+    expect(index).toBeGreaterThanOrEqual(1);
+    const expected = `/body/DocFragment[1]/body/p[${index}]/br[1].0`;
+
+    await expect
+      .poll(
+        async () => {
+          const response = await request.get(
+            `/kosync/syncs/progress/${document}`,
+            {
+              headers: {
+                "x-auth-user": "quiosco",
+                "x-auth-key": AUTH_KEY,
+              },
+            },
+          );
+          const body = (await response.json()) as {
+            progress?: string;
+            device?: string;
+          };
+          return { progress: body.progress, device: body.device };
+        },
+        { timeout: 10_000 },
+      )
+      .toEqual({ progress: expected, device: "Quiosco" });
+
+    // The app's own lookup sees the pushed position, so another install would
+    // be offered the same sentence.
+    const lookup = await request.get(
+      `/api/kosync/progress?filename=${encodeURIComponent(filename)}`,
+      { headers: { Authorization: "Bearer e2e-token" } },
+    );
+    await expect(lookup.ok()).toBe(true);
+    const looked = (await lookup.json()) as {
+      progress: { progress: string; device: string } | null;
+    };
+    expect(looked.progress?.progress).toBe(expected);
+    expect(looked.progress?.device).toBe("Quiosco");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
