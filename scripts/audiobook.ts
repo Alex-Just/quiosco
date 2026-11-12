@@ -319,6 +319,26 @@ function readTranscript(path: string): TimedWord[] {
   return parsed.words;
 }
 
+/**
+ * How much of the audio a transcript must reach to be reusable. A run killed
+ * mid-chapter leaves a short transcript behind; the pack would then stretch
+ * one part of the book over the whole file.
+ */
+const TRANSCRIPT_COVERAGE = 0.85;
+
+/** True when the cached transcript runs to the end of its audio. */
+function transcriptIsComplete(out: string, audio: string): boolean {
+  if (!existsSync(out)) return false;
+  try {
+    const parsed = JSON.parse(readFileSync(out, "utf8")) as Transcript;
+    const end = parsed.words.at(-1)?.end ?? 0;
+    const duration = durationOf(audio);
+    return duration > 0 && end >= duration * TRANSCRIPT_COVERAGE;
+  } catch {
+    return false;
+  }
+}
+
 /** Transcode one chapter to mono Opus and return the staged file. */
 function transcode(
   source: string,
@@ -576,7 +596,16 @@ async function main(): Promise<void> {
   if (options.transcribe) {
     const pending = audio.flatMap((source, index) => {
       const out = transcriptFiles[index];
-      return out && !existsSync(out) ? [{ audio: source, out }] : [];
+      if (!out) return [];
+      if (!existsSync(out)) return [{ audio: source, out }];
+      if (transcriptIsComplete(out, source)) return [];
+      // A run that died mid-chapter leaves a short transcript. Drop it so the
+      // transcriber writes the whole chapter again.
+      rmSync(out);
+      console.log(
+        `Re-transcribing ${basename(out)}: it stops before the audio ends.`,
+      );
+      return [{ audio: source, out }];
     });
     if (pending.length > 0) {
       console.log(`Transcribing ${pending.length} chapter(s)…`);
@@ -616,11 +645,15 @@ async function main(): Promise<void> {
           .slice(unitStarts[index] ?? 0, unitStarts[index + 1] ?? units.length)
           .map((unit) => unit.text);
         const duration = durationOf(stagedPath);
-        const aligned = alignChapter(
-          slice,
-          readTranscript(transcriptPath),
-          duration,
-        );
+        const words = readTranscript(transcriptPath);
+        const reached = words.at(-1)?.end ?? 0;
+        if (duration > 0 && reached < duration * TRANSCRIPT_COVERAGE) {
+          fail(
+            `${basename(transcriptPath)} stops at ${reached.toFixed(0)}s of ` +
+              `${duration.toFixed(0)}s; delete it and rerun so the chapter is transcribed whole`,
+          );
+        }
+        const aligned = alignChapter(slice, words, duration);
         if (aligned.coverage < COVERAGE_WARN) weak += 1;
         console.log(
           `[track ${track + 1}] ${chapter.title}: ` +

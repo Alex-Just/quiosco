@@ -102,6 +102,10 @@ existing files are skipped. An interrupted run continues where it stopped. To
 rebuild after adding missing chapters, run the same command: only the new
 chapters are transcribed, and the pack is rewritten.
 
+A cached transcript is only reused when it reaches the end of its audio. A run
+killed mid-chapter leaves a short one, and the tool transcribes that chapter
+again instead of stretching it over the whole file.
+
 The cache is keyed by track number, not by audio content. If you insert,
 remove or reorder tracks, delete the cache folder (or every transcript from the
 first changed track onward) before rebuilding. Otherwise old transcripts are
