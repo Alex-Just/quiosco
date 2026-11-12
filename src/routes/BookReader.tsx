@@ -197,14 +197,6 @@ export default function BookReader({
     store,
     bookId: article.id,
     chapterUnitStarts,
-    onEnded: (unit) => {
-      if (!autoListen) return;
-      setZenUnit((index) => {
-        if (index == null) return index;
-        const next = unit + 1;
-        return next < paneParagraphs.length ? next : index;
-      });
-    },
   });
   const narrated = narration.ready;
   const { stop: stopNarration, toggle: toggleNarration, canPlay } = narration;
@@ -354,7 +346,8 @@ export default function BookReader({
 
   // Speech follows the screen: turning the page stops whatever is speaking,
   // and with Auto on it starts the new sentence (same flow as articles). A
-  // narrated book advances through its own audio instead of TTS.
+  // narrated book starts its own audio instead of TTS; Auto never turns the
+  // page on its own, it only starts the page the reader is on.
   const prevZenUnit = useRef(zenUnit);
   useEffect(() => {
     if (prevZenUnit.current === zenUnit) return;

@@ -60,8 +60,6 @@ export function useNarration(args: {
   store: ArticleStore;
   bookId: string;
   chapterUnitStarts: readonly number[];
-  /** Fired when a segment reaches its natural end (not on stop). */
-  onEnded?: (unit: number) => void;
 }): NarrationHook {
   const { store, bookId, chapterUnitStarts } = args;
   const [pack, setPack] = useState<NarrationPack | null>(null);
@@ -73,13 +71,11 @@ export function useNarration(args: {
   const packRef = useRef<NarrationPack | null>(null);
   const speakingRef = useRef<number | null>(null);
   const startsRef = useRef(chapterUnitStarts);
-  const endedRef = useRef(args.onEnded);
   /** Invalidates the handlers of a segment that a newer action replaced. */
   const runRef = useRef(0);
   /** Cancels a pack import once the book changes or another import starts. */
   const importRun = useRef(0);
   startsRef.current = chapterUnitStarts;
-  endedRef.current = args.onEnded;
 
   const applySpeaking = useCallback((unit: number | null) => {
     speakingRef.current = unit;
@@ -135,7 +131,6 @@ export function useNarration(args: {
         onEnd: () => {
           if (runRef.current !== run) return;
           applySpeaking(null);
-          endedRef.current?.(unit);
         },
         onError: () => {
           if (runRef.current !== run) return;

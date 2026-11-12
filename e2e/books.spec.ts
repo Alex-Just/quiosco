@@ -581,6 +581,111 @@ test("book Zen has the article Listen control with Auto", async ({ page }) => {
   ).toBeVisible();
 });
 
+test("Auto does not advance the page when narration ends", async ({ page }) => {
+  await importBook(page);
+  const articleUrl = page.url();
+  const bookId = articleUrl.split("/").pop() ?? "";
+  expect(bookId).not.toBe("");
+
+  // Seed a pack so the reader takes the recorded-audio path (the only path
+  // with an end-of-audio callback); the content is never decoded.
+  await page.evaluate(
+    async ({ id }) => {
+      const request = indexedDB.open("quiosco");
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      const chapters = Array.from({ length: 5 }, (_, index) => ({
+        offset: index * 100,
+        size: 100,
+        duration: 400,
+        starts: Array.from({ length: 400 }, (_, unit) => unit * 0.5),
+        ends: Array.from({ length: 400 }, (_, unit) => unit * 0.5 + 0.25),
+      }));
+      const pack = {
+        version: 1,
+        title: "Prueba de narración",
+        createdAt: Date.now(),
+        chapters,
+        archive: new Blob([new Uint8Array(500)]),
+      };
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction("narration", "readwrite");
+        tx.objectStore("narration").put(pack, id);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+      db.close();
+    },
+    { id: bookId },
+  );
+
+  await page.addInitScript(() => {
+    const audios: Array<{
+      onended: (() => void) | null;
+      ontimeupdate: (() => void) | null;
+      currentTime: number;
+      readyState: number;
+    }> = [];
+    (
+      window as unknown as { __narrationAudios: typeof audios }
+    ).__narrationAudios = audios;
+    class FakeAudio {
+      readyState = 1;
+      currentTime = 0;
+      preload = "";
+      onended: (() => void) | null = null;
+      ontimeupdate: (() => void) | null = null;
+      constructor() {
+        audios.push(this);
+      }
+      addEventListener() {}
+      removeAttribute() {}
+      pause() {}
+      load() {}
+      async play() {}
+    }
+    Object.defineProperty(window, "Audio", {
+      configurable: true,
+      value: FakeAudio,
+    });
+  });
+
+  await page.reload();
+  await page.getByRole("button", { name: "More book actions" }).click();
+  await expect(
+    page.getByRole("button", { name: "Remove audiobook" }),
+  ).toBeVisible();
+  await page.locator(".sheet-backdrop").click({ position: { x: 4, y: 4 } });
+
+  const auto = page.getByRole("checkbox", {
+    name: "Auto-listen on each page",
+  });
+  await auto.check();
+  const label = page.locator(".zen-progress-label");
+  await page.keyboard.press("ArrowDown");
+  await expect(
+    page.getByRole("button", { name: "Stop listening" }),
+  ).toBeVisible();
+  const playing = await label.textContent();
+
+  // The segment reaches its natural end. Auto means "start on a page load",
+  // not "turn the page": the reader must stay and the button must reset.
+  await page.evaluate(() => {
+    const audios = (
+      window as unknown as {
+        __narrationAudios: Array<{ onended: (() => void) | null }>;
+      }
+    ).__narrationAudios;
+    audios.at(-1)?.onended?.();
+  });
+  await expect(
+    page.getByRole("button", { name: "Listen to original" }),
+  ).toBeVisible();
+  await expect(label).toHaveText(playing ?? "");
+});
+
 test("translates the Zen sentence from the cache and pauses on failure", async ({
   page,
 }) => {
