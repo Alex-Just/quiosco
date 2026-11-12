@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "xyz.alexjust.quiosco",
+      "sha256_cert_fingerprints": [
+        "85:0B:D4:66:1E:CB:09:A6:9D:92:D8:17:C8:BB:1A:88:14:FB:8A:63:52:A8:C4:B3:2A:0A:00:92:47:4B:3D:54"
+      ]
+    }
+  }
+]

@@ -338,6 +338,12 @@ node scripts/wrangler-run.mjs d1 execute quiosco --local --file worker/migration
    be reinstalled/updated after that entry changes. If a shared file arrives
    empty (a Chrome 153 bug), use Add → Book → pick the file instead.
 5. After a manifest change, reinstall from Chrome (WebAPK update lag).
+6. To open an `.epub` straight from Telegram, Files, or Downloads (Android's
+   *Open with* chooser) install the thin trusted-web-activity wrapper. Download
+   [`quiosco.apk`](https://github.com/Alex-Just/quiosco/releases/latest/download/quiosco.apk)
+   from the latest release, or build it from [`android/`](android/README.md).
+   The PWA cannot register for `ACTION_VIEW`; the wrapper hands the file to the
+   same Book importer and shares Chrome's storage with the installed app.
 
 ## Smoke test
 

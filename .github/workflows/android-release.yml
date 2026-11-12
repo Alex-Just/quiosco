@@ -1,0 +1,222 @@
+name: Android release
+
+# A push that changes the wrapper rebuilds the signed APK. Web-only changes
+# deploy through CI and reach the TWA in Chrome without a new APK, because the
+# APK only carries identity and intent filters.
+"on":
+  push:
+    branches:
+      - main
+    paths:
+      - android/**
+      - .github/workflows/android-release.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build the APK
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: android-build-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Install Java
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      # androidx.core 1.17 requires compileSdk 36, which is newer than the
+      # platform preinstalled on the runner image.
+      - name: Install Android platform 36
+        run: |
+          set -eu
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          test -n "$sdk"
+          sdkmanager="$sdk/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$sdkmanager" ]; then
+            sdkmanager="$(find "$sdk/cmdline-tools" -name sdkmanager -type f -print -quit)"
+          fi
+          test -x "$sdkmanager" || {
+            echo "::error::sdkmanager not found under $sdk"
+            exit 1
+          }
+          yes | "$sdkmanager" "platforms;android-36" "build-tools;35.0.0" >/dev/null
+
+      # The keystore and its passwords are gitignored on the operator's
+      # computer. In CI they come from repository secrets and exist only in
+      # this job's workspace.
+      - name: Write the signing inputs
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PROPERTIES: ${{ secrets.ANDROID_KEYSTORE_PROPERTIES }}
+        run: |
+          set -eu
+          umask 077
+          require() {
+            if [ -z "$2" ]; then
+              echo "::error::The $1 repository secret is missing or empty."
+              exit 1
+            fi
+          }
+          require ANDROID_KEYSTORE_BASE64 "$ANDROID_KEYSTORE_BASE64"
+          require ANDROID_KEYSTORE_PROPERTIES "$ANDROID_KEYSTORE_PROPERTIES"
+
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/quiosco-release.jks
+          printf '%s\n' "$ANDROID_KEYSTORE_PROPERTIES" > android/keystore.properties
+
+      # The run number keeps versionCode above every earlier build, so a phone
+      # accepts the new APK as an update of the installed one.
+      - name: Build the release APK
+        working-directory: android
+        env:
+          BUILD: ${{ github.run_number }}
+        run: ./gradlew --no-daemon --stacktrace -PversionCode="$BUILD" assembleRelease
+
+      - name: Collect the APK and its checksum
+        run: |
+          set -eu
+          mkdir -p dist
+          cp android/app/build/outputs/apk/release/app-release.apk dist/quiosco.apk
+          (cd dist && sha256sum -- *.apk > SHA256SUMS.txt)
+          cat dist/SHA256SUMS.txt
+
+      # A wrong key or package would be published to every phone, and a broken
+      # intent filter would fail silently at runtime, so the upload is gated on
+      # the identity and the file-handling metadata.
+      - name: Verify the APK identity
+        run: |
+          set -eu
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          test -n "$sdk"
+          apksigner=""
+          aapt=""
+          for dir in $(find "$sdk/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -r); do
+            if [ -x "$dir/apksigner" ] && [ -x "$dir/aapt" ]; then
+              apksigner="$dir/apksigner"
+              aapt="$dir/aapt"
+              break
+            fi
+          done
+          test -n "$apksigner" || {
+            echo "::error::no build-tools with apksigner and aapt under $sdk"
+            exit 1
+          }
+          test -n "$aapt"
+
+          expected=850bd4661ecb09a69d92d817c8bb1a8814fb8a6352a8c4b32a0a0092474b3d54
+          if ! "$apksigner" verify --print-certs dist/quiosco.apk | grep -qi "$expected"; then
+            echo "::error::APK signer does not match public/.well-known/assetlinks.json"
+            exit 1
+          fi
+          if ! "$aapt" dump badging dist/quiosco.apk | grep -q "package: name='xyz.alexjust.quiosco'"; then
+            echo "::error::APK package is not xyz.alexjust.quiosco"
+            exit 1
+          fi
+
+          "$aapt" dump xmltree dist/quiosco.apk AndroidManifest.xml > manifest.txt
+          for expected_text in \
+            FileHandlingActivity0 \
+            android.intent.action.VIEW \
+            application/epub+zip \
+            FILE_HANDLING_ACTION_URL
+          do
+            if ! grep -q "$expected_text" manifest.txt; then
+              echo "::error::APK manifest is missing $expected_text"
+              exit 1
+            fi
+          done
+          if ! "$aapt" dump --values resources dist/quiosco.apk |
+            grep -q "https://quiosco.alex-just.workers.dev/add"; then
+            echo "::error::APK does not open EPUBs on the Add page"
+            exit 1
+          fi
+
+      - name: Keep the APK on the run
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: quiosco-apk-${{ github.run_number }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish the rolling release
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    # Never cancel an upload halfway through.
+    concurrency:
+      group: android-publish
+      cancel-in-progress: false
+    steps:
+      - name: Download the APK
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: quiosco-apk-${{ github.run_number }}
+          path: dist
+
+      - name: Verify the checksum
+        run: (cd dist && sha256sum -c SHA256SUMS.txt)
+
+      # One release with one stable download URL. Each Android change replaces
+      # the asset; the URL https://github.com/Alex-Just/quiosco/releases/latest/download/quiosco.apk
+      # never changes.
+      - name: Publish the rolling release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: latest
+          BUILD: ${{ github.run_number }}
+          SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -eu
+          current_build="$(
+            gh release view "$TAG" --json name --jq '.name' 2>/dev/null |
+              grep -oE 'build [0-9]+' | grep -oE '[0-9]+' | head -1 || true
+          )"
+          if [ -n "$current_build" ] && [ "$current_build" -gt "$BUILD" ]; then
+            echo "::error::refusing to replace build $current_build with $BUILD"
+            exit 1
+          fi
+
+          title="Quiosco Android APK (build $BUILD)"
+          cat > release-notes.md <<EOF
+          The signed Trusted Web Activity wrapper that puts Quiosco in Android's
+          *Open with* chooser for \`.epub\` files.
+
+          - \`quiosco.apk\` — release APK, signed with the certificate published at
+            \`/.well-known/assetlinks.json\`
+          - \`SHA256SUMS.txt\` — checksum for the APK
+
+          Install with \`adb install -r quiosco.apk\`, or open the APK on the phone.
+          The web app deploys separately; this release changes only when \`android/\`
+          changes.
+
+          Built from commit \`$(printf '%.7s' "$SHA")\`. [Workflow run]($RUN_URL).
+          EOF
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "$title" --notes-file release-notes.md --latest
+          else
+            gh release create "$TAG" --target "$SHA" --title "$title" \
+              --notes-file release-notes.md --latest
+          fi
+
+          gh release upload "$TAG" dist/* --clobber

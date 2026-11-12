@@ -61,8 +61,12 @@ export default function AddPage() {
     setFetchedVia,
   });
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: location.key re-reads the pending book on each navigation to /add
   useEffect(() => {
     if (!fromBookShare) return;
+    // A file launch can arrive while /add is already open, so each navigation
+    // to it re-reads the pending book instead of only the first mount.
+    setMode("book");
     let cancelled = false;
     void (async () => {
       const file = await readPendingBook();
@@ -74,7 +78,7 @@ export default function AddPage() {
     return () => {
       cancelled = true;
     };
-  }, [fromBookShare]);
+  }, [fromBookShare, location.key]);
 
   const preprocessApply = {
     setText,

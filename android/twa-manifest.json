@@ -1,0 +1,63 @@
+{
+  "packageId": "xyz.alexjust.quiosco",
+  "host": "quiosco.alex-just.workers.dev",
+  "name": "Quiosco",
+  "launcherName": "Quiosco",
+  "display": "standalone",
+  "themeColor": "#16202a",
+  "themeColorDark": "#16202a",
+  "navigationColor": "#16202a",
+  "navigationColorDark": "#16202a",
+  "navigationDividerColor": "#16202a",
+  "navigationDividerColorDark": "#16202a",
+  "backgroundColor": "#16202a",
+  "enableNotifications": false,
+  "startUrl": "/",
+  "iconUrl": "https://quiosco.alex-just.workers.dev/icons/icon-512.png",
+  "maskableIconUrl": "https://quiosco.alex-just.workers.dev/icons/icon-maskable-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "./quiosco-release.jks",
+    "alias": "quiosco"
+  },
+  "appVersionCode": 1,
+  "appVersion": "1.0.0",
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://quiosco.alex-just.workers.dev/manifest.webmanifest",
+  "fallbackType": "customtabs",
+  "features": {},
+  "enableSiteSettingsShortcut": false,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "minSdkVersion": 24,
+  "orientation": "default",
+  "fingerprints": [
+    {
+      "name": "release",
+      "value": "85:0B:D4:66:1E:CB:09:A6:9D:92:D8:17:C8:BB:1A:88:14:FB:8A:63:52:A8:C4:B3:2A:0A:00:92:47:4B:3D:54"
+    }
+  ],
+  "fileHandlers": [
+    {
+      "actionUrl": "https://quiosco.alex-just.workers.dev/add",
+      "mimeTypes": ["application/epub+zip"]
+    }
+  ],
+  "launchHandlerClientMode": "focus-existing",
+  "shareTarget": {
+    "action": "https://quiosco.alex-just.workers.dev/share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "epub",
+          "accept": ["application/epub+zip"]
+        }
+      ]
+    }
+  }
+}

@@ -7,6 +7,7 @@ import {
   Routes,
   useLocation,
 } from "react-router-dom";
+import { LaunchQueueHandler } from "./components/LaunchQueueHandler";
 import { createApi } from "./lib/api";
 import { loadSettings } from "./lib/settings";
 import { registerSyncRunner, scheduleSync, syncNow } from "./lib/sync";
@@ -28,6 +29,7 @@ function AppShell() {
 
   return (
     <>
+      <LaunchQueueHandler />
       {!onSettings && (
         <header className="app-header">
           <Link to="/" className="app-title">

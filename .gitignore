@@ -21,6 +21,16 @@ docs/superpowers/
 !.opencode/agents/translate-epub.md
 .idea/
 
+# Android TWA build output and signing material. The keystore and its
+# passwords live only on the machine that signs releases; back them up.
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/*.jks
+android/*.keystore
+android/keystore.properties
+
 .playwright-cli/
 # Security audit output (generated reports and ledgers are never committed).
 security-audit/

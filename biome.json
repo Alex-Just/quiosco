@@ -8,7 +8,10 @@
       "!**/.wrangler",
       "!**/test-results",
       "!**/playwright-report",
-      "!**/.superpowers"
+      "!**/.superpowers",
+      "!android/.gradle",
+      "!android/build",
+      "!android/app/build"
     ]
   },
   "linter": { "enabled": true, "rules": { "preset": "recommended" } },
