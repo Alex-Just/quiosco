@@ -709,6 +709,16 @@ describe("handleKosyncPush", () => {
       pushed: false,
       reason: "stale",
     });
+
+    // The same pointer with a different percentage is not the same write.
+    const wrongPercentage = await push(
+      env,
+      body({ percentage: 0.5, baseUpdatedAt: at }),
+    );
+    await expect(wrongPercentage.json()).resolves.toEqual({
+      pushed: false,
+      reason: "stale",
+    });
   });
 
   it("allows consecutive pushes once the base follows the last response", async () => {
