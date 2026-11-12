@@ -51,12 +51,17 @@ const DISMISSED_PREFIX = "quiosco.kosync.dismissed.";
 
 const BILINGUAL_XPOINTER =
   /^\/body\/DocFragment\[(\d+)\]\/body\/p\[(\d+)\]\/br\[1\](?:\.\d+)?$/;
+const BILINGUAL_EXPORT = /-bilingual(?:[ ._-][^/]*)?\.epub$/i;
 
-/** True for a quiosco bilingual export, the only EPUB with exact XPointers. */
+/**
+ * True for a quiosco bilingual export, the only EPUB with exact XPointers.
+ * A version suffix is allowed (`-bilingual-v5.epub`, `-bilingual (2).epub`);
+ * the export structure, not the exact basename, is what makes it exact.
+ */
 export function isBilingualExportFilename(
   value: string | null | undefined,
 ): boolean {
-  return value?.toLowerCase().endsWith("-bilingual.epub") === true;
+  return typeof value === "string" && BILINGUAL_EXPORT.test(value);
 }
 
 export function unitOffsets(units: readonly BookSentenceUnit[]): UnitOffsets {

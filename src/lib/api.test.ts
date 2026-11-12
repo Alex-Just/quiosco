@@ -295,6 +295,7 @@ describe("createApi", () => {
       fetchFn: fetchFn as unknown as typeof fetch,
     });
     const request = {
+      document: "0123456789abcdef0123456789abcdef",
       filename: "Libro-bilingual.epub",
       progress: "/body/DocFragment[2]/body/p[1]/br[1].0",
       percentage: 0.42,
@@ -334,6 +335,7 @@ describe("createApi", () => {
     });
     await expect(
       api.kosyncPush({
+        document: "0123456789abcdef0123456789abcdef",
         filename: "Libro-bilingual.epub",
         progress: "/body/DocFragment[1]/body/p[1]/br[1].0",
         percentage: 0,
@@ -355,6 +357,7 @@ describe("createApi", () => {
     });
     await expect(
       api.kosyncPush({
+        document: "0123456789abcdef0123456789abcdef",
         filename: "Libro-bilingual.epub",
         progress: "/body/DocFragment[1]/body/p[1]/br[1].0",
         percentage: 0,

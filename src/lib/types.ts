@@ -156,6 +156,8 @@ export interface KosyncProgress {
 
 /** App push of an exact bilingual-export position to KOReader's sync row. */
 export interface KosyncPushRequest {
+  /** KOReader document id from the lookup this push is based on. */
+  document: string;
   /** The bilingual EPUB basename; the server refuses every other file. */
   filename: string;
   /** Exact export XPointer for the current sentence. */

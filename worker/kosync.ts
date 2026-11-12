@@ -29,7 +29,7 @@ const MAX_DEVICE_CHARS = 128;
 const MAX_PROGRESS_CHARS = 512;
 
 /** Only quiosco's own export has deterministic chapter/paragraph XPointers. */
-const BILINGUAL_FILENAME = /-bilingual\.epub$/i;
+const BILINGUAL_FILENAME = /-bilingual(?:[ ._-][^/]*)?\.epub$/i;
 const EXPORT_XPOINTER =
   /^\/body\/DocFragment\[[1-9]\d{0,5}\]\/body\/p\[[1-9]\d{0,5}\]\/br\[1\](?:\.\d{1,6})?$/;
 /** Shown by KOReader as the device that last pushed. */
@@ -422,9 +422,10 @@ export async function handleKosyncLookup(
  * App-facing write: push the reader's exact position for a bilingual export.
  *
  * KOReader stores the EPUB position as a CRe XPointer. quiosco can only
- * generate one for a `*-bilingual.epub` it produced itself, so this route
- * refuses every other file. The row must already exist: the document id is
- * KOReader's, and the app learns it from the read lookup.
+ * generate one for a `*-bilingual*.epub` it produced itself, so this route
+ * refuses every other file. The app sends the document id from the read
+ * lookup, which is how a renamed local export (e.g. `-bilingual-v5.epub`)
+ * still writes the row the e-reader actually syncs.
  *
  * `baseUpdatedAt` is the server timestamp the app last saw. The conditional
  * UPDATE is the concurrency guard: if KOReader pushed after that, no row
@@ -451,6 +452,11 @@ export async function handleKosyncPush(
     return jsonResponse({ pushed: false, reason: "not-exact" });
   }
 
+  const document = cleanString(body.document, MAX_DOCUMENT_CHARS);
+  if (!validDocument(document)) {
+    return jsonResponse({ error: "bad request" }, 400);
+  }
+
   const progress = cleanString(body.progress, MAX_PROGRESS_CHARS);
   const percentage = body.percentage;
   const baseUpdatedAt = body.baseUpdatedAt;
@@ -468,7 +474,7 @@ export async function handleKosyncPush(
     return jsonResponse({ error: "bad request" }, 400);
   }
 
-  const row = await findProgressByFilename(env.DB, filename);
+  const row = await findProgress(env.DB, document);
   if (!row?.filename || !BILINGUAL_FILENAME.test(row.filename)) {
     return jsonResponse({ pushed: false, reason: "unlinked" });
   }

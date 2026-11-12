@@ -551,6 +551,7 @@ describe("handleKosyncPush", () => {
   const pointer = "/body/DocFragment[2]/body/p[1]/br[1].0";
   const at = 1_760_000_000;
   const body = (overrides: Record<string, unknown> = {}) => ({
+    document,
     filename,
     progress: pointer,
     percentage: 0.42,
@@ -603,14 +604,35 @@ describe("handleKosyncPush", () => {
       (await push(env, body({ filename: "Libro.epub" }))).json(),
     ).resolves.toEqual({ pushed: false, reason: "not-exact" });
     await expect(
-      (await push(env, body({ filename: "Otro-bilingual.epub" }))).json(),
+      (await push(env, body({ document: "f".repeat(32) }))).json(),
     ).resolves.toEqual({ pushed: false, reason: "unlinked" });
+  });
+
+  it("accepts a versioned local export and writes its linked document", async () => {
+    const { db, env } = await envWithRow();
+    vi.spyOn(Date, "now").mockReturnValue((at + 10) * 1000);
+
+    const response = await push(
+      env,
+      body({ filename: "Libro-bilingual-v5.epub" }),
+    );
+    await expect(response.json()).resolves.toMatchObject({
+      pushed: true,
+      document,
+    });
+    expect(db.rows.get(document)).toMatchObject({
+      filename,
+      progress: pointer,
+      device: "Quiosco",
+    });
   });
 
   it("rejects malformed positions, percentages, and bases", async () => {
     const { env } = await envWithRow();
     const cases = [
       body({ filename: undefined }),
+      body({ document: undefined }),
+      body({ document: "a:b" }),
       body({ progress: "56" }),
       body({ progress: "/body/DocFragment[2]/body/p[1]/text().0" }),
       body({ percentage: 1.5 }),

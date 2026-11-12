@@ -259,7 +259,7 @@ After D1 is created and the schema is applied (see checklist above):
 ## KOReader progress sync
 
 Quiosco can exchange reading positions with KOReader on a PocketBook (or any
-KOReader). For a quiosco-generated `*-bilingual.epub` the bridge is two-way:
+KOReader). For a quiosco-generated `*-bilingual*.epub` the bridge is two-way:
 KOReader pushes and the app offers to jump, and reading in the app pushes the
 exact sentence back so KOReader resumes there. For any other EPUB it is
 read-only: KOReader's position is a CRe XPointer quiosco cannot generate, so
@@ -275,11 +275,11 @@ How it works:
 - With **Send document metadata** enabled, KOReader includes the EPUB
   basename, title, and authors in each push. Quiosco stores them and matches a
   local book by its import filename, falling back to title/author.
-- Opening a book asks `/api/kosync/progress`. A *-bilingual.epub exported
+- Opening a book asks `/api/kosync/progress`. A *-bilingual*.epub exported
   by quiosco carries an XPointer that resolves to the exact chapter and
   sentence; other EPUBs fall back to a percentage, so the prompt is offered
   but the landing point is approximate. The jump is always explicit.
-- For a `*-bilingual.epub`, the reader also pushes: 1.5 s after the sentence
+- For a `*-bilingual*.epub`, the reader also pushes: 1.5 s after the sentence
   settles, and when the app is hidden, it writes the exact XPointer through
   `/api/kosync/push`. That route uses `APP_TOKEN`; the kosync MD5 key never
   reaches the client.
@@ -288,7 +288,8 @@ How it works:
   and the app stops pushing for the session. The app also never pushes while a
   jump banner is showing.
 - The app can only push a book after KOReader has pushed it at least once:
-  that first push supplies the document id the app writes to.
+  that first push supplies the document id the app writes to. A renamed local
+  export still targets that document, so a `-v5` copy works.
 
 Setup:
 
@@ -316,9 +317,10 @@ Setup:
 Caveats:
 
 - EPUB only, and progress only: no highlights, notes, or bookmarks.
-- A quiosco `*-bilingual.epub` export maps exactly by XPointer, because its
+- A quiosco `*-bilingual*.epub` export maps exactly by XPointer, because its
   chapters and sentence paragraphs are generated deterministically. That is
-  also the only file the app pushes; other EPUBs use KOReader's page-based
+  also the only file the app pushes; a version suffix such as
+  `-bilingual-v5.epub` is fine. Other EPUBs use KOReader's page-based
   percentage for the read side (approximate, usually within a page or two)
   and stay read-only.
 - The app pushes only while it is open, with a flush when it is hidden: a TWA

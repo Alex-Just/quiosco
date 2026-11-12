@@ -27,6 +27,8 @@ const PUSH_DEBOUNCE_MS = 1_500;
  * an old in-flight queue still holds its own copy.
  */
 interface PushState {
+  /** Linked KOReader document from the lookup; null until it resolves. */
+  document: string | null;
   /** Server timestamp last seen or written; null until the lookup resolves. */
   base: number | null;
   /** Terminal for the session: remote moved, unlinked, disabled, or not exact. */
@@ -40,6 +42,7 @@ interface PushState {
 
 function newPushState(): PushState {
   return {
+    document: null,
     base: null,
     stalled: false,
     lastPushed: null,
@@ -184,6 +187,7 @@ export function useKosyncPrompt(args: {
           device: row?.device ?? null,
         });
         setRemote(row);
+        pushRef.current.document = row?.document ?? null;
         pushRef.current.base = row?.updatedAt ?? null;
         setLookupDone(true);
       })
@@ -243,6 +247,7 @@ export function useKosyncPrompt(args: {
   const sendPosition = useCallback(
     async (state: PushState, index: number) => {
       if (!api || !pushable || state.base === null || state.stalled) return;
+      if (state.document === null) return;
       if (state.lastPushed === index) return;
       const filename = article.sourceFilename;
       if (!filename) return;
@@ -255,6 +260,7 @@ export function useKosyncPrompt(args: {
       if (!progress) return;
       try {
         const result = await api.kosyncPush({
+          document: state.document,
           filename,
           progress,
           percentage: unitStartPercentage(offsets, index),

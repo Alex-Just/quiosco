@@ -3,6 +3,7 @@ import type { BookSentenceUnit } from "./bookText";
 import {
   bilingualXPointer,
   bilingualXPointerUnitIndex,
+  isBilingualExportFilename,
   KOSYNC_MAPPING_VERSION,
   loadKosyncDismissal,
   parseKosyncProgress,
@@ -101,6 +102,12 @@ describe("bilingualXPointerUnitIndex", () => {
     expect(index("/body/DocFragment[2]/body/p[1]/br[1].0")).toBe(4);
     expect(index("/body/DocFragment[2]/body/p[2]/br[1].0")).toBe(5);
     expect(index("/body/DocFragment[1]/body/p[2]/br[1].0")).toBe(2);
+    expect(
+      index(
+        "/body/DocFragment[2]/body/p[1]/br[1].0",
+        "libro-bilingual-v5.epub",
+      ),
+    ).toBe(4);
   });
 
   it("rejects out-of-range, non-export, and non-bilingual inputs", () => {
@@ -111,6 +118,16 @@ describe("bilingualXPointerUnitIndex", () => {
       index("/body/DocFragment[2]/body/p[1]/br[1].0", "libro.epub"),
     ).toBeNull();
     expect(index("/body/DocFragment[2]/body/p[1]/br[1].0", null)).toBeNull();
+  });
+});
+
+describe("isBilingualExportFilename", () => {
+  it("accepts standard and versioned export names", () => {
+    expect(isBilingualExportFilename("libro-bilingual.epub")).toBe(true);
+    expect(isBilingualExportFilename("libro-bilingual-v5.epub")).toBe(true);
+    expect(isBilingualExportFilename("libro-bilingual (2).epub")).toBe(true);
+    expect(isBilingualExportFilename("libro.epub")).toBe(false);
+    expect(isBilingualExportFilename(null)).toBe(false);
   });
 });
 

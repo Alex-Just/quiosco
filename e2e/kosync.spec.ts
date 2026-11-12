@@ -12,12 +12,12 @@ function chapter(title: string, sentences: readonly string[]): string {
   return `<html xmlns="http://www.w3.org/1999/xhtml"><head><title>${title}</title></head><body><h1>${title}</h1>${sentences.map((sentence) => `<p>${sentence}</p>`).join("")}</body></html>`;
 }
 
-function buildEpub(): Uint8Array {
+function buildEpub(title = "QA KOReader", author = "QA"): Uint8Array {
   const opf = `<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" unique-identifier="bookid" version="3.0">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-    <dc:title>QA KOReader</dc:title>
-    <dc:creator>QA</dc:creator>
+    <dc:title>${title}</dc:title>
+    <dc:creator>${author}</dc:creator>
     <dc:language>es</dc:language>
   </metadata>
   <manifest>
@@ -65,6 +65,8 @@ function pushProgress(
     progress: string;
     percentage: number;
     document?: string;
+    title?: string;
+    authors?: string;
   },
 ): Promise<import("@playwright/test").APIResponse> {
   return request.put("/kosync/syncs/progress", {
@@ -79,8 +81,8 @@ function pushProgress(
       device: "PocketBook",
       metadata: {
         filename: args.filename,
-        title: "QA KOReader",
-        authors: "QA",
+        title: args.title ?? "QA KOReader",
+        authors: args.authors ?? "QA",
       },
     },
   });
@@ -207,10 +209,13 @@ test("the app pushes its exact position back for a bilingual export", async ({
   request,
 }) => {
   const dir = await mkdtemp(join(tmpdir(), "quiosco-kosync-push-"));
-  const filename = "qa-push-bilingual.epub";
+  const filename = "qa-push-bilingual-v5.epub";
+  const koReaderFilename = "qa-push-bilingual.epub";
+  const title = "QA Push";
+  const authors = "QA Push";
   const document = "c".repeat(32);
   const file = join(dir, filename);
-  await writeFile(file, buildEpub());
+  await writeFile(file, buildEpub(title, authors));
   try {
     await page.goto("/settings");
     await page.getByLabel("App token").fill("e2e-token");
@@ -225,13 +230,17 @@ test("the app pushes its exact position back for a bilingual export", async ({
     await page.waitForURL("**/article/**");
     const articleUrl = page.url();
 
-    // A non-exact pointer at 0% links the row by filename without offering a
-    // jump, so the app starts from a clean base with no banner in the way.
+    // A non-exact pointer at 0% links the row without offering a jump, so
+    // the app starts from a clean base with no banner in the way. The local
+    // filename is versioned, so it links by title/author and must push to the
+    // document returned by that lookup.
     expect(
       (
         await pushProgress(request, {
           document,
-          filename,
+          filename: koReaderFilename,
+          title,
+          authors,
           progress: "/body/DocFragment[1]/body/p[1]/text().0",
           percentage: 0,
         })
@@ -275,10 +284,14 @@ test("the app pushes its exact position back for a bilingual export", async ({
 
     // The app's own lookup sees the pushed position, so another install would
     // be offered the same sentence.
-    const lookup = await request.get(
-      `/api/kosync/progress?filename=${encodeURIComponent(filename)}`,
-      { headers: { Authorization: "Bearer e2e-token" } },
-    );
+    const params = new URLSearchParams({
+      filename,
+      title,
+      author: authors,
+    });
+    const lookup = await request.get(`/api/kosync/progress?${params}`, {
+      headers: { Authorization: "Bearer e2e-token" },
+    });
     await expect(lookup.ok()).toBe(true);
     const looked = (await lookup.json()) as {
       progress: { progress: string; device: string } | null;
