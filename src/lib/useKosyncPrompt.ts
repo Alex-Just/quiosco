@@ -14,6 +14,7 @@ import {
   unitOffsets,
   unitStartPercentage,
 } from "./kosync";
+import { log } from "./log";
 import type { Article, KosyncProgress } from "./types";
 
 type StorageLike = Pick<Storage, "getItem" | "setItem">;
@@ -111,6 +112,8 @@ export function useKosyncPrompt(args: {
   );
   const pushRef = useRef<PushState>(newPushState());
   const latestIndexRef = useRef<number | null>(null);
+  const loggedBookRef = useRef<string | null>(null);
+  const loggedPushRef = useRef<string | null>(null);
 
   const offsets = useMemo(() => unitOffsets(units), [units]);
   const ready = localIndex !== null && units.length > 0;
@@ -123,17 +126,47 @@ export function useKosyncPrompt(args: {
   );
 
   useEffect(() => {
+    if (loggedBookRef.current === article.id) return;
+    loggedBookRef.current = article.id;
+    // One line per book open: Settings -> Copy log can explain an idle bridge
+    // without a network trace.
+    log.info("kosync", "book opened", {
+      zen: enabled,
+      authenticated: appToken.length > 0,
+      ready,
+      units: units.length,
+      chapters: chapterBodyStarts.length,
+      filename: article.sourceFilename ?? null,
+      pushable,
+    });
+  }, [
+    article.id,
+    enabled,
+    appToken,
+    ready,
+    units.length,
+    chapterBodyStarts.length,
+    article.sourceFilename,
+    pushable,
+  ]);
+
+  useEffect(() => {
     const storage = browserStorage();
     setRemote(null);
     setDismissed(storage ? loadKosyncDismissal(storage, article.id) : null);
     setLookupDone(false);
     pushRef.current = newPushState();
     latestIndexRef.current = null;
+    loggedPushRef.current = null;
   }, [article.id]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new book must refetch even when its metadata matches
   useEffect(() => {
     if (!enabled || !api || !ready) return;
+    log.info("kosync", "lookup start", {
+      filename: article.sourceFilename ?? null,
+      title: article.title,
+    });
     const controller = new AbortController();
     void api
       .kosyncProgress(
@@ -146,14 +179,22 @@ export function useKosyncPrompt(args: {
       )
       .then((row) => {
         if (controller.signal.aborted) return;
+        log.info("kosync", "lookup", {
+          linked: row !== null,
+          device: row?.device ?? null,
+        });
         setRemote(row);
         pushRef.current.base = row?.updatedAt ?? null;
         setLookupDone(true);
       })
-      .catch(() => {
+      .catch((error) => {
         // A missing bridge, a bad token, or an offline device just means no
         // prompt or push; opening the book must never fail because of this.
-        if (!controller.signal.aborted) setLookupDone(true);
+        if (controller.signal.aborted) return;
+        log.warn("kosync", "lookup failed", {
+          error: error instanceof Error ? error.message : "unknown",
+        });
+        setLookupDone(true);
       });
     return () => controller.abort();
   }, [
@@ -222,24 +263,37 @@ export function useKosyncPrompt(args: {
         if (!result.pushed) {
           // Stale means KOReader is ahead; unlinked/disabled/not-exact mean
           // this book cannot push. Stop for the session either way.
+          log.warn("kosync", "push skipped", {
+            reason: result.reason ?? "unknown",
+            index,
+          });
           state.stalled = true;
           state.pending = null;
           return;
         }
         state.lastPushed = index;
         if (result.updatedAt !== undefined) state.base = result.updatedAt;
+        if (loggedPushRef.current !== article.id) {
+          loggedPushRef.current = article.id;
+          log.info("kosync", "push accepted", { index });
+        }
         // The accepted write supersedes the lookup row. Keeping the old row
         // would look like a backward jump on the next page turn, and its
         // banner would block the next push.
         if (pushRef.current === state) setRemote(null);
-      } catch {
+      } catch (error) {
         // Offline or a transient server error: keep the local position and
         // try again on the next change. Never block reading.
+        log.warn("kosync", "push failed", {
+          error: error instanceof Error ? error.message : "unknown",
+          index,
+        });
       }
     },
     [
       api,
       pushable,
+      article.id,
       article.sourceFilename,
       chapterUnitStarts,
       chapterBodyStarts,
