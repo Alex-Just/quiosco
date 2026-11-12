@@ -8,6 +8,8 @@ import {
   type ParsedBook,
   parseEpub,
 } from "../lib/epub/parseEpub";
+import { seedImportedTranslations } from "../lib/importBilingual";
+import { loadSettings } from "../lib/settings";
 import type { ArticleStore } from "../lib/store";
 
 type AddBookFormProps = {
@@ -105,6 +107,18 @@ export function AddBookForm({
         chapters: preview.chapters,
         sourceFilename: fileName,
       });
+      if (preview.bilingual !== undefined) {
+        try {
+          const seeded = await seedImportedTranslations({
+            store,
+            bilingual: preview.bilingual,
+            settings: loadSettings(),
+          });
+          if (seeded > 0) book.bookTranslationOn = true;
+        } catch {
+          // The text book still imports; live Zen translation remains available.
+        }
+      }
       await store.put(book);
       onSaved(book.id);
     } catch (saveError) {

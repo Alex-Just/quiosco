@@ -3,6 +3,11 @@
 // reader) out. The structure stays minimal and strictly well-formed; fflate
 // stores the mimetype entry first and deflates the rest.
 import { strToU8, type Zippable, zipSync } from "fflate";
+import {
+  BILINGUAL_SIDECAR_PATH,
+  type BilingualBook,
+  buildBilingualSidecar,
+} from "./bilingual";
 
 export interface EpubChapterInput {
   title: string;
@@ -87,6 +92,7 @@ function packageXml(
     language: string | null;
     uuid: string;
     modified: string;
+    bilingual?: BilingualBook;
   },
   labels: readonly string[],
 ): string {
@@ -101,10 +107,17 @@ function packageXml(
   ]
     .filter((line): line is string => line !== null)
     .join("\n");
+  const hasBilingual =
+    input.bilingual !== undefined && input.bilingual.entries.length > 0;
   const manifest = [
     `    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>`,
     `    <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>`,
     `    <item id="css" href="style.css" media-type="text/css"/>`,
+    ...(hasBilingual
+      ? [
+          `    <item id="quiosco-bilingual" href="quiosco-bilingual.json" media-type="application/json"/>`,
+        ]
+      : []),
     ...labels.map(
       (_, index) =>
         `    <item id="chapter-${index + 1}" href="chapter-${index + 1}.xhtml" media-type="application/xhtml+xml"/>`,
@@ -191,6 +204,7 @@ export function buildEpubBytes(input: {
   chapters: readonly EpubChapterInput[];
   uuid: string;
   modified: string;
+  bilingual?: BilingualBook;
 }): Uint8Array {
   const labels = input.chapters.map((chapter, index) =>
     chapter.title.trim() ? chapter.title.trim() : `Chapter ${index + 1}`,
@@ -208,5 +222,10 @@ export function buildEpubBytes(input: {
       chapterXml(labels[index] ?? `Chapter ${index + 1}`, chapter),
     );
   });
+  if (input.bilingual !== undefined && input.bilingual.entries.length > 0) {
+    files[BILINGUAL_SIDECAR_PATH] = strToU8(
+      buildBilingualSidecar(input.bilingual),
+    );
+  }
   return zipSync(files);
 }

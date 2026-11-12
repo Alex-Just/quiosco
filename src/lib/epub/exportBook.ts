@@ -19,6 +19,7 @@ import {
 import type { ArticleStore } from "../store";
 import type { Article } from "../types";
 import { pairSourceWithTranslation } from "../zenTranslationDisplay";
+import type { BilingualBook } from "./bilingual";
 import {
   buildEpubBytes,
   type EpubChapterInput,
@@ -141,6 +142,15 @@ export async function exportBookEpub(args: {
     }
   }
 
+  const bilingual: BilingualBook = {
+    targetLanguage: settings.targetLanguage,
+    chapters: article.chapters,
+    entries: units.flatMap((unit, index) => {
+      if (unit.skipped) return [];
+      const translation = translations.get(index);
+      return translation ? [{ source: unit.text, translation }] : [];
+    }),
+  };
   const bytes = buildEpubBytes({
     title: article.title,
     author: article.author ?? null,
@@ -148,6 +158,7 @@ export async function exportBookEpub(args: {
     chapters: assembleExportChapters({ article, units, translations }),
     uuid: args.uuid ?? crypto.randomUUID(),
     modified: (args.now ?? new Date()).toISOString(),
+    bilingual,
   });
   return { bytes, filename: exportFilename(article.title) };
 }

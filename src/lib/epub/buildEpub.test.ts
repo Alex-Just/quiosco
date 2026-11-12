@@ -90,6 +90,55 @@ describe("buildEpub", () => {
     );
   });
 
+  it("writes and round-trips the bilingual sidecar", async () => {
+    const bilingual = {
+      targetLanguage: "Russian",
+      chapters: [{ title: "Uno", text: "Hola." }],
+      entries: [{ source: "Hola.", translation: "🇪🇸 Hola.\n🇷🇺 Привет." }],
+    };
+    const bytes = buildEpubBytes({
+      title: "Libro",
+      author: null,
+      language: "es",
+      uuid: UUID,
+      modified: MODIFIED,
+      chapters: [{ title: "Uno", paragraphs: ["Hola.\n\nПривет."] }],
+      bilingual,
+    });
+
+    const zip = unzipSync(bytes);
+    const sidecar = JSON.parse(
+      strFromU8(zip["OEBPS/quiosco-bilingual.json"] ?? new Uint8Array()),
+    ) as unknown;
+    expect(sidecar).toEqual({ version: 1, ...bilingual });
+    const opf = strFromU8(zip["OEBPS/content.opf"] ?? new Uint8Array());
+    expect(opf).toContain('href="quiosco-bilingual.json"');
+    const parsed = await parseEpub(bytes);
+    expect(parsed.bilingual).toEqual(bilingual);
+    expect(parsed.chapters).toEqual(bilingual.chapters);
+  });
+
+  it("recovers the source from a target-only bilingual block", async () => {
+    const bytes = buildEpubBytes({
+      title: "Libro",
+      author: null,
+      language: "es",
+      uuid: UUID,
+      modified: MODIFIED,
+      chapters: [{ title: "Uno", paragraphs: ["Привет."] }],
+      bilingual: {
+        targetLanguage: "Russian",
+        entries: [{ source: "Hola.", translation: "Привет." }],
+      },
+    });
+
+    const parsed = await parseEpub(bytes);
+    expect(parsed.chapters[0]?.text).toBe("Hola.");
+    expect(parsed.bilingual?.entries).toEqual([
+      { source: "Hola.", translation: "Привет." },
+    ]);
+  });
+
   it("round-trips through the parser with specials and non-Latin text", async () => {
     const parsed = await parseEpub(sampleBytes());
 

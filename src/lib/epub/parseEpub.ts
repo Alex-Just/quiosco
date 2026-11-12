@@ -1,5 +1,13 @@
 import { type Unzipped, unzip } from "fflate";
+import { normalizeSentence } from "../sentenceKey";
+import { splitFlagStanzas, stripSentenceMarkers } from "../sentences";
 import type { BookChapter } from "../types";
+import {
+  BILINGUAL_SIDECAR_PATH,
+  type BilingualBook,
+  isBilingualSidecarPath,
+  parseBilingualSidecar,
+} from "./bilingual";
 import { extractChapter } from "./chapterText";
 import {
   containerRootPath,
@@ -38,6 +46,8 @@ export interface ParsedBook {
   author: string | null;
   language: string | null;
   chapters: BookChapter[];
+  /** Present on Quiosco bilingual exports; ignored by other readers. */
+  bilingual?: BilingualBook;
 }
 
 const decoder = new TextDecoder();
@@ -53,6 +63,38 @@ const normalize = (text: string) =>
   text.replace(/\s+/g, " ").trim().toLowerCase();
 
 /**
+ * A bilingual export stores one unit per paragraph as
+ * "source\n\ntranslation" (flags already stripped). Keep only the source when
+ * the block is listed in the sidecar; untranslated blocks stay untouched.
+ */
+function sourceOnlyParagraphs(
+  paragraphs: readonly string[],
+  sources: ReadonlySet<string>,
+  targets: ReadonlyMap<string, string>,
+): string[] {
+  return paragraphs.map((paragraph) => {
+    if (sources.has(normalizeSentence(paragraph))) return paragraph;
+    const parts = paragraph.split("\n\n");
+    const first = parts[0]?.trim();
+    if (parts.length > 1 && first && sources.has(normalizeSentence(first))) {
+      return first;
+    }
+    const source = targets.get(normalizeSentence(paragraph));
+    return source ?? paragraph;
+  });
+}
+
+/** The translation stanza of a sidecar block, with flags/markers removed. */
+function targetStanza(block: string): string {
+  const stanzas = splitFlagStanzas(block);
+  const stanza =
+    stanzas.length >= 2
+      ? (stanzas[stanzas.length - 1] ?? "")
+      : (block.split(/\n{2,}/).at(-1) ?? block);
+  return stripSentenceMarkers(stanza).trim();
+}
+
+/**
  * Zip entries the importer reads: container/package XML, NCX, nav and chapter
  * documents. Case-insensitive, so archives that shout their extensions still
  * import; images, stylesheets and fonts are never inflated.
@@ -66,7 +108,10 @@ function unzipFiles(bytes: Uint8Array): Promise<Unzipped> {
   return new Promise((resolve, reject) => {
     unzip(
       bytes,
-      { filter: (file) => isTextEntry(file.name) },
+      {
+        filter: (file) =>
+          isTextEntry(file.name) || isBilingualSidecarPath(file.name),
+      },
       (error, files) => {
         if (error) reject(error);
         else resolve(files);
@@ -139,6 +184,25 @@ export async function parseEpub(
 
     const files = await unzipFiles(bytes);
     const lookup = createLookup(files);
+    const sidecarEntry = lookup(BILINGUAL_SIDECAR_PATH);
+    const bilingual =
+      sidecarEntry === null
+        ? undefined
+        : (parseBilingualSidecar(decode(sidecarEntry.bytes)) ?? undefined);
+    const bilingualSources =
+      bilingual === undefined
+        ? null
+        : new Set(
+            bilingual.entries.map((entry) => normalizeSentence(entry.source)),
+          );
+    const bilingualTargets = new Map<string, string>();
+    if (bilingual !== undefined) {
+      for (const entry of bilingual.entries) {
+        const target = targetStanza(entry.translation);
+        if (target)
+          bilingualTargets.set(normalizeSentence(target), entry.source);
+      }
+    }
 
     const containerEntry = lookup("META-INF/container.xml");
     if (!containerEntry) throw new EpubError("not-epub");
@@ -206,22 +270,30 @@ export async function parseEpub(
       const entry = doc.path === null ? null : lookup(doc.path);
       if (entry) {
         const { heading, paragraphs } = extractChapter(decode(entry.bytes));
-        if (paragraphs.length > 0) {
+        const sourceParagraphs =
+          bilingualSources === null
+            ? paragraphs
+            : sourceOnlyParagraphs(
+                paragraphs,
+                bilingualSources,
+                bilingualTargets,
+              );
+        if (sourceParagraphs.length > 0) {
           const title =
             labelByPath.get(entry.path) ??
             heading ??
             `Chapter ${chapters.length + 1}`;
           // The extractor emits a heading as a paragraph too; drop the first
           // paragraph when it would only repeat the chapter title.
-          const first = paragraphs[0];
+          const first = sourceParagraphs[0];
           if (
             first !== undefined &&
             (normalize(first) === normalize(title) ||
               (heading !== null && normalize(first) === normalize(heading)))
           ) {
-            paragraphs.shift();
+            sourceParagraphs.shift();
           }
-          const text = paragraphs.join("\n\n");
+          const text = sourceParagraphs.join("\n\n");
           chars += text.length;
           if (chars > MAX_BOOK_CHARS) throw new EpubError("too-large", "text");
           chapters.push({ title, text });
@@ -234,12 +306,16 @@ export async function parseEpub(
       }
     }
 
-    if (chapters.length === 0) throw new EpubError("empty");
+    const sidecarChapters = bilingual?.chapters ?? [];
+    const finalChapters =
+      sidecarChapters.length > 0 ? sidecarChapters : chapters;
+    if (finalChapters.length === 0) throw new EpubError("empty");
     return {
       title: pkg.title,
       author: pkg.author,
       language: pkg.language,
-      chapters,
+      chapters: finalChapters,
+      ...(bilingual === undefined ? {} : { bilingual }),
     };
   } catch (error) {
     if (error instanceof EpubError) throw error;

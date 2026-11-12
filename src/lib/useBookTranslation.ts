@@ -1,8 +1,10 @@
 // Zen translation mode: one prefetch session per open book while the mode is
 // on, plus the verified cache reads that turn its writes into visible
-// paragraph text. Translation is opt-in: no mode or no token, no requests.
+// paragraph text. Without a token it runs cache-only for imported bilingual
+// books; a cache miss ends in the auth state instead of a request.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createApi } from "./api";
+import { AuthError } from "./apiErrors";
 import type { BookSentenceUnit } from "./bookText";
 import {
   type BookTranslationSession,
@@ -96,7 +98,7 @@ export function useBookTranslation(args: {
   const readGeneration = useRef(0);
 
   useEffect(() => {
-    if (!enabled || !appToken) {
+    if (!enabled) {
       current.current = null;
       setStatus("idle");
       return;
@@ -105,11 +107,18 @@ export function useBookTranslation(args: {
     let started: BookTranslationSession | null = null;
     let unsubscribe: (() => void) | null = null;
     const keyMemo = createSentenceKeyMemo({ targetLanguage, rules });
-    const api = createApi({ token: appToken });
+    const api = appToken ? createApi({ token: appToken }) : null;
     void keyMemo.rulesHash().then((rulesHashValue) => {
       if (cancelled) return;
       const session = startBookTranslation({
-        deps: { store, translate: api.translate },
+        deps: {
+          store,
+          translate: api
+            ? api.translate
+            : async () => {
+                throw new AuthError();
+              },
+        },
         units,
         paragraphUnits,
         keyFor: (unitIndex) => keyMemo.keyFor(units[unitIndex]?.text ?? ""),

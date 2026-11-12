@@ -176,6 +176,14 @@ describe("exportBookEpub", () => {
     expect(chapter).toContain("T: Hola."); // cached
     expect(chapter).toContain("Adiós."); // source fallback
     expect(chapter).not.toContain("T: Adiós.");
+    const sidecar = JSON.parse(
+      strFromU8(zip["OEBPS/quiosco-bilingual.json"] ?? new Uint8Array()),
+    ) as { targetLanguage: string; entries: unknown[]; chapters: unknown[] };
+    expect(sidecar.targetLanguage).toBe("English");
+    expect(sidecar.entries).toEqual([
+      { source: "Hola.", translation: "🇬🇧 T: Hola." },
+    ]);
+    expect(sidecar.chapters).toEqual([{ title: "Uno", text: "Hola. Adiós." }]);
     // reads arrived in batches of two units, then the remainder
     expect(calls.map((keys) => keys.length)).toEqual([2, 1]);
   });

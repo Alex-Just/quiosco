@@ -134,10 +134,10 @@ export default function BookReader({
   const [settings] = useState(() => loadSettings());
   /**
    * Zen-only; off on a book's first open, on for every later open once the
-   * book has translations saved. Needs a token to do anything.
+   * book has translations saved. Cached translations work without a token.
    */
   const [translationMode, setTranslationMode] = useState(
-    () => article.bookTranslationOn === true && Boolean(settings.appToken),
+    () => article.bookTranslationOn === true,
   );
   const [autoListen, setAutoListen] = useState(() => loadZenAutoListen());
   const [pageCopied, setPageCopied] = useState(false);
@@ -249,7 +249,8 @@ export default function BookReader({
     paragraphUnits,
   });
 
-  const canTranslate = Boolean(settings.appToken);
+  const canTranslate =
+    Boolean(settings.appToken) || article.bookTranslationOn === true;
   const currentUnit = zenUnit == null ? null : (units[zenUnit] ?? null);
   const displayedText =
     translationMode && zenUnit != null

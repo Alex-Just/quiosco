@@ -128,6 +128,11 @@ and pass its model with `--model`. For a multi-hour book, keep the Mac awake
 with `caffeinate -i pnpm translate:epub ...`; an interrupted run resumes from
 the cache.
 
+The exported EPUB also carries `OEBPS/quiosco-bilingual.json`, a source /
+translation sidecar. Importing it into Quiosco seeds the sentence cache and
+opens the paired Zen view without retranslating; other EPUB readers ignore the
+sidecar.
+
 See [docs/local-epub-translation.md](docs/local-epub-translation.md) for model
 access, long-running supervisor examples, options, output limitations and
 troubleshooting.

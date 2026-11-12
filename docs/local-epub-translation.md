@@ -142,6 +142,10 @@ The output is the same **bilingual, text-only** EPUB the reader exports:
 - Original images, cover and CSS are not carried over.
 - Chapter titles come from the source EPUB; the title paragraph is not repeated
   in the chapter body.
+- `OEBPS/quiosco-bilingual.json` carries the source chapters and exact
+  source/translation pairs. Other readers ignore it. Importing the EPUB into
+  Quiosco strips the translations from the book text, seeds the sentence cache
+  from the sidecar, and opens the paired Zen view without retranslating.
 
 The built-in rules are Spanish-to-Russian. Both `es` and `spa` metadata tags
 count as Spanish. The CLI refuses to use the built-in rules when the EPUB's

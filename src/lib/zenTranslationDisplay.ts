@@ -42,3 +42,25 @@ export function pairSourceWithTranslation(
 
   return `${withSourceFlag(sourceText)}\n${repaired}`;
 }
+
+/**
+ * Sidecar import: the source is known, so pair a translation-only block even
+ * when the model omitted its language flag. Complete bilingual blocks and
+ * source-only blocks are left alone.
+ */
+export function pairBilingualTranslation(
+  source: string,
+  translation: string,
+): string {
+  const sourceText = source.trim();
+  const repaired = repairFlagMarkers(translation).trim();
+  if (!repaired) return sourceText;
+  if (!sourceText) return repaired;
+
+  const stanzas = splitFlagStanzas(repaired);
+  if (stanzas.length >= 2) return repaired;
+  const onlyText = stripSentenceMarkers(stanzas[0] ?? repaired).trim();
+  if (onlyText === sourceText) return repaired;
+
+  return `${withSourceFlag(sourceText)}\n${repaired}`;
+}

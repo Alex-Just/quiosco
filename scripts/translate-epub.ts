@@ -12,6 +12,7 @@ import {
   bookFlatParagraphs,
   bookSentenceUnits,
 } from "../src/lib/bookText";
+import type { BilingualBook } from "../src/lib/epub/bilingual";
 import { buildEpubBytes, exportFilename } from "../src/lib/epub/buildEpub";
 import { assembleExportChapters } from "../src/lib/epub/exportBook";
 import {
@@ -195,6 +196,15 @@ export async function main(
     units,
     translations: result.translations,
   });
+  const bilingual: BilingualBook = {
+    targetLanguage: options.targetLanguage,
+    chapters: book.chapters,
+    entries: units.flatMap((unit, index) => {
+      if (unit.skipped) return [];
+      const translation = result.translations.get(index);
+      return translation ? [{ source: unit.text, translation }] : [];
+    }),
+  };
   const bytes = buildEpubBytes({
     title: book.title,
     author: book.author,
@@ -202,6 +212,7 @@ export async function main(
     chapters,
     uuid: crypto.randomUUID(),
     modified: new Date().toISOString(),
+    bilingual,
   });
 
   await mkdir(dirname(outputPath), { recursive: true });

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { pairSourceWithTranslation } from "./zenTranslationDisplay";
+import {
+  pairBilingualTranslation,
+  pairSourceWithTranslation,
+} from "./zenTranslationDisplay";
 
 describe("pairSourceWithTranslation", () => {
   it("prepends the source when the cache entry is translation-only", () => {
@@ -52,5 +55,18 @@ describe("pairSourceWithTranslation", () => {
         "\uFFFCУ Живоглот забрался.",
       ),
     ).toBe("🇪🇸 Crookshanks se subió.\n🇷🇺 У Живоглот забрался.");
+  });
+});
+
+describe("pairBilingualTranslation", () => {
+  it("pairs a flagless translation using the known source", () => {
+    expect(pairBilingualTranslation("Hola mundo.", "Hello world.")).toBe(
+      "🇪🇸 Hola mundo.\nHello world.",
+    );
+  });
+
+  it("leaves a complete bilingual block alone", () => {
+    const bilingual = "🇪🇸 Hola mundo.\n🇷🇺 Привет, мир.";
+    expect(pairBilingualTranslation("Hola mundo.", bilingual)).toBe(bilingual);
   });
 });
