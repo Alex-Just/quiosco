@@ -581,6 +581,22 @@ test("book Zen has the article Listen control with Auto", async ({ page }) => {
   ).toBeVisible();
 });
 
+test("book Zen keeps the trash out of the top chrome", async ({ page }) => {
+  await importBook(page);
+  await expect(
+    page.getByRole("button", { name: "More book actions" }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Delete book" })).toHaveCount(
+    0,
+  );
+
+  // Deleting a book stays available from the actions sheet.
+  await page.getByRole("button", { name: "More book actions" }).click();
+  await expect(
+    page.getByRole("button", { name: "Delete", exact: true }),
+  ).toBeVisible();
+});
+
 test("Auto does not advance the page when narration ends", async ({ page }) => {
   await importBook(page);
   const articleUrl = page.url();
