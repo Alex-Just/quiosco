@@ -5,10 +5,11 @@ import { log } from "../lib/log";
 import { storePendingBook } from "../lib/sharePayload";
 
 /**
- * Receives an EPUB opened from Android's "Open with" chooser.
+ * Receives an EPUB from browsers that implement the File Handling API.
  *
- * The Trusted Web Activity hands the file to this page and the Add page takes
- * over. A cold launch starts on /add; a warm one is moved there.
+ * Chrome for Android does not implement it, so the Android wrapper forwards
+ * "Open with" EPUBs through the share target instead. This remains a
+ * progressive enhancement for browsers that do support `launchQueue`.
  */
 export function LaunchQueueHandler() {
   const navigate = useNavigate();

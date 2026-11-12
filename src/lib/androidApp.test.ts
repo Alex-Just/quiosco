@@ -3,10 +3,10 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 /**
- * Digital Asset Links are what let Chrome hand a launched EPUB to the site.
- * A mismatch between the APK's package/signing key and this public file fails
- * silently at runtime (the TWA opens, the file never arrives), so the two
- * are checked together here instead of at first install.
+ * Digital Asset Links make the APK a verified Trusted Web Activity. A mismatch
+ * between the APK's package/signing key and this public file fails silently at
+ * runtime (the app opens as a browser tab), so the two are checked together
+ * here instead of at first install.
  *
  * cwd-relative on purpose: Vite rewrites import.meta.url under test.
  */
@@ -64,5 +64,34 @@ describe("twa-manifest.json", () => {
         mimeTypes: ["application/epub+zip"],
       },
     ]);
+  });
+});
+
+describe("AndroidManifest.xml", () => {
+  const androidManifest = readFileSync(
+    "android/app/src/main/AndroidManifest.xml",
+    "utf8",
+  );
+
+  it("declares the component android-browser-helper enables at launch", () => {
+    // The helper calls setComponentEnabledSetting() on this component on every
+    // launch. If Bubblewrap omits it, the app crashes before Chrome opens.
+    expect(androidManifest).toContain(
+      'android:name="com.google.androidbrowserhelper.trusted.ManageDataLauncherActivity"',
+    );
+  });
+
+  it("carries the share target on the EPUB intent alias", () => {
+    // Chrome for Android has no launchQueue, so the launcher re-dispatches the
+    // opened file as ACTION_SEND and needs the share target metadata here.
+    const alias = androidManifest.slice(
+      androidManifest.indexOf('android:name="FileHandlingActivity0"'),
+      androidManifest.indexOf("</activity-alias>"),
+    );
+
+    expect(alias).toContain("FILE_HANDLING_ACTION_URL");
+    expect(alias).toContain(
+      "android.support.customtabs.trusted.METADATA_SHARE_TARGET",
+    );
   });
 });

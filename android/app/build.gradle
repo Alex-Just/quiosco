@@ -54,7 +54,7 @@ def twaManifest = [
     // The fallback strategy for when Trusted Web Activity is not available. Possible values are
     // 'customtabs' and 'webview'.
     fallbackType: 'customtabs',
-    enableSiteSettingsShortcut: 'false',
+    enableSiteSettingsShortcut: 'true',
     orientation: 'default',
 ]
 

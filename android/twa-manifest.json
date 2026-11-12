@@ -26,7 +26,7 @@
   "webManifestUrl": "https://quiosco.alex-just.workers.dev/manifest.webmanifest",
   "fallbackType": "customtabs",
   "features": {},
-  "enableSiteSettingsShortcut": false,
+  "enableSiteSettingsShortcut": true,
   "isChromeOSOnly": false,
   "isMetaQuest": false,
   "minSdkVersion": 24,

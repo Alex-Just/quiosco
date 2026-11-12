@@ -31,7 +31,7 @@
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/appName"
-        
+        android:manageSpaceActivity="com.google.androidbrowserhelper.trusted.ManageDataLauncherActivity"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Translucent.NoTitleBar">
 
@@ -48,6 +48,25 @@
         <meta-data
             android:name="twa_generator"
             android:value="@string/generatorApp" />
+
+        <!-- android-browser-helper 2.7.4 calls setComponentEnabledSetting() for this
+             component on every launch (API 25+). If it is absent from the manifest,
+             the app crashes with IllegalArgumentException before opening Chrome.
+             Bubblewrap omits it when enableSiteSettingsShortcut is false, so it is
+             declared here explicitly. Changing enableSiteSettingsShortcut back to
+             false and regenerating would reintroduce the crash. -->
+        <activity android:name="com.google.androidbrowserhelper.trusted.ManageDataLauncherActivity"
+            android:exported="false"
+            android:enabled="true"
+            android:excludeFromRecents="true">
+            <meta-data
+                android:name="android.support.customtabs.trusted.MANAGE_SPACE_URL"
+                android:value="@string/launchUrl" />
+            <intent-filter>
+                <action android:name="android.intent.action.APPLICATION_PREFERENCES" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
 
         
 
@@ -198,6 +217,11 @@
         android:exported="true">
         <meta-data android:name="android.support.customtabs.trusted.FILE_HANDLING_ACTION_URL"
             android:value="@string/fileHandlingActionUrl0" /> 
+        <!-- The file is re-dispatched as ACTION_SEND because Chrome for Android
+             cannot deliver it through the File Handling API. -->
+        <meta-data
+            android:name="android.support.customtabs.trusted.METADATA_SHARE_TARGET"
+            android:resource="@string/shareTarget"/>
         <intent-filter>
             <action android:name="android.intent.action.VIEW"/>
             <category android:name="android.intent.category.DEFAULT" />

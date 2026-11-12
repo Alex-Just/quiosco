@@ -15,21 +15,22 @@
  */
 package xyz.alexjust.quiosco;
 
+import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 
-
-
 public class LauncherActivity
         extends com.google.androidbrowserhelper.trusted.LauncherActivity {
-    
-
-    
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        Intent intent = getIntent();
+        if (isOpenedEpub(intent)) {
+            setIntent(asShare(intent));
+        }
+
         super.onCreate(savedInstanceState);
         // Setting an orientation crashes the app due to the transparent background on Android 8.0
         // Oreo and below. We only set the orientation on Oreo and above. This only affects the
@@ -42,12 +43,36 @@ public class LauncherActivity
         }
     }
 
+    /**
+     * Chrome for Android does not implement the File Handling API, so a VIEW
+     * intent's file would never reach the page through the file handler action
+     * URL. The TWA share target is supported on Android, so route the opened
+     * EPUB through it instead; the web app already handles that path.
+     */
+    private static boolean isOpenedEpub(Intent intent) {
+        if (!Intent.ACTION_VIEW.equals(intent.getAction())) return false;
+        Uri data = intent.getData();
+        if (data == null || !"content".equals(data.getScheme())) return false;
+        String type = intent.getType();
+        return type != null && "application/epub+zip".equalsIgnoreCase(type);
+    }
+
+    private static Intent asShare(Intent viewIntent) {
+        // Copy the original intent so its launch flags, component and data URI
+        // survive. Do not call setType(): it clears the data URI, which is what
+        // the helper uses to pick the action URL.
+        Intent share = new Intent(viewIntent);
+        share.setAction(Intent.ACTION_SEND);
+        share.putExtra(Intent.EXTRA_STREAM, viewIntent.getData());
+        share.addCategory(Intent.CATEGORY_DEFAULT);
+        share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        return share;
+    }
+
     @Override
     protected Uri getLaunchingUrl() {
         // Get the original launch Url.
         Uri uri = super.getLaunchingUrl();
-
-        
 
         return uri;
     }

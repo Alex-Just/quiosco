@@ -1,9 +1,10 @@
 /**
  * The slice of the File Handling API the app uses.
  *
- * A Trusted Web Activity opened with an `.epub` receives the file here, on the
- * main thread. Unlike the share target, the bytes never pass through the
- * service worker, so an inactive worker cannot drop them.
+ * Chrome for Android does not expose `launchQueue`, so the Android wrapper
+ * delivers "Open with" EPUBs through the share target instead. Where a browser
+ * does support it, the file arrives on the main thread and never passes
+ * through the service worker.
  */
 export type LaunchedFileHandle = {
   getFile(): Promise<File>;

@@ -130,7 +130,9 @@ jobs:
             FileHandlingActivity0 \
             android.intent.action.VIEW \
             application/epub+zip \
-            FILE_HANDLING_ACTION_URL
+            FILE_HANDLING_ACTION_URL \
+            METADATA_SHARE_TARGET \
+            ManageDataLauncherActivity
           do
             if ! grep -q "$expected_text" manifest.txt; then
               echo "::error::APK manifest is missing $expected_text"

@@ -8,8 +8,9 @@ Downloads.
 This directory is the smallest thing that can: a Trusted Web Activity generated
 by [Bubblewrap](https://github.com/GoogleChromeLabs/bubblewrap). Chrome renders
 the site, so the library, settings, and service worker are the same ones the
-installed PWA uses; the APK only carries identity and intent filters. There is
-no native code of our own beyond the generated launcher.
+installed PWA uses; the APK only carries identity and intent filters. The only
+native code of our own is a small launcher subclass (see
+`LauncherActivity.java`).
 
 The filter it adds:
 
@@ -17,8 +18,13 @@ The filter it adds:
 | --- | --- | --- |
 | `android.intent.action.VIEW` | `content://` with `application/epub+zip` | `/add` (`FILE_HANDLING_ACTION_URL`) |
 
-The file reaches the page through `launchQueue` and is imported by the normal
-Book → Add flow (see `src/components/LaunchQueueHandler.tsx`).
+Chrome for Android does not implement the File Handling API
+(`window.launchQueue` is undefined), so the TWA cannot hand the file to the
+page through `FILE_HANDLING_ACTION_URL`. Instead the launcher rewrites the VIEW
+intent into `ACTION_SEND` for the same URI, and the alias declares the share
+target metadata. Chrome then POSTs the EPUB to the web app's `/share` endpoint,
+which stores it for the normal Book → Add flow (see `src/sw.ts` and
+`src/lib/sharePayload.ts`).
 
 The APK also declares the share target, so it can replace the installed PWA.
 Until the old PWA/WebAPK is removed, the share sheet may list Quiosco twice.
@@ -124,20 +130,49 @@ project and discards the local patches in `app/build.gradle` and
    `lint { checkReleaseBuilds false }` block in `app/build.gradle`.
 3. `android:allowBackup="false"` and removal of the deprecated `package`
    attribute in `app/src/main/AndroidManifest.xml`.
+4. Keep `enableSiteSettingsShortcut` true in `twa-manifest.json`. The helper
+   enables `ManageDataLauncherActivity` on every launch; if Bubblewrap omits
+   that component (the false case), the app crashes with
+   `IllegalArgumentException` before Chrome opens.
+5. Reapply the VIEW→`ACTION_SEND` bridge in `LauncherActivity.java` and the
+   share target metadata on `FileHandlingActivity0`. Without them the TWA
+   opens `/add`, but Chrome for Android cannot deliver the file.
+6. Reapply the explicit `ManageDataLauncherActivity` declaration if the
+   template does not emit it.
 
 `compileSdk`/`targetSdk` 36 and `minSdk 24` come from the template and
 `twa-manifest.json`. Rebuild and re-run the verification above afterwards.
 
 ## Troubleshooting on device
 
-- **The app opens but no book appears.** File delivery needs a verified
-  Digital Asset Link. Confirm the deployed file is JSON (not the SPA's HTML)
-  and that the certificate matches, then ask Android to re-check:
+- **The app closes immediately on launch.** android-browser-helper 2.7.4 calls
+  `setComponentEnabledSetting` for its `ManageDataLauncherActivity` on every
+  launch, even when the site settings shortcut is disabled. If that component
+  is missing from the manifest, the app dies before Chrome opens. Confirm with:
+
+  ```bash
+  adb logcat -b crash | grep -E "ManageDataLauncherActivity|IllegalArgumentException"
+  ```
+
+  The fix is the `<activity>` declaration in `AndroidManifest.xml`; keep
+  `enableSiteSettingsShortcut` true in `twa-manifest.json` so regeneration
+  keeps it.
+
+- **The app opens but no book appears.** File delivery now goes through the
+  share target (`/share`), not `launchQueue`. Check the wrapper handed the
+  intent over and Chrome accepted the share:
+
+  ```bash
+  adb logcat | grep -iE "TWALauncherActivity|Dropping share|FileHandling"
+  ```
+
+  A verified Digital Asset Link is still needed for the fullscreen TWA. Confirm
+  the deployed file is JSON (not the SPA's HTML) and that the certificate
+  matches, then ask Android to re-check:
 
   ```bash
   adb shell pm get-app-links xyz.alexjust.quiosco   # expect "verified"
   adb shell pm verify-app-links --re-verify xyz.alexjust.quiosco
-  adb logcat | grep -iE "LauncherActivity|FileHandling|launchQueue"
   ```
 
 - **The sender is not listed at all.** The intent filter matches
