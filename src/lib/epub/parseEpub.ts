@@ -40,6 +40,11 @@ export const MAX_BOOK_FILE_BYTES = 25 * 1024 * 1024;
 // Bilingual exports contain both the source and the translation, so a large
 // novel can exceed the original 2M guard even though its source text fits.
 export const MAX_BOOK_CHARS = 4_000_000;
+// A small compressed archive can expand to much more text than it can hold as
+// characters. Refuse the allocation before decompression; the parser's text
+// cap is checked later, when the chapter strings exist.
+export const MAX_TEXT_ENTRY_BYTES = 16 * 1024 * 1024;
+export const MAX_EXPANDED_TEXT_BYTES = 32 * 1024 * 1024;
 
 export interface ParsedBook {
   title: string;
@@ -104,16 +109,38 @@ export function isTextEntry(path: string): boolean {
 }
 
 /**
+ * The unzip filter for text entries, with a running expansion budget. fflate
+ * reports each entry's declared uncompressed size before decompressing it, so
+ * this rejects a zip bomb without allocating its output.
+ */
+export function textEntryFilter(): (file: {
+  name: string;
+  originalSize: number;
+}) => boolean {
+  let expanded = 0;
+  return (file) => {
+    if (!isTextEntry(file.name) && !isBilingualSidecarPath(file.name)) {
+      return false;
+    }
+    if (
+      file.originalSize > MAX_TEXT_ENTRY_BYTES ||
+      expanded + file.originalSize > MAX_EXPANDED_TEXT_BYTES
+    ) {
+      throw new EpubError("too-large", "text");
+    }
+    expanded += file.originalSize;
+    return true;
+  };
+}
+
+/**
  * fflate's synchronous unzip. Its async unzip decompresses entries over 512KB
  * in a blob worker; the site's CSP (`worker-src 'self'`) blocks that worker and
  * fflate never reports the failure, leaving the import pending forever. The
- * archive is size-capped, so doing this on the main thread is bounded.
+ * expansion budget bounds the main-thread work here.
  */
 function unzipFiles(bytes: Uint8Array): Unzipped {
-  return unzipSync(bytes, {
-    filter: (file) =>
-      isTextEntry(file.name) || isBilingualSidecarPath(file.name),
-  });
+  return unzipSync(bytes, { filter: textEntryFilter() });
 }
 
 interface ZipEntry {

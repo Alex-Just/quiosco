@@ -8,7 +8,10 @@ import {
   isTextEntry,
   MAX_BOOK_CHARS,
   MAX_BOOK_FILE_BYTES,
+  MAX_EXPANDED_TEXT_BYTES,
+  MAX_TEXT_ENTRY_BYTES,
   parseEpub,
+  textEntryFilter,
 } from "./parseEpub";
 
 // fflate only encodes DOS timestamps (1980-2099); pin a fixed date inside
@@ -465,6 +468,50 @@ describe("parseEpub", () => {
     expect(error).toBeInstanceOf(EpubError);
     expect((error as EpubError).code).toBe("too-large");
     expect((error as EpubError).detail).toBeUndefined();
+  });
+
+  it("rejects a text entry over the per-entry expansion cap", () => {
+    const filter = textEntryFilter();
+    expect(() =>
+      filter({
+        name: "OEBPS/Text/huge.xhtml",
+        originalSize: MAX_TEXT_ENTRY_BYTES + 1,
+      }),
+    ).toThrow(EpubError);
+  });
+
+  it("rejects cumulative text expansion over the total cap", () => {
+    const filter = textEntryFilter();
+    let accepted = 0;
+    while (accepted + MAX_TEXT_ENTRY_BYTES <= MAX_EXPANDED_TEXT_BYTES) {
+      filter({
+        name: `OEBPS/Text/cap${accepted}.xhtml`,
+        originalSize: MAX_TEXT_ENTRY_BYTES,
+      });
+      accepted += MAX_TEXT_ENTRY_BYTES;
+    }
+    if (accepted < MAX_EXPANDED_TEXT_BYTES) {
+      filter({
+        name: "OEBPS/Text/remaining.xhtml",
+        originalSize: MAX_EXPANDED_TEXT_BYTES - accepted,
+      });
+    }
+    expect(() =>
+      filter({ name: "OEBPS/Text/over.xhtml", originalSize: 1 }),
+    ).toThrow(EpubError);
+  });
+
+  it("does not charge images against the text expansion budget", () => {
+    const filter = textEntryFilter();
+    expect(
+      filter({
+        name: "OEBPS/Images/large.jpg",
+        originalSize: MAX_EXPANDED_TEXT_BYTES,
+      }),
+    ).toBe(false);
+    expect(filter({ name: "OEBPS/Text/cap.xhtml", originalSize: 1 })).toBe(
+      true,
+    );
   });
 
   it("reports progress once per linear spine document", async () => {
