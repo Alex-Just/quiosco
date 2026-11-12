@@ -27,8 +27,9 @@ public class LauncherActivity
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         Intent intent = getIntent();
-        if (isOpenedEpub(intent)) {
-            setIntent(asShare(intent));
+        String epubType = epubType(intent);
+        if (epubType != null) {
+            setIntent(asShare(intent, epubType));
         }
 
         super.onCreate(savedInstanceState);
@@ -48,21 +49,30 @@ public class LauncherActivity
      * intent's file would never reach the page through the file handler action
      * URL. The TWA share target is supported on Android, so route the opened
      * EPUB through it instead; the web app already handles that path.
+     *
+     * @return the EPUB MIME type for a VIEW of a {@code content://} EPUB, or
+     *     null when this is not such an intent. Some senders omit the type;
+     *     the content provider can still supply it.
      */
-    private static boolean isOpenedEpub(Intent intent) {
-        if (!Intent.ACTION_VIEW.equals(intent.getAction())) return false;
+    private String epubType(Intent intent) {
+        if (!Intent.ACTION_VIEW.equals(intent.getAction())) return null;
         Uri data = intent.getData();
-        if (data == null || !"content".equals(data.getScheme())) return false;
+        if (data == null || !"content".equals(data.getScheme())) return null;
+
         String type = intent.getType();
-        return type != null && "application/epub+zip".equalsIgnoreCase(type);
+        if (type == null) {
+            type = intent.resolveType(getContentResolver());
+        }
+        return "application/epub+zip".equalsIgnoreCase(type) ? type : null;
     }
 
-    private static Intent asShare(Intent viewIntent) {
+    private static Intent asShare(Intent viewIntent, String type) {
         // Copy the original intent so its launch flags, component and data URI
-        // survive. Do not call setType(): it clears the data URI, which is what
-        // the helper uses to pick the action URL.
+        // survive. setDataAndType keeps the URI and makes a provider-resolved
+        // type explicit for the share target.
         Intent share = new Intent(viewIntent);
         share.setAction(Intent.ACTION_SEND);
+        share.setDataAndType(viewIntent.getData(), type);
         share.putExtra(Intent.EXTRA_STREAM, viewIntent.getData());
         share.addCategory(Intent.CATEGORY_DEFAULT);
         share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
