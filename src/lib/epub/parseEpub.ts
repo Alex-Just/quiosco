@@ -1,4 +1,4 @@
-import { type Unzipped, unzip } from "fflate";
+import { type Unzipped, unzipSync } from "fflate";
 import { normalizeSentence } from "../sentenceKey";
 import { splitFlagStanzas, stripSentenceMarkers } from "../sentences";
 import type { BookChapter } from "../types";
@@ -103,20 +103,16 @@ export function isTextEntry(path: string): boolean {
   return /\.(xml|opf|ncx|xhtml|html|htm)$/i.test(path);
 }
 
-/** fflate's async unzip, as a promise that rejects on corrupt archives. */
-function unzipFiles(bytes: Uint8Array): Promise<Unzipped> {
-  return new Promise((resolve, reject) => {
-    unzip(
-      bytes,
-      {
-        filter: (file) =>
-          isTextEntry(file.name) || isBilingualSidecarPath(file.name),
-      },
-      (error, files) => {
-        if (error) reject(error);
-        else resolve(files);
-      },
-    );
+/**
+ * fflate's synchronous unzip. Its async unzip decompresses entries over 512KB
+ * in a blob worker; the site's CSP (`worker-src 'self'`) blocks that worker and
+ * fflate never reports the failure, leaving the import pending forever. The
+ * archive is size-capped, so doing this on the main thread is bounded.
+ */
+function unzipFiles(bytes: Uint8Array): Unzipped {
+  return unzipSync(bytes, {
+    filter: (file) =>
+      isTextEntry(file.name) || isBilingualSidecarPath(file.name),
   });
 }
 
@@ -182,7 +178,9 @@ export async function parseEpub(
   try {
     if (bytes.length > MAX_BOOK_FILE_BYTES) throw new EpubError("too-large");
 
-    const files = await unzipFiles(bytes);
+    // Paint the form's busy state before decompressing on the main thread.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const files = unzipFiles(bytes);
     const lookup = createLookup(files);
     const sidecarEntry = lookup(BILINGUAL_SIDECAR_PATH);
     const bilingual =

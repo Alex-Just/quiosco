@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { strToU8, zipSync } from "fflate";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { buildEpubBytes } from "./buildEpub";
 import {
   EpubError,
@@ -477,6 +477,32 @@ describe("parseEpub", () => {
       [1, 2],
       [2, 2],
     ]);
+  });
+
+  it("parses a large entry without a blob worker", {
+    timeout: 20_000,
+  }, async () => {
+    // The site's CSP forbids blob workers. fflate's async unzip would hand a
+    // >512KB entry to one and never call back, leaving the form stuck.
+    class BlockedWorker {
+      constructor() {
+        throw new Error("blob workers are blocked");
+      }
+    }
+    vi.stubGlobal("Worker", BlockedWorker);
+    try {
+      const longText = "palabra ".repeat(70_000);
+      const book = await parseEpub(
+        epub(
+          epub3({
+            "OEBPS/Text/cap001.xhtml": chapterXml(null, longText),
+          }),
+        ),
+      );
+      expect(book.chapters[0]?.text.length).toBeGreaterThan(500_000);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("imports a book whose zip also holds images and stylesheets", async () => {

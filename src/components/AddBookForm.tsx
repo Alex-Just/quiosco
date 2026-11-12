@@ -139,6 +139,11 @@ export function AddBookForm({
           onChange={(event) => void onFile(event.target.files?.[0])}
         />
       </label>
+      {busy && !preview && !error && (
+        <p className="muted" aria-live="polite">
+          Reading book…
+        </p>
+      )}
       {progress && (
         <p className="muted" aria-live="polite">
           Reading book… chapter {progress.done}/{progress.total}
