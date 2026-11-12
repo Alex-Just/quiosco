@@ -3,6 +3,7 @@ import { createApi } from "./api";
 import type { BookSentenceUnit } from "./bookText";
 import {
   bilingualXPointer,
+  bilingualXPointerUnitIndex,
   isBilingualExportFilename,
   KOSYNC_MAPPING_VERSION,
   type KosyncDismissal,
@@ -180,6 +181,24 @@ export function useKosyncPrompt(args: {
     });
   }, [enabled, localIndex, remote, offsets, dismissed, chapterBodyStarts]);
 
+  // A restored sentence can already be the e-reader's exact position. Treat
+  // it as synchronized and drop the row: there is no jump to offer, and
+  // keeping it would later look like a backward jump on the next page turn.
+  useEffect(() => {
+    if (!pushable || remote === null || localIndex === null) return;
+    const state = pushRef.current;
+    if (state.lastPushed !== null) return;
+    const exact = bilingualXPointerUnitIndex({
+      progress: remote.progress,
+      filename: remote.filename,
+      chapterBodyStarts,
+      unitCount: units.length,
+    });
+    if (exact === null || exact !== localIndex) return;
+    state.lastPushed = exact;
+    setRemote(null);
+  }, [pushable, remote, localIndex, chapterBodyStarts, units.length]);
+
   const sendPosition = useCallback(
     async (state: PushState, index: number) => {
       if (!api || !pushable || state.base === null || state.stalled) return;
@@ -209,6 +228,10 @@ export function useKosyncPrompt(args: {
         }
         state.lastPushed = index;
         if (result.updatedAt !== undefined) state.base = result.updatedAt;
+        // The accepted write supersedes the lookup row. Keeping the old row
+        // would look like a backward jump on the next page turn, and its
+        // banner would block the next push.
+        if (pushRef.current === state) setRemote(null);
       } catch {
         // Offline or a transient server error: keep the local position and
         // try again on the next change. Never block reading.

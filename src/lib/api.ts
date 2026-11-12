@@ -46,6 +46,8 @@ export interface ApiClient {
 const CLIENT_TIMEOUT_MS = 130_000;
 /** A progress lookup is a single indexed read; do not let it hang a book open. */
 const KOSYNC_LOOKUP_TIMEOUT_MS = 15_000;
+/** A push is one indexed write; a stalled request must not hold its queue. */
+const KOSYNC_PUSH_TIMEOUT_MS = 15_000;
 
 const THREAD_FETCH_FAILED = "Could not fetch the thread right now. Try again.";
 
@@ -230,6 +232,7 @@ export function createApi(options: {
           headers: { ...authHeaders, "Content-Type": "application/json" },
           body: JSON.stringify(request),
           keepalive: true,
+          signal: AbortSignal.timeout(KOSYNC_PUSH_TIMEOUT_MS),
         }),
       );
       const result = parseKosyncPushResult(await response.json());

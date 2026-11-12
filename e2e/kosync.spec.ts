@@ -250,8 +250,8 @@ test("the app pushes its exact position back for a bilingual export", async ({
     expect(index).toBeGreaterThanOrEqual(1);
     const expected = `/body/DocFragment[1]/body/p[${index}]/br[1].0`;
 
-    await expect
-      .poll(
+    const stored = () =>
+      expect.poll(
         async () => {
           const response = await request.get(
             `/kosync/syncs/progress/${document}`,
@@ -269,8 +269,9 @@ test("the app pushes its exact position back for a bilingual export", async ({
           return { progress: body.progress, device: body.device };
         },
         { timeout: 10_000 },
-      )
-      .toEqual({ progress: expected, device: "Quiosco" });
+      );
+
+    await stored().toEqual({ progress: expected, device: "Quiosco" });
 
     // The app's own lookup sees the pushed position, so another install would
     // be offered the same sentence.
@@ -284,6 +285,16 @@ test("the app pushes its exact position back for a bilingual export", async ({
     };
     expect(looked.progress?.progress).toBe(expected);
     expect(looked.progress?.device).toBe("Quiosco");
+
+    // A later open restores the exact position the app pushed. Moving on must
+    // not resurrect the old row as a backward-jump banner or block the write.
+    await page.reload();
+    await expect(label).toHaveText(new RegExp(`^${index + 1}/`));
+    await expect(page.locator(".kosync-prompt")).toHaveCount(0);
+    await page.keyboard.press("ArrowDown");
+    const nextExpected = `/body/DocFragment[1]/body/p[${index + 1}]/br[1].0`;
+    await expect(page.locator(".kosync-prompt")).toHaveCount(0);
+    await stored().toEqual({ progress: nextExpected, device: "Quiosco" });
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

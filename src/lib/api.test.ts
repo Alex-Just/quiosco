@@ -313,6 +313,7 @@ describe("createApi", () => {
     expect(url).toBe("/api/kosync/push");
     expect(init.method).toBe("POST");
     expect(init.keepalive).toBe(true);
+    expect(init.signal).toBeInstanceOf(AbortSignal);
     expect(init.headers).toEqual({
       Authorization: "Bearer t",
       "Content-Type": "application/json",
