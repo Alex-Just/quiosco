@@ -22,6 +22,8 @@ read/unread/archived list with copy-to-clipboard.
 
 Import an `.epub` from the Add page (**Type: Book**). Quiosco parses it on the
 device and keeps its chapters as text; the `.epub` file itself is not stored.
+Parsed text is capped at 4M characters, enough for bilingual exports of large
+novels.
 
 Books share the library, actions, and read/unread/archived states with
 articles, but they are **local-only**: they never enter `/api/sync`, and

@@ -29,7 +29,9 @@ export class EpubError extends Error {
 }
 
 export const MAX_BOOK_FILE_BYTES = 25 * 1024 * 1024;
-export const MAX_BOOK_CHARS = 2_000_000;
+// Bilingual exports contain both the source and the translation, so a large
+// novel can exceed the original 2M guard even though its source text fits.
+export const MAX_BOOK_CHARS = 4_000_000;
 
 export interface ParsedBook {
   title: string;
