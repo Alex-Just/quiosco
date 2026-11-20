@@ -138,6 +138,9 @@ The per-window timeout defaults to three minutes.
 The output is the same **bilingual, text-only** EPUB the reader exports:
 
 - Each paragraph contains the source sentence followed by its translation.
+- Each pair starts on its own page. `p.s + p.s` is the KOReader rule. Every
+  pair after the first also has `class="break"` and the `p.break` rule,
+  because CrossPoint drops selectors that contain `+`.
 - Language flag markers are stripped for e-reader fonts.
 - Original images, cover and CSS are not carried over.
 - Chapter titles come from the source EPUB; the title paragraph is not repeated

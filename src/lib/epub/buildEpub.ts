@@ -55,23 +55,34 @@ const CONTAINER_XML = `<?xml version="1.0" encoding="UTF-8"?>
 const STYLE_CSS = `body { line-height: 1.4; }
 p { margin: 0; }
 p.s + p.s { page-break-before: always; break-before: page; }
+p.break { page-break-before: always; break-before: page; }
 `;
 
-/** One `<p class="s">` per display block; lines join with `<br/>`. */
-function paragraphXml(block: string): string {
+/**
+ * One `<p class="s">` per display block; lines join with `<br/>`.
+ * `break` marks every block after the first. KOReader uses `p.s + p.s`.
+ * CrossPoint drops selectors that contain `+`, and uses `p.break` instead.
+ */
+function paragraphXml(block: string, pageBreakBefore: boolean): string {
   const lines = block.split("\n");
   while (lines.length > 0 && lines[0]?.trim() === "") lines.shift();
   while (lines.length > 0 && lines[lines.length - 1]?.trim() === "") {
     lines.pop();
   }
   if (lines.length === 0) return "";
+  const className = pageBreakBefore ? "s break" : "s";
   // The leading break opens every page with one blank line.
-  return `    <p class="s"><br/>${lines.map(escapeXml).join("<br/>")}</p>`;
+  return `    <p class="${className}"><br/>${lines.map(escapeXml).join("<br/>")}</p>`;
 }
 
 function chapterXml(label: string, chapter: EpubChapterInput): string {
+  let pageBreakBefore = false;
   const body = chapter.paragraphs
-    .map(paragraphXml)
+    .map((block) => {
+      const paragraph = paragraphXml(block, pageBreakBefore);
+      if (paragraph !== "") pageBreakBefore = true;
+      return paragraph;
+    })
     .filter((paragraph) => paragraph !== "")
     .join("\n");
   return `<?xml version="1.0" encoding="UTF-8"?>

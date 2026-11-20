@@ -121,7 +121,10 @@ The default model is `opencode/deepseek-v4.1-flash-free`; override it with
 `~/.cache/quiosco/epub-translations.json` (override with `--cache`), so an
 interrupted run resumes without paying for the same sentence twice. The output
 is the same bilingual, text-only EPUB the reader exports, written next to the
-input as `<title>-bilingual.epub` (override with `--output`).
+input as `<title>-bilingual.epub` (override with `--output`). Each source
+sentence and its translation occupy one page. KOReader uses the `p.s + p.s`
+rule. Every pair after the first also has `class="break"`, because CrossPoint
+drops any selector that contains `+`.
 
 The free model is cloud inference served by OpenCode, not an offline model. For
 a fully offline pipeline, configure Ollama or LM Studio as an OpenCode provider

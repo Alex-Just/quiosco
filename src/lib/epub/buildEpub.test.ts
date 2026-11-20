@@ -79,14 +79,15 @@ describe("buildEpub", () => {
     const zip = unzipSync(sampleBytes());
     const css = strFromU8(zip["OEBPS/style.css"] ?? new Uint8Array());
     expect(css).toContain("p.s + p.s");
+    expect(css).toContain("p.break");
     expect(css).toContain("page-break-before: always");
 
     const chapter = strFromU8(zip["OEBPS/chapter-1.xhtml"] ?? new Uint8Array());
     expect(chapter).not.toContain("<h1>");
     expect(chapter).toContain('<p class="s"><br/>María &amp; &lt;yo&gt;</p>');
-    expect(chapter).toContain('<p class="s"><br/>Привет</p>');
+    expect(chapter).toContain('<p class="s break"><br/>Привет</p>');
     expect(chapter).toContain(
-      '<p class="s"><br/>Primera línea<br/><br/>Segunda línea</p>',
+      '<p class="s break"><br/>Primera línea<br/><br/>Segunda línea</p>',
     );
   });
 
