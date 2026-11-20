@@ -17,6 +17,7 @@
     "audiobook": "vite-node scripts/audiobook.ts",
     "translate:epub": "vite-node scripts/translate-epub.ts",
     "smoke": "vite-node scripts/smoke.ts",
+    "vocab:sync": "vite-node scripts/vocab-sync.ts",
     "e2e": "playwright test",
     "scan": "node scripts/scan-bundle.mjs",
     "android:build": "cd android && ./gradlew assembleRelease",

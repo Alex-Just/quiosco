@@ -352,6 +352,34 @@ node scripts/wrangler-run.mjs d1 execute quiosco --local --file worker/migration
 node scripts/wrangler-run.mjs d1 execute quiosco --local --file worker/migrations/0002_kosync.sql
 ```
 
+## Vocabulary to Anki
+
+CrossPoint can save each dictionary lookup. On the reader, turn on
+**Settings → Reader → Save Vocabulary Lookups**. A lookup with no Wi-Fi stays
+in `/Vocabulary.txt` until the laptop asks for it.
+
+On the reader, open **Home → File Transfer → Join Network** and leave that
+screen up. On the laptop, open Anki with
+[AnkiConnect](https://github.com/FooSoft/anki-connect) listening on port 8765,
+then run:
+
+```bash
+pnpm vocab:sync -- --reader http://crosspoint.local
+```
+
+The command reads `/Vocabulary.txt`, finds each book by title and author, and
+takes the sentence at the saved offset. The book file name does not matter.
+New cards go into the **Smart Book** deck. The same word is updated in place.
+If the reader is off, the command stops and leaves Anki unchanged.
+
+A file copied from the reader works the same way:
+
+```bash
+pnpm vocab:sync -- --vocab "/Volumes/NO NAME/Vocabulary.txt" --epub book.epub
+```
+
+In Anki, press Sync. The Android app receives the cards on its own sync.
+
 ## Install on Android
 
 1. Open the deployed URL in **Chrome for Android** → menu → **Install app**.
